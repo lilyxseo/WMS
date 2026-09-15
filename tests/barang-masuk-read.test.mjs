@@ -54,6 +54,7 @@ test('full mode batches and explicit Supabase errors never fall back to Google S
     assert.deepEqual(body, {
       success: false,
       reason: 'BARANG_MASUK_FETCH_FAILED',
+      code: 'UPSTREAM_QUERY_FAILED',
       message: 'Gagal membaca data Barang Masuk.',
     });
     assert.equal(calls, 1);
@@ -70,6 +71,7 @@ test('invalid Supabase success bodies return a controlled JSON error', async () 
     assert.deepEqual(await response.json(), {
       success: false,
       reason: 'BARANG_MASUK_FETCH_FAILED',
+      code: 'UPSTREAM_QUERY_FAILED',
       message: 'Gagal membaca data Barang Masuk.',
     });
   } finally { globalThis.fetch = originalFetch; }
@@ -95,7 +97,7 @@ test('Supabase failures log diagnostic fields without credentials or request aut
     });
     assert.equal(response.status, 500);
     assert.deepEqual(logs, [[
-      '[BarangMasukAPI] Supabase query failed',
+      '[BarangMasukAPI] query-error',
       {
         code: '42703',
         message: 'column inventory_barang_masuk.synced_at does not exist',
@@ -112,42 +114,22 @@ test('Supabase failures log diagnostic fields without credentials or request aut
   }
 });
 
-test('full compatibility mode reads Supabase in 1000-row batches', async () => {
+test('mode=full is ignored and cannot bypass bounded pagination', async () => {
   const originalFetch = globalThis.fetch;
   const urls = [];
   globalThis.fetch = async url => {
     urls.push(String(url));
     if (String(url).includes('inventory_sync_status')) return new Response('[]', { status: 200 });
-    const offset = Number(new URL(String(url)).searchParams.get('offset'));
-    const size = offset === 0 ? 1000 : 2;
-    return new Response(JSON.stringify(Array.from({ length: size }, (_, index) => ({ sku: `SKU-${offset + index}`, source_row_number: offset + index + 2 }))), { status: 200, headers: { 'content-range': `${offset}-${offset + size - 1}/1002` } });
+    return new Response(JSON.stringify(Array.from({ length: 25 }, (_, index) => ({ sku: `SKU-${index}`, source_row_number: 100 - index }))), { status: 200, headers: { 'content-range': '0-24/1002' } });
   };
   try {
-    const response = await handleBarangMasukRequest({ request: request('?mode=full'), env });
+    const response = await handleBarangMasukRequest({ request: request('?mode=full&page=1&limit=25&sort=latest'), env });
     const body = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(body.data.length, 1002);
+    assert.equal(body.rows.length, 25);
     assert.equal(body.total, 1002);
-    assert.equal(urls.filter(url => url.includes('inventory_barang_masuk')).length, 2);
-    assert.match(urls[0], /offset=0&limit=1000/);
-    assert.match(urls[1], /offset=1000&limit=1000/);
-  } finally { globalThis.fetch = originalFetch; }
-});
-
-test('full mode stops when the exact count is reached', async () => {
-  const originalFetch = globalThis.fetch;
-  const urls = [];
-  globalThis.fetch = async url => {
-    urls.push(String(url));
-    if (String(url).includes('inventory_sync_status')) return new Response('[]', { status: 200 });
-    return new Response(JSON.stringify(Array.from({ length: 1000 }, (_, index) => ({ sku: `SKU-${index}` }))), {
-      status: 200,
-      headers: { 'content-range': '0-999/1000' },
-    });
-  };
-  try {
-    const response = await handleBarangMasukRequest({ request: request('?mode=full'), env });
-    assert.equal(response.status, 200);
-    assert.equal(urls.filter(url => url.includes('inventory_barang_masuk')).length, 1);
+    assert.equal(body.hasNext, true);
+    assert.match(urls[0], /order=source_row_number.desc&offset=0&limit=25/);
+    assert.equal(urls.filter(url => url.includes('inventory_barang_masuk')).length, 2); // page + summary
   } finally { globalThis.fetch = originalFetch; }
 });

@@ -52,24 +52,25 @@ test('default pagination performs one bounded 50-row query', async () => {
     const body = await (await handleBarangKeluarRequest({ request: request(''), env })).json();
     assert.equal(body.limit, 50);
     assert.match(urls[0], /offset=0&limit=50/);
-    assert.match(urls[0], /order=normalized_date.desc.nullslast%2Csource_row_number.desc|order=normalized_date.desc.nullslast,source_row_number.desc/);
+    assert.match(urls[0], /order=source_row_number.desc/);
   } finally { globalThis.fetch = originalFetch; }
 });
 
-test('full mode batches all rows for frontend compatibility', async () => {
+test('mode=full is ignored and cannot bypass bounded pagination', async () => {
   const originalFetch = globalThis.fetch;
   const urls = [];
   globalThis.fetch = async url => {
     urls.push(String(url));
     if (String(url).includes('inventory_sync_status')) return new Response('[]', { status: 200 });
-    const offset = Number(new URL(String(url)).searchParams.get('offset'));
-    const size = offset === 0 ? 1000 : 2;
-    return new Response(JSON.stringify(Array.from({ length: size }, (_, index) => ({ sku: `SKU-${offset + index}` }))), { status: 200, headers: { 'content-range': `${offset}-${offset + size - 1}/1002` } });
+    return new Response(JSON.stringify(Array.from({ length: 25 }, (_, index) => ({ sku: `SKU-${index}`, source_row_number: 100 - index }))), { status: 200, headers: { 'content-range': '0-24/1002' } });
   };
   try {
-    const body = await (await handleBarangKeluarRequest({ request: request('?mode=full'), env })).json();
-    assert.equal(body.data.length, 1002);
-    assert.equal(urls.filter(url => url.includes('inventory_barang_keluar')).length, 2);
+    const body = await (await handleBarangKeluarRequest({ request: request('?mode=full&page=1&limit=25&sort=latest'), env })).json();
+    assert.equal(body.rows.length, 25);
+    assert.equal(body.total, 1002);
+    assert.equal(body.hasNext, true);
+    assert.match(urls[0], /order=source_row_number.desc&offset=0&limit=25/);
+    assert.equal(urls.filter(url => url.includes('inventory_barang_keluar')).length, 2); // page + summary
   } finally { globalThis.fetch = originalFetch; }
 });
 
@@ -84,7 +85,7 @@ test('Supabase failure returns controlled JSON and never falls back to Sheets', 
     const response = await handleBarangKeluarRequest({ request: request(''), env });
     assert.equal(response.status, 500);
     assert.match(response.headers.get('content-type'), /application\/json/);
-    assert.deepEqual(await response.json(), { success: false, reason: 'BARANG_KELUAR_FETCH_FAILED', message: 'Gagal membaca data Barang Keluar.' });
+    assert.deepEqual(await response.json(), { success: false, reason: 'BARANG_KELUAR_FETCH_FAILED', code: 'UPSTREAM_QUERY_FAILED', message: 'Gagal membaca data Barang Keluar.' });
     assert.equal(urls.length, 1);
     assert.equal(urls.some(url => url.includes('googleapis.com')), false);
   } finally { globalThis.fetch = originalFetch; }

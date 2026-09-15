@@ -1,5 +1,5 @@
 import { getSecretSupabaseConfig } from '../_supabase-config.js';
-import { escapeLike, supabaseRows, transactionPage, transactionSummary } from '../_transaction-read.js';
+import { escapeLike, supabaseRows, transactionPage, transactionSort, transactionSummary } from '../_transaction-read.js';
 
 const TABLE = 'inventory_barang_keluar';
 // Keep reads compatible with the deployed table schema. In particular, synced_at is
@@ -56,7 +56,6 @@ export async function handleBarangKeluarRequest({ request, env }) {
     console.info('[BarangKeluarAPI] auth-ok');
 
     const url = new URL(request.url);
-    const mode = url.searchParams.get('mode') === 'full' ? 'full' : 'page';
     const page = Math.max(1, Number.parseInt(url.searchParams.get('page') || '1', 10) || 1);
     const limit = Math.min(MAX_LIMIT, Math.max(1, Number.parseInt(url.searchParams.get('limit') || String(DEFAULT_LIMIT), 10) || DEFAULT_LIMIT));
     const filters = [];
@@ -65,6 +64,8 @@ export async function handleBarangKeluarRequest({ request, env }) {
     const status = String(url.searchParams.get('status') || '').trim();
     const startDate = String(url.searchParams.get('startDate') || '').trim();
     const endDate = String(url.searchParams.get('endDate') || '').trim();
+    const sort = transactionSort(url.searchParams.get('sort'));
+    console.info('[BarangKeluarAPI] params', { page, limit, sort: sort.name, hasSearch: Boolean(search), hasDateRange: Boolean(startDate || endDate) });
 
     if (sku) filters.push(`sku=ilike.${encodeURIComponent(`%${escapeLike(sku)}%`)}`);
     if (search) {
@@ -77,9 +78,8 @@ export async function handleBarangKeluarRequest({ request, env }) {
     let rawRows = [];
     let total = 0;
     console.info('[BarangKeluarAPI] query-start');
-    const direction = url.searchParams.get('sort') === 'oldest' ? 'asc' : 'desc';
     const rowsStartedAt = Date.now();
-    const result = await transactionPage(supabaseConfig, TABLE, { columns: COLUMNS, filterQuery, startDate, endDate, page, limit, direction, full: mode === 'full', bounded: true });
+    const result = await transactionPage(supabaseConfig, TABLE, { columns: COLUMNS, filterQuery, startDate, endDate, page, limit, direction: sort.direction, bounded: true });
     rawRows = result.rows;
     total = result.total;
     const rowsMs = Date.now() - rowsStartedAt;
@@ -88,9 +88,16 @@ export async function handleBarangKeluarRequest({ request, env }) {
     console.info('[BarangKeluarAPI] query-ok');
 
     const includeSummary = url.searchParams.get('includeSummary') !== '0';
-    const syncStatus = includeSummary ? await fetchSyncStatus(supabaseConfig) : null;
+    let syncStatus = null;
     const summaryStartedAt = Date.now();
-    const summary = result.summary || (includeSummary ? await transactionSummary(supabaseConfig, TABLE, filterQuery) : null);
+    let summary = result.summary;
+    if (includeSummary) {
+      const metadata = await Promise.allSettled([fetchSyncStatus(supabaseConfig), summary ? Promise.resolve(summary) : transactionSummary(supabaseConfig, TABLE, filterQuery)]);
+      if (metadata[0].status === 'fulfilled') syncStatus = metadata[0].value;
+      else console.error('[BarangKeluarAPI] sync-status-error', { code: metadata[0].reason?.code, message: metadata[0].reason?.message });
+      if (metadata[1].status === 'fulfilled') summary = metadata[1].value;
+      else console.error('[BarangKeluarAPI] summary-error', { code: metadata[1].reason?.code, message: metadata[1].reason?.message });
+    }
     const summaryMs = Date.now() - summaryStartedAt;
     console.info('[BarangKeluar] summaryMs', summaryMs);
     const rows = rawRows.map(mapBarangKeluarRow);
@@ -109,23 +116,25 @@ export async function handleBarangKeluarRequest({ request, env }) {
       total,
       ...(summary ? { summary } : {}),
       page,
-      limit: mode === 'full' ? rows.length : limit,
-      pageSize: mode === 'full' ? rows.length : limit,
+      limit,
+      pageSize: limit,
+      hasNext: page * limit < total,
       lastSync: syncStatus?.last_success_at ?? null,
       syncStatus,
       durationMs: Date.now() - startedAt,
     });
     console.info('[BarangKeluar] serializationMs', Date.now() - serializationStartedAt);
-    console.info('[BarangKeluar] totalMs', Date.now() - startedAt);
     return response;
   } catch (error) {
-    console.error('[BarangKeluarAPI] Supabase query failed', {
+    console.error('[BarangKeluarAPI] query-error', {
       code: error?.code,
       message: error?.message,
       details: error?.details,
       hint: error?.hint,
     });
-    return json({ success: false, reason: ERROR_REASON, message: SAFE_ERROR_MESSAGE }, 500);
+    return json({ success: false, reason: ERROR_REASON, code: error?.code || 'UPSTREAM_QUERY_FAILED', message: SAFE_ERROR_MESSAGE }, 500);
+  } finally {
+    console.info('[BarangKeluarAPI] totalMs', Date.now() - startedAt);
   }
 }
 
