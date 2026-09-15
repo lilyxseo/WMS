@@ -25,11 +25,11 @@ test('endpoint normalizes dates before pagination while applying non-date filter
     assert.equal(response.status, 200);
     assert.equal(body.source, 'supabase');
     assert.equal(body.total, 1);
-    assert.equal(body.limit, 100);
+    assert.equal(body.limit, 50);
     assert.equal(body.lastSync, '2026-08-31T01:00:00Z');
     assert.equal(body.data[0].namaBarang, 'Produk');
     const dataUrl = calls[0].url;
-    assert.equal(new URL(dataUrl).searchParams.get('select'), '*');
+    assert.equal(new URL(dataUrl).searchParams.get('select'), 'tanggal,from_location,to_location,sku,nama_barang,qty,status,pic,keterangan,source_row_number');
     assert.match(dataUrl, /offset=0&limit=1000/);
     assert.match(dataUrl, /sku=ilike/);
     assert.match(dataUrl, /or=\(sku\.ilike.*nama_barang\.ilike/);

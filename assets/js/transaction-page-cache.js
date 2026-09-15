@@ -1,0 +1,47 @@
+export const TRANSACTION_PAGE_CACHE_TTL_MS = 45_000;
+export const TRANSACTION_PAGE_CACHE_LIMIT = 8;
+
+function stableObject(value = {}) {
+  return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)));
+}
+
+export function transactionPageKey({ source, page, limit, query = '', filters = {}, sort = 'latest' }) {
+  return `${source}|page=${page}|limit=${limit}|q=${encodeURIComponent(query)}|filters=${encodeURIComponent(JSON.stringify(stableObject(filters)))}|sort=${sort}`;
+}
+
+export function transactionSummaryKey({ source, query = '', filters = {} }) {
+  return `${source}|q=${encodeURIComponent(query)}|filters=${encodeURIComponent(JSON.stringify(stableObject(filters)))}`;
+}
+
+export class TransactionPageCache {
+  constructor(maxPagesPerSource = TRANSACTION_PAGE_CACHE_LIMIT) {
+    this.maxPagesPerSource = maxPagesPerSource;
+    this.pages = { barang_masuk: new Map(), barang_keluar: new Map() };
+    this.summaries = new Map();
+  }
+
+  get(source, key) {
+    const bucket = this.pages[source];
+    const value = bucket?.get(key);
+    if (!value) return null;
+    bucket.delete(key);
+    bucket.set(key, value);
+    return value;
+  }
+
+  set(source, key, value) {
+    const bucket = this.pages[source];
+    if (!bucket) throw new TypeError(`Unknown transaction source: ${source}`);
+    bucket.delete(key);
+    bucket.set(key, { ...value, fetchedAt: value.fetchedAt || Date.now() });
+    while (bucket.size > this.maxPagesPerSource) bucket.delete(bucket.keys().next().value);
+  }
+
+  setSummary(key, summary) { this.summaries.set(key, { summary, fetchedAt: Date.now() }); }
+  getSummary(key) { return this.summaries.get(key) || null; }
+  isFresh(entry, now = Date.now()) { return Boolean(entry && now - entry.fetchedAt < TRANSACTION_PAGE_CACHE_TTL_MS); }
+  clearSource(source) {
+    this.pages[source]?.clear();
+    for (const key of this.summaries.keys()) if (key.startsWith(`${source}|`)) this.summaries.delete(key);
+  }
+}

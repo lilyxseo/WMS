@@ -26,7 +26,7 @@ test('endpoint normalizes dates before pagination and applies non-date filters i
     assert.equal(body.source, 'supabase');
     assert.equal(body.table, 'public.inventory_barang_keluar');
     assert.equal(body.total, 1);
-    assert.equal(body.limit, 100);
+    assert.equal(body.limit, 50);
     assert.equal(body.lastSync, '2026-08-31T01:00:00Z');
     assert.deepEqual(body.syncStatus, { source: 'barang_keluar', status: 'success', last_success_at: '2026-08-31T01:00:00Z' });
     const dataUrl = calls[0].url;
@@ -41,7 +41,7 @@ test('endpoint normalizes dates before pagination and applies non-date filters i
   } finally { globalThis.fetch = originalFetch; }
 });
 
-test('default pagination is 50 rows', async () => {
+test('default pagination performs one bounded 50-row query', async () => {
   const originalFetch = globalThis.fetch;
   const urls = [];
   globalThis.fetch = async url => {
@@ -51,7 +51,8 @@ test('default pagination is 50 rows', async () => {
   try {
     const body = await (await handleBarangKeluarRequest({ request: request(''), env })).json();
     assert.equal(body.limit, 50);
-    assert.match(urls[0], /offset=0&limit=1000/);
+    assert.match(urls[0], /offset=0&limit=50/);
+    assert.match(urls[0], /order=normalized_date.desc.nullslast%2Csource_row_number.desc|order=normalized_date.desc.nullslast,source_row_number.desc/);
   } finally { globalThis.fetch = originalFetch; }
 });
 

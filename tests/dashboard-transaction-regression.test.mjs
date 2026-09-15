@@ -21,9 +21,9 @@ test('dashboard restores both latest-50 tables and monthly insight without full 
 
 test('normal transaction routes request a server page and preserve backend totals', () => {
   const loader = main.slice(main.indexOf('async function loadTransactionTablePage'), main.indexOf('function normalizeMovementRows'));
-  assert.match(loader, /URLSearchParams\(\{page:String\(nextPage\),limit:String\(nextLimit\),sort\}\)/);
-  assert.match(loader, /st\.total=Number\(data\.total\)/);
-  assert.match(loader, /st\.summary=data\.summary/);
+  assert.match(loader, /URLSearchParams\(\{page:String\(nextPage\),limit:String\(nextLimit\),sort,includeSummary:String\(!cachedSummary\)\}\)/);
+  assert.match(loader, /applyTransactionPayload\(mode/);
+  assert.match(loader, /TRANSACTION_PAGE_CACHE\.set\(source,key/);
   assert.doesNotMatch(loader, /mode=full|slice\(/);
   for (const source of [masuk, keluar]) {
     assert.match(source, /transactionPage\(supabaseConfig, TABLE/);

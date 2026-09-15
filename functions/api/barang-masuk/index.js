@@ -1,12 +1,12 @@
 import { getSecretSupabaseConfig } from '../_supabase-config.js';
-import { escapeLike, supabaseRows, transactionPage } from '../_transaction-read.js';
+import { escapeLike, supabaseRows, transactionPage, transactionSummary } from '../_transaction-read.js';
 
 const TABLE = 'inventory_barang_masuk';
 // Keep reads compatible with the deployed table schema. In particular, synced_at is
 // optional metadata and must not make the whole endpoint fail when it is not present.
-const COLUMNS = '*';
+const COLUMNS = 'tanggal,from_location,to_location,sku,nama_barang,qty,status,pic,keterangan,source_row_number';
 const DEFAULT_LIMIT = 50;
-const MAX_LIMIT = 100;
+const MAX_LIMIT = 50;
 const ERROR_REASON = 'BARANG_MASUK_FETCH_FAILED';
 const SAFE_ERROR_MESSAGE = 'Gagal membaca data Barang Masuk.';
 
@@ -55,6 +55,8 @@ export async function handleBarangMasukRequest({ request, env }) {
     // Validate the centralized server-only configuration before constructing a query.
     // This endpoint has no additional route-level auth check; keep its existing auth behavior.
     const supabaseConfig = getSecretSupabaseConfig(env);
+    const authMs = Date.now() - startedAt;
+    console.info('[BarangMasuk] authMs', authMs);
     console.info('[BarangMasukAPI] auth-ok');
 
     const url = new URL(request.url);
@@ -84,14 +86,23 @@ export async function handleBarangMasukRequest({ request, env }) {
     let total = 0;
     console.info('[BarangMasukAPI] query-start');
     const direction = url.searchParams.get('sort') === 'oldest' ? 'asc' : 'desc';
-    const result = await transactionPage(supabaseConfig, TABLE, { columns: COLUMNS, filterQuery, startDate, endDate, page, limit, direction, full: mode === 'full' });
+    const rowsStartedAt = Date.now();
+    const result = await transactionPage(supabaseConfig, TABLE, { columns: COLUMNS, filterQuery, startDate, endDate, page, limit, direction, full: mode === 'full', bounded: true });
     rawRows = result.rows;
     total = result.total;
+    const rowsMs = Date.now() - rowsStartedAt;
+    console.info('[BarangMasuk] rowsMs', rowsMs);
+    console.info('[BarangMasuk] countMs', 0, '(included in rows query)');
     console.info('[BarangMasukAPI] query-ok');
 
-    const syncStatus = await fetchSyncStatus(supabaseConfig);
-    const summary = result.summary;
+    const includeSummary = url.searchParams.get('includeSummary') !== '0';
+    const syncStatus = includeSummary ? await fetchSyncStatus(supabaseConfig) : null;
+    const summaryStartedAt = Date.now();
+    const summary = result.summary || (includeSummary ? await transactionSummary(supabaseConfig, TABLE, filterQuery) : null);
+    const summaryMs = Date.now() - summaryStartedAt;
+    console.info('[BarangMasuk] summaryMs', summaryMs);
     const rows = rawRows.map(mapBarangMasukRow);
+    const serializationStartedAt = Date.now();
     const body = {
       success: true,
       source: 'supabase',
@@ -111,7 +122,9 @@ export async function handleBarangMasukRequest({ request, env }) {
       syncStatus,
       durationMs: Date.now() - startedAt,
     };
-    console.info('[BarangMasukAPI] response-ready');
+    const serializationMs = Date.now() - serializationStartedAt;
+    console.info('[BarangMasuk] serializationMs', serializationMs);
+    console.info('[BarangMasuk] totalMs', Date.now() - startedAt);
     return json(body);
   } catch (error) {
     console.error('[BarangMasukAPI] Supabase query failed', {
