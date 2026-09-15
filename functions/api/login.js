@@ -21,7 +21,11 @@ function safeEquals(a, b) {
   return out === 0;
 }
 
-function createDevToken(secret, username) {
+function toBase64Url(value) {
+  return btoa(value).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+async function createDevToken(secret, username) {
   const payload = {
     sub: "developer",
     username,
@@ -30,8 +34,10 @@ function createDevToken(secret, username) {
     exp: Math.floor(Date.now() / 1000) + DEV_SESSION_TTL_SECONDS,
   };
 
-  const base = btoa(JSON.stringify(payload));
-  const sig = btoa(`${base}.${secret}`).replace(/=+$/g, "");
+  const base = toBase64Url(JSON.stringify(payload));
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const signed = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(base));
+  const sig = toBase64Url(String.fromCharCode(...new Uint8Array(signed)));
 
   return `${base}.${sig}`;
 }
@@ -52,7 +58,7 @@ async function resolveLoginEmail(identifier, env) {
   const { url, key } = getSecretSupabaseConfig(env);
   const params = new URLSearchParams({
     select: "email",
-    username: `eq.${identifier}`,
+    username: `ilike.${identifier}`,
     limit: "1",
   });
   const response = await fetch(`${url}/rest/v1/users?${params}`, {
@@ -73,36 +79,61 @@ export async function onRequestPost({ request, env }) {
 
     const normalizedIdentifier = String(body.identifier || body.email || "").trim();
     const normalizedPassword = String(body.password || "");
+    const identifierType = isEmail(normalizedIdentifier) ? "email" : "username";
+
+    console.info(`[Login] identifier type: ${identifierType}`);
 
     if (!normalizedIdentifier || !normalizedPassword) {
+      console.info("[Login] username resolved: false");
+      console.info("[Login] developer path matched: false");
+      console.info("[Login] supabase auth status: not_attempted");
+      console.info("[Login] profile lookup status: not_attempted");
+      console.info("[Login] final rejection reason: INVALID_LOGIN_PAYLOAD");
       return json({ success: false, reason: "INVALID_LOGIN_PAYLOAD", message: "Username/email dan password wajib diisi." }, 400);
     }
+
+    // Resolve before developer matching. Prior to server-side resolution the
+    // browser passed this email to /api/login, so DEV_USERNAME may intentionally
+    // contain the resolved developer email rather than the displayed username.
+    const normalizedEmail = await resolveLoginEmail(normalizedIdentifier, env);
+    const usernameResolved = identifierType === "email" || Boolean(normalizedEmail);
+    console.info(`[Login] username resolved: ${usernameResolved}`);
+    console.info(`[Login] profile lookup status: ${identifierType === "username" ? (normalizedEmail ? "found" : "not_found") : "not_required"}`);
 
     /**
      * OPTIONAL DEVELOPER LOGIN
      * Tidak boleh mengganggu login Supabase/database normal.
      */
+    const devUsername = String(env.DEV_USERNAME || "").trim().toLowerCase();
+    const developerPathMatched = Boolean(devUsername) && (
+      safeEquals(normalizedIdentifier.toLowerCase(), devUsername) ||
+      (normalizedEmail && safeEquals(normalizedEmail, devUsername))
+    );
     const devLoginReady =
       String(env.DEV_LOGIN_ENABLED || "").toLowerCase() === "true" &&
-      env.DEV_USERNAME &&
-      env.DEV_PASSWORD;
+      devUsername &&
+      env.DEV_PASSWORD &&
+      env.DEV_SESSION_SECRET;
 
-    if (devLoginReady) {
-      const devUsername = String(env.DEV_USERNAME || "");
+    console.info(`[Login] developer path matched: ${developerPathMatched}`);
+
+    if (developerPathMatched && !devLoginReady) {
+      console.info("[Login] supabase auth status: not_attempted");
+      console.info("[Login] final rejection reason: DEVELOPER_CONFIG_MISSING");
+      return json(INVALID_CREDENTIALS_RESPONSE, 401);
+    }
+
+    if (developerPathMatched) {
       const devPassword = String(env.DEV_PASSWORD || "");
 
-      if (
-        safeEquals(normalizedIdentifier, devUsername) &&
-        safeEquals(normalizedPassword, devPassword)
-      ) {
-        const secret = String(
-          env.DEV_SESSION_SECRET || "dev-secret"
-        );
+      if (safeEquals(normalizedPassword, devPassword)) {
+        const secret = String(env.DEV_SESSION_SECRET);
 
-        const accessToken = createDevToken(secret, normalizedIdentifier);
+        const accessToken = await createDevToken(secret, normalizedIdentifier);
         const expiresAt =
           Math.floor(Date.now() / 1000) + DEV_SESSION_TTL_SECONDS;
 
+        console.info("[Login] supabase auth status: not_attempted");
         return json({
           mode: "dev",
           session: {
@@ -121,14 +152,21 @@ export async function onRequestPost({ request, env }) {
           },
         });
       }
+
+      console.info("[Login] supabase auth status: not_attempted");
+      console.info("[Login] final rejection reason: DEVELOPER_INVALID_CREDENTIALS");
+      return json(INVALID_CREDENTIALS_RESPONSE, 401);
     }
 
     /**
      * NORMAL DATABASE LOGIN VIA SUPABASE
      */
     const { url: supabaseUrl, key: supabasePublishableKey } = getPublishableSupabaseConfig(env);
-    const normalizedEmail = await resolveLoginEmail(normalizedIdentifier, env);
-    if (!normalizedEmail) return json(INVALID_CREDENTIALS_RESPONSE, 401);
+    if (!normalizedEmail) {
+      console.info("[Login] supabase auth status: not_attempted");
+      console.info("[Login] final rejection reason: USERNAME_NOT_RESOLVED");
+      return json(INVALID_CREDENTIALS_RESPONSE, 401);
+    }
 
     const resp = await fetch(
       `${supabaseUrl}/auth/v1/token?grant_type=password`,
@@ -152,11 +190,8 @@ export async function onRequestPost({ request, env }) {
       const upstreamErrorCode = String(data.error_code || data.code || data.error || "AUTH_LOGIN_FAILED");
       const errorCode = upstreamErrorCode === "invalid_credentials" ? "INVALID_LOGIN_CREDENTIALS" : upstreamErrorCode.toUpperCase();
       const message = String(data.error_description || data.msg || data.message || "Login gagal.");
-      console.warn("[SUPABASE_LOGIN_FAILED]", {
-        status: resp.status,
-        error_code: upstreamErrorCode,
-        message,
-      });
+      console.info(`[Login] supabase auth status: rejected_${resp.status}`);
+      console.info(`[Login] final rejection reason: ${errorCode === "INVALID_LOGIN_CREDENTIALS" ? "SUPABASE_INVALID_CREDENTIALS" : errorCode}`);
       return json(
         {
           success: false,
@@ -173,8 +208,12 @@ export async function onRequestPost({ request, env }) {
         error_code: "AUTH_SESSION_INCOMPLETE",
         message: "Supabase Auth response did not include both session tokens.",
       });
+      console.info("[Login] supabase auth status: incomplete_session");
+      console.info("[Login] final rejection reason: SESSION_CREATION_FAILED");
       return json({ success: false, reason: "AUTH_SESSION_INCOMPLETE", message: "Sesi login tidak lengkap." }, 502);
     }
+
+    console.info("[Login] supabase auth status: authenticated");
 
     return json({
       success: true,
@@ -191,6 +230,9 @@ export async function onRequestPost({ request, env }) {
   } catch (err) {
     if (err?.message === 'USERNAME_LOOKUP_FAILED') {
       console.error('[USERNAME_LOOKUP_FAILED] Unable to resolve login identifier.');
+      console.info("[Login] profile lookup status: failed");
+      console.info("[Login] supabase auth status: not_attempted");
+      console.info("[Login] final rejection reason: USERNAME_LOOKUP_FAILED");
       return json({ success: false, reason: "AUTH_SERVICE_UNAVAILABLE", message: "Layanan login sedang tidak tersedia." }, 502);
     }
     if (String(err?.message || '').startsWith('SUPABASE_')) {

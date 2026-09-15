@@ -23,6 +23,12 @@ Affected endpoints and helpers:
 - Inventory synchronization for Kartu Stok, RPL, BULKY, Barang Masuk, and
   Barang Keluar uses the secret credential through the shared sync engine.
 
+The existing explicit developer login is enabled only when all four server-side
+variables are present: `DEV_LOGIN_ENABLED=true`, `DEV_USERNAME`, `DEV_PASSWORD`,
+and a strong `DEV_SESSION_SECRET`. `DEV_USERNAME` may be the configured username
+or its profile email. These values are never exposed through runtime config;
+preview bypass remains a separate, non-production feature.
+
 ## Production inventory schedule (Supabase Cron)
 
 Supabase Cron is the scheduler only. Configure **five independent HTTP jobs**,
