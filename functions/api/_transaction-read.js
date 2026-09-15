@@ -58,6 +58,15 @@ export function orderTransactionRows(rows, direction = 'desc') {
     });
 }
 
+// Transaction rows are appended to their source sheets in transaction order.
+// Keep the public sort vocabulary separate from PostgREST column names: there
+// is deliberately no `normalized_date` database column in the deployed tables.
+export function transactionSort(sort) {
+  return sort === 'oldest'
+    ? { name: 'oldest', direction: 'asc', databaseOrder: 'source_row_number.asc' }
+    : { name: 'latest', direction: 'desc', databaseOrder: 'source_row_number.desc' };
+}
+
 // `tanggal` is text in the deployed inventory tables, so PostgREST cannot
 // chronologically order mixed ISO and MM/DD/YYYY values. Read on the server,
 // normalize before range filtering, and only then apply page boundaries.
@@ -71,8 +80,8 @@ export async function transactionPage(config, table, {
   // deployed `tanggal` column contains mixed textual formats.
   if (bounded && !full && !startDate && !endDate) {
     const offset = (page - 1) * limit;
-    const order = direction === 'asc' ? 'asc' : 'desc';
-    const result = await supabaseRows(config, `${table}?select=${columns}${filterQuery}&order=normalized_date.${order}.nullslast,source_row_number.desc&offset=${offset}&limit=${limit}`, { count: true });
+    const databaseOrder = direction === 'asc' ? 'source_row_number.asc' : 'source_row_number.desc';
+    const result = await supabaseRows(config, `${table}?select=${columns}${filterQuery}&order=${databaseOrder}&offset=${offset}&limit=${limit}`, { count: true });
     return { rows: result.payload, total: exactTotal(result.response, result.payload.length), summary: null };
   }
   const rows = [];

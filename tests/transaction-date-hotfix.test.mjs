@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { normalizeTransactionDate, orderTransactionRows, transactionPage } from '../functions/api/_transaction-read.js';
+import { normalizeTransactionDate, orderTransactionRows, transactionPage, transactionSort } from '../functions/api/_transaction-read.js';
 
 test('transaction parser treats slash dates as MM/DD/YYYY and rejects malformed dates', () => {
   for (const [raw, expected] of [
@@ -43,5 +43,31 @@ test('date range, metrics, latest page, and pagination use normalized chronology
     assert.equal(all.summary.invalidDateCount, 1);
     assert.equal(all.summary.latestDate, '2026-09-15');
     assert.equal(all.summary.oldestDate, '2025-12-31');
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('paginated sort allowlist produces bounded stable PostgREST queries', async () => {
+  const originalFetch = globalThis.fetch;
+  const urls = [];
+  globalThis.fetch = async url => {
+    urls.push(String(url));
+    return new Response(JSON.stringify([{ tanggal: '9/15/2026', source_row_number: 25 }]), {
+      status: 200,
+      headers: { 'content-range': '25-25/20984' },
+    });
+  };
+  try {
+    for (const sort of ['latest', 'oldest', 'not-a-column']) {
+      const mapped = transactionSort(sort);
+      const result = await transactionPage({ url: 'https://db.example', key: 'secret' }, 'inventory_barang_keluar', {
+        page: 2, limit: 25, direction: mapped.direction, bounded: true,
+      });
+      assert.equal(result.rows.length, 1);
+      assert.equal(result.total, 20984);
+    }
+    assert.match(urls[0], /order=source_row_number.desc&offset=25&limit=25/);
+    assert.match(urls[1], /order=source_row_number.asc&offset=25&limit=25/);
+    assert.match(urls[2], /order=source_row_number.desc&offset=25&limit=25/);
+    assert.doesNotMatch(urls.join('\n'), /normalized_date|not-a-column/);
   } finally { globalThis.fetch = originalFetch; }
 });
