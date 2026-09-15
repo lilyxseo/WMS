@@ -46,28 +46,42 @@ test('date range, metrics, latest page, and pagination use normalized chronology
   } finally { globalThis.fetch = originalFetch; }
 });
 
-test('paginated sort allowlist produces bounded stable PostgREST queries', async () => {
+test('sort allowlist orders the full matching set before pagination', async () => {
   const originalFetch = globalThis.fetch;
   const urls = [];
   globalThis.fetch = async url => {
     urls.push(String(url));
     return new Response(JSON.stringify([{ tanggal: '9/15/2026', source_row_number: 25 }]), {
       status: 200,
-      headers: { 'content-range': '25-25/20984' },
+      headers: { 'content-range': '0-0/1' },
     });
   };
   try {
-    for (const sort of ['latest', 'oldest', 'not-a-column']) {
+    for (const sort of ['latest', 'oldest', 'sku-asc', 'name-asc', 'qty-desc', 'qty-asc', 'not-a-column']) {
       const mapped = transactionSort(sort);
       const result = await transactionPage({ url: 'https://db.example', key: 'secret' }, 'inventory_barang_keluar', {
-        page: 2, limit: 25, direction: mapped.direction, bounded: true,
+        page: 2, limit: 25, sort: mapped.name, bounded: true,
       });
-      assert.equal(result.rows.length, 1);
-      assert.equal(result.total, 20984);
+      assert.equal(result.rows.length, 0);
+      assert.equal(result.total, 1);
     }
-    assert.match(urls[0], /order=source_row_number.desc&offset=25&limit=25/);
-    assert.match(urls[1], /order=source_row_number.asc&offset=25&limit=25/);
-    assert.match(urls[2], /order=source_row_number.desc&offset=25&limit=25/);
+    assert.ok(urls.every(url => /order=source_row_number.desc&offset=0&limit=1000/.test(url)));
     assert.doesNotMatch(urls.join('\n'), /normalized_date|not-a-column/);
   } finally { globalThis.fetch = originalFetch; }
+});
+
+test('all transaction sorts are numeric/null safe, natural and stable', () => {
+  const rows = [
+    { tanggal: '12/31/2025', sku: 'A10', nama_barang: null, qty: '100', source_row_number: 2 },
+    { tanggal: '9/15/2026', sku: 'A2', nama_barang: 'Zulu', qty: '3', source_row_number: 3 },
+    { tanggal: '2026-09-14', sku: '001', nama_barang: 'alpha', qty: '20', source_row_number: 4 },
+    { tanggal: 'bad', sku: '01', nama_barang: '', qty: '', source_row_number: 5 },
+  ];
+  const values = (sort, field) => orderTransactionRows(rows, sort).map(item => item.row[field]);
+  assert.deepEqual(values('latest', 'tanggal'), ['9/15/2026', '2026-09-14', '12/31/2025', 'bad']);
+  assert.deepEqual(values('oldest', 'tanggal'), ['12/31/2025', '2026-09-14', '9/15/2026', 'bad']);
+  assert.deepEqual(values('sku-asc', 'sku'), ['001', '01', 'A2', 'A10']);
+  assert.deepEqual(values('name-asc', 'nama_barang'), ['alpha', 'Zulu', null, '']);
+  assert.deepEqual(values('qty-desc', 'qty'), ['100', '20', '3', '']);
+  assert.deepEqual(values('qty-asc', 'qty'), ['3', '20', '100', '']);
 });
