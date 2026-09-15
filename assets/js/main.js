@@ -256,11 +256,6 @@ const environment=String(runtimeConfig.environment||"unknown").trim().toLowerCas
 const trustedPreviewEnvironments=new Set(["preview","deploy-preview","branch-deploy","development","dev","local"]);
 return trustedPreviewEnvironments.has(environment)&&isTruthyFlag(runtimeConfig.previewBypassLogin);
 }
-function isTrustedDevelopmentEnvironment(){
-const environment=String(runtimeConfig.environment||"unknown").trim().toLowerCase();
-return new Set(["preview","deploy-preview","branch-deploy","development","dev","local"]).has(environment);
-}
-
 document.addEventListener('click',e=>{
   const target=e.target?.closest?.('[data-crud-action], [data-mv-delete], [data-mv-bulk-delete], [data-mv-bulk-edit], #sheetSubmitBtn, #pdfTransferImportBtn, [data-action="delete"], [data-action="edit"]');
   if(target&&!guardCrudAction(target.dataset?.crudAction||target.dataset?.action||'CRUD')){e.preventDefault();e.stopImmediatePropagation();}
@@ -564,7 +559,9 @@ if(isPreviewBypassLoginEnabled()){
 user={id:'preview-bypass',email:'preview@local'};
 devProfile={full_name:'Developer',role:'Mode Development',username:'developer',email:'preview@local'};
 }else{
-session=await restoreSession({allowDeveloperSession:isTrustedDevelopmentEnvironment()});
+// This only restores a developer session created by an explicit credential
+// login; it does not enable preview bypass or automatic developer login.
+session=await restoreSession({allowDeveloperSession:true});
 if(requestGeneration!==authRequestGeneration)return;
 if(session){
 if(session?.isDeveloper){
