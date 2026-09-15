@@ -16,14 +16,21 @@ async function exactCount(config, table, filter = '') {
   return total && total !== '*' ? Number(total) : (await response.json()).length;
 }
 
+export async function loadTotalMovement(env) {
+  const config = getSecretSupabaseConfig(env);
+  // An ilike without wildcards is exact but safely accepts legacy casing.
+  return exactCount(config, SOURCES.barangMasuk.table, '&status=ilike.Movement');
+}
+
 export async function loadInventoryCounts(env) {
   const config = getSecretSupabaseConfig(env);
   const entries = await Promise.all([
     exactCount(config, SOURCES.kartuStok.table), exactCount(config, SOURCES.rpl.table), exactCount(config, SOURCES.bulky.table),
     exactCount(config, SOURCES.barangMasuk.table, '&sku=not.is.null&status=ilike.BARANG%20MASUK'),
     exactCount(config, SOURCES.barangKeluar.table, '&tanggal=not.is.null&keterangan=ilike.PENGELUARAN'),
+    exactCount(config, SOURCES.barangMasuk.table, '&status=ilike.Movement'),
   ]);
-  return { kartuStok: entries[0], rpl: entries[1], bulky: entries[2], barangMasuk: entries[3], barangKeluar: entries[4] };
+  return { kartuStok: entries[0], rpl: entries[1], bulky: entries[2], barangMasuk: entries[3], barangKeluar: entries[4], totalMovement: entries[5] };
 }
 
 function number(value) {
