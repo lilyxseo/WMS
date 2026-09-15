@@ -34,8 +34,8 @@ test('dashboard refresh only refetches dashboard summary', () => {
 
 test('movement detail routes lazy-load independently', () => {
   const loader = bodyBetween('async function loadDetailPageData(page)', 'async function initAppData()');
-  assert.match(loader, /page==='barang-masuk'.*loadTransactionTablePage\('in',\{page:1\}\)/);
-  assert.match(loader, /page==='barang-keluar'.*loadTransactionTablePage\('out',\{page:1\}\)/);
+  assert.match(loader, /page==='barang-masuk'.*loadTransactionTablePage\('in',\{page:TABLE_STATE.in.page\}\)/);
+  assert.match(loader, /page==='barang-keluar'.*loadTransactionTablePage\('out',\{page:TABLE_STATE.out.page\}\)/);
   const showPage = bodyBetween('function showPage(page)', 'function pageTitleFromPath(path)');
   assert.match(showPage, /loadDetailPageData\(page\)/);
 });

@@ -63,8 +63,18 @@ export function orderTransactionRows(rows, direction = 'desc') {
 // normalize before range filtering, and only then apply page boundaries.
 export async function transactionPage(config, table, {
   columns = '*', filterQuery = '', startDate = '', endDate = '', page = 1,
-  limit = 50, direction = 'desc', full = false,
+  limit = 50, direction = 'desc', full = false, bounded = false,
 } = {}) {
+  // The normal list path must stay bounded: PostgREST applies filtering, stable
+  // ordering and the requested range, and returns the exact count in the same
+  // response. Date-range reads retain the legacy normalization path because the
+  // deployed `tanggal` column contains mixed textual formats.
+  if (bounded && !full && !startDate && !endDate) {
+    const offset = (page - 1) * limit;
+    const order = direction === 'asc' ? 'asc' : 'desc';
+    const result = await supabaseRows(config, `${table}?select=${columns}${filterQuery}&order=normalized_date.${order}.nullslast,source_row_number.desc&offset=${offset}&limit=${limit}`, { count: true });
+    return { rows: result.payload, total: exactTotal(result.response, result.payload.length), summary: null };
+  }
   const rows = [];
   let sourceTotal = null;
   for (let offset = 0; ; offset += TRANSACTION_READ_BATCH_SIZE) {
