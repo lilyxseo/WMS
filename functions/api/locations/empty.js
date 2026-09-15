@@ -1,0 +1,2 @@
+import { boundedInt, callLocationRpc, locationJson } from '../_locations.js';
+export async function onRequestGet(context) { try { const u=new URL(context.request.url); const out=await callLocationRpc(context,'location_empty',{p_page:boundedInt(u.searchParams.get('page'),1,100000),p_limit:boundedInt(u.searchParams.get('limit'),25)}); return out.response||locationJson({success:true,...out.payload,timings:out.timings}); } catch(error) { console.error('[Locations] empty',error?.message||error); return locationJson({success:false,message:'Gagal memuat lokasi kosong'},502); } }
