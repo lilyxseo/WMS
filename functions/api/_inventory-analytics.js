@@ -9,6 +9,23 @@ const SOURCES = {
   barangKeluar: { table: 'inventory_barang_keluar', select: 'sku,nama_barang,qty,status,tanggal,from_location,keterangan' },
 };
 
+async function exactCount(config, table, filter = '') {
+  const response = await fetch(`${config.url}/rest/v1/${table}?select=sku${filter}&limit=1`, { headers: { apikey: config.key, Authorization: `Bearer ${config.key}`, Prefer: 'count=exact' } });
+  if (!response.ok) throw new Error(`Count ${table} failed (${response.status})`);
+  const total = String(response.headers.get('content-range') || '').split('/')[1];
+  return total && total !== '*' ? Number(total) : (await response.json()).length;
+}
+
+export async function loadInventoryCounts(env) {
+  const config = getSecretSupabaseConfig(env);
+  const entries = await Promise.all([
+    exactCount(config, SOURCES.kartuStok.table), exactCount(config, SOURCES.rpl.table), exactCount(config, SOURCES.bulky.table),
+    exactCount(config, SOURCES.barangMasuk.table, '&sku=not.is.null&status=ilike.BARANG%20MASUK'),
+    exactCount(config, SOURCES.barangKeluar.table, '&tanggal=not.is.null&keterangan=ilike.PENGELUARAN'),
+  ]);
+  return { kartuStok: entries[0], rpl: entries[1], bulky: entries[2], barangMasuk: entries[3], barangKeluar: entries[4] };
+}
+
 function number(value) {
   const parsed = Number(String(value ?? '').replace(/,/g, ''));
   return Number.isFinite(parsed) ? parsed : 0;

@@ -17,7 +17,7 @@ test('login persists and verifies the session before protected startup requests'
 });
 
 test('first dashboard and sync-status reads run in parallel with current auth headers', () => {
-  assert.match(main, /Promise\.allSettled\(\[loadDashboardSummary\(\),loadInventorySyncStatus\(\)\]\)/);
+  assert.match(main, /Promise\.allSettled\(\[loadDashboardPayload\(\),loadInventorySyncStatus\(\)\]\)/);
   for (const endpoint of ['/api/dashboard-summary', '/api/inventory-sync-status']) {
     const call = main.slice(main.indexOf(`fetchJsonSafe('${endpoint}'`) - 100, main.indexOf(`fetchJsonSafe('${endpoint}'`) + 100);
     assert.match(call, /await getAuthHeaders\(\)/);

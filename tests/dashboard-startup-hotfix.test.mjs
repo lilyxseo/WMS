@@ -12,11 +12,11 @@ function bodyBetween(start, end) {
   return source.slice(startIndex, endIndex);
 }
 
-test('dashboard initialization fetches and renders only its authoritative summary', () => {
+test('dashboard initialization fetches its lightweight dashboard payload', () => {
   const init = bodyBetween('async function initAppData()', 'async function refreshDataInBackground()');
   const landing = init.slice(0, init.indexOf('await hydrateModuleCachesFromDb()'));
-  assert.match(landing, /Promise\.allSettled\(\[loadDashboardSummary\(\),loadInventorySyncStatus\(\)\]\)/);
-  assert.doesNotMatch(landing, /hydrateAllDataOnInit|preloadData|mode=['"]full|BARCODE|barang-masuk|barang-keluar/);
+  assert.match(landing, /Promise\.allSettled\(\[loadDashboardPayload\(\),loadInventorySyncStatus\(\)\]\)/);
+  assert.doesNotMatch(landing, /hydrateAllDataOnInit|preloadData|mode=['"]full|BARCODE/);
 
   const summary = bodyBetween('async function loadDashboardSummary()', 'async function loadDetailPageData(page)');
   assert.match(summary, /fetchJsonSafe\('\/api\/dashboard-summary'/);
@@ -28,14 +28,14 @@ test('dashboard initialization fetches and renders only its authoritative summar
 test('dashboard refresh only refetches dashboard summary', () => {
   const refresh = bodyBetween('async function triggerManualRefresh()', 'function syncRefreshButton()');
   const dashboardBranch = refresh.slice(refresh.indexOf("activePage==='dashboard'"), refresh.indexOf("activePage==='balikan-store'"));
-  assert.match(dashboardBranch, /loadDashboardSummary\(\)/);
+  assert.match(dashboardBranch, /loadDashboardPayload\(\)/);
   assert.doesNotMatch(dashboardBranch, /loadAllData|hydrateAllDataOnInit|loadBarcodeMaster|mode=.?full|syncData/);
 });
 
 test('movement detail routes lazy-load independently', () => {
   const loader = bodyBetween('async function loadDetailPageData(page)', 'async function initAppData()');
-  assert.match(loader, /page==='barang-masuk'[\s\S]*loadBarangMasuk\(\{mode:'full'\}\)/);
-  assert.match(loader, /page==='barang-keluar'[\s\S]*loadBarangKeluar\(\{mode:'full'\}\)/);
+  assert.match(loader, /page==='barang-masuk'.*loadTransactionTablePage\('in',\{page:1\}\)/);
+  assert.match(loader, /page==='barang-keluar'.*loadTransactionTablePage\('out',\{page:1\}\)/);
   const showPage = bodyBetween('function showPage(page)', 'function pageTitleFromPath(path)');
   assert.match(showPage, /loadDetailPageData\(page\)/);
 });

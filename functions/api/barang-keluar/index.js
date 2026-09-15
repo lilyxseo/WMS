@@ -1,4 +1,5 @@
 import { getSecretSupabaseConfig } from '../_supabase-config.js';
+import { escapeLike, exactTotal, supabaseRows, transactionSummary } from '../_transaction-read.js';
 
 const TABLE = 'inventory_barang_keluar';
 // Keep reads compatible with the deployed table schema. In particular, synced_at is
@@ -17,9 +18,6 @@ function json(body, status = 200) {
   });
 }
 
-function escapeLike(value) {
-  return String(value || '').replace(/[\\%_]/g, match => `\\${match}`);
-}
 
 export function mapBarangKeluarRow(row = {}) {
   return {
@@ -41,32 +39,7 @@ export function mapBarangKeluarRow(row = {}) {
   };
 }
 
-async function supabaseGet(config, path, { count = false } = {}) {
-  const { url, key } = config;
-  const response = await fetch(`${url}/rest/v1/${path}`, {
-    headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-      ...(count ? { Prefer: 'count=exact' } : {}),
-    },
-  });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    const error = new Error(payload?.message || `Supabase HTTP ${response.status}`);
-    error.name = 'SupabaseError';
-    error.code = payload?.code;
-    error.details = payload?.details;
-    error.hint = payload?.hint;
-    throw error;
-  }
-  if (!Array.isArray(payload)) throw new TypeError('Supabase returned an invalid response body');
-  return { payload, response };
-}
-
-function exactTotal(response, fallback) {
-  const total = String(response.headers.get('content-range') || '').split('/')[1];
-  return total && total !== '*' ? Number(total) : fallback;
-}
+const supabaseGet = supabaseRows;
 
 async function fetchSyncStatus(config) {
   const path = 'inventory_sync_status?select=*&source=eq.barang_keluar&limit=1';
@@ -120,7 +93,7 @@ export async function handleBarangKeluarRequest({ request, env }) {
     }
     console.info('[BarangKeluarAPI] query-ok');
 
-    const syncStatus = await fetchSyncStatus(supabaseConfig);
+    const [syncStatus, summary] = await Promise.all([fetchSyncStatus(supabaseConfig), mode === 'full' ? Promise.resolve(null) : transactionSummary(supabaseConfig, TABLE, filterQuery)]);
     const rows = rawRows.map(mapBarangKeluarRow);
     const columns = ['tanggal', 'from', 'to', 'sku', 'namaBarang', 'qty', 'status', 'pic', 'keterangan'];
     return json({
@@ -134,6 +107,7 @@ export async function handleBarangKeluarRequest({ request, env }) {
       rows,
       values: rows.map(row => columns.map(key => row[key] ?? '')),
       total,
+      ...(summary ? { summary } : {}),
       page,
       limit: mode === 'full' ? rows.length : limit,
       pageSize: mode === 'full' ? rows.length : limit,
