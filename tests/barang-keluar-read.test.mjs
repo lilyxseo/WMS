@@ -11,13 +11,13 @@ test('Barang Keluar adapter preserves the legacy frontend fields', () => {
   });
 });
 
-test('endpoint paginates and applies SKU, q, status, and date filters in Supabase', async () => {
+test('endpoint normalizes dates before pagination and applies non-date filters in Supabase', async () => {
   const calls = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url, options) => {
     calls.push({ url: String(url), options });
     if (String(url).includes('inventory_sync_status')) return new Response(JSON.stringify([{ source: 'barang_keluar', status: 'success', last_success_at: '2026-08-31T01:00:00Z' }]), { status: 200 });
-    return new Response(JSON.stringify([{ sku: 'SKU-1', nama_barang: 'Produk', source_row_number: 42 }]), { status: 200, headers: { 'content-range': '100-100/21789' } });
+    return new Response(JSON.stringify([{ tanggal: '8/31/2026', sku: 'SKU-1', nama_barang: 'Produk', source_row_number: 42 }]), { status: 200, headers: { 'content-range': '0-0/1' } });
   };
   try {
     const response = await handleBarangKeluarRequest({ request: request('?page=2&limit=500&sku=SKU-1&q=Produk&status=OK&startDate=2026-08-01&endDate=2026-08-31'), env });
@@ -25,17 +25,16 @@ test('endpoint paginates and applies SKU, q, status, and date filters in Supabas
     assert.equal(response.status, 200);
     assert.equal(body.source, 'supabase');
     assert.equal(body.table, 'public.inventory_barang_keluar');
-    assert.equal(body.total, 21789);
+    assert.equal(body.total, 1);
     assert.equal(body.limit, 100);
     assert.equal(body.lastSync, '2026-08-31T01:00:00Z');
     assert.deepEqual(body.syncStatus, { source: 'barang_keluar', status: 'success', last_success_at: '2026-08-31T01:00:00Z' });
     const dataUrl = calls[0].url;
-    assert.match(dataUrl, /offset=100&limit=100/);
+    assert.match(dataUrl, /offset=0&limit=1000/);
     assert.match(dataUrl, /sku=ilike/);
     assert.match(dataUrl, /or=\(sku\.ilike.*nama_barang\.ilike/);
     assert.match(dataUrl, /status=eq\.OK/);
-    assert.match(dataUrl, /tanggal=gte\.2026-08-01/);
-    assert.match(dataUrl, /tanggal=lte\.2026-08-31/);
+    assert.doesNotMatch(dataUrl, /tanggal=(?:gte|lte)/);
     assert.equal(calls.some(call => call.url.includes('googleapis.com')), false);
     assert.equal(calls[0].options.headers.apikey, env.SUPABASE_SECRET_KEY);
     assert.equal(new URL(calls.find(call => call.url.includes('inventory_sync_status')).url).searchParams.get('source'), 'eq.barang_keluar');
@@ -52,7 +51,7 @@ test('default pagination is 50 rows', async () => {
   try {
     const body = await (await handleBarangKeluarRequest({ request: request(''), env })).json();
     assert.equal(body.limit, 50);
-    assert.match(urls[0], /offset=0&limit=50/);
+    assert.match(urls[0], /offset=0&limit=1000/);
   } finally { globalThis.fetch = originalFetch; }
 });
 

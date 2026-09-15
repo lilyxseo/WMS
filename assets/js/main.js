@@ -2247,7 +2247,8 @@ async function loadTransactionTablePage(mode,{page,limit,search}={}){
 const st=TABLE_STATE[mode],requestId=++st.requestId;st.loading=true;
 const nextPage=Math.max(1,Number(page)||st.page||1),nextLimit=[25,50,100].includes(Number(limit))?Number(limit):st.pageSize;
 const q=String(search??(mode==='in'?inSearch?.value:outSearch?.value)??'').trim();
-const params=new URLSearchParams({page:String(nextPage),limit:String(nextLimit)});if(q)params.set('q',q);
+const sort=document.getElementById(`mv-sort-${mode}`)?.value||'latest';
+const params=new URLSearchParams({page:String(nextPage),limit:String(nextLimit),sort});if(q)params.set('q',q);
 const endpoint=mode==='in'?'/api/barang-masuk':'/api/barang-keluar';
 try{const {res,data}=await fetchJsonSafe(`${endpoint}?${params}`);if(!res.ok||!data?.success)throw new Error(data?.message||'Gagal memuat data');if(requestId!==st.requestId)return;
 const rows=normalizeBackendRows(data);st.page=Number(data.page)||nextPage;st.pageSize=Number(data.limit)||nextLimit;st.total=Number(data.total)||0;st.summary=data.summary||{totalRows:st.total,totalQty:0,totalSku:0};
@@ -2335,7 +2336,7 @@ function positionColumnFilterMenu(menu){
   menu.style.top=`${top}px`;
   if(prevHidden){menu.hidden=true;}
 }
-function sortTableRows(rows,sort){const m={latest:(a,b)=>(b._sheetOrder??0)-(a._sheetOrder??0),oldest:(a,b)=>(a._sheetOrder??0)-(b._sheetOrder??0),sku:(a,b)=>String(getVal(a,["sku"])||"").localeCompare(String(getVal(b,["sku"])||"")),name:(a,b)=>String(getVal(a,["nama barang","namabarang","namaBarang","nama","item","description"])||"").localeCompare(String(getVal(b,["nama barang","namabarang","namaBarang","nama","item","description"])||"")),qtyDesc:(a,b)=>(b._qty||0)-(a._qty||0),qtyAsc:(a,b)=>(a._qty||0)-(b._qty||0)};return [...rows].sort(m[sort]||m.latest);}
+function sortTableRows(rows,sort){const m={latest:(a,b)=>(a._sheetOrder??0)-(b._sheetOrder??0),oldest:(a,b)=>(a._sheetOrder??0)-(b._sheetOrder??0),sku:(a,b)=>String(getVal(a,["sku"])||"").localeCompare(String(getVal(b,["sku"])||"")),name:(a,b)=>String(getVal(a,["nama barang","namabarang","namaBarang","nama","item","description"])||"").localeCompare(String(getVal(b,["nama barang","namabarang","namaBarang","nama","item","description"])||"")),qtyDesc:(a,b)=>(b._qty||0)-(a._qty||0),qtyAsc:(a,b)=>(a._qty||0)-(b._qty||0)};return [...rows].sort(m[sort]||m.latest);}
 function paginateRows(mode,action){const st=TABLE_STATE[mode];const max=Math.max(1,Math.ceil(st.total/st.pageSize));const page=action==="prev"?Math.max(1,st.page-1):Math.min(max,st.page+1);return loadTransactionTablePage(mode,{page});}
 function toggleColumnVisibility(mode){const root=document.getElementById(`mv-cols-${mode}`);const cols=[...root.querySelectorAll('input[type="checkbox"]')].filter(c=>c.checked).map(c=>c.value);renderDataTablePage(mode,mode==="in"?"Barang Masuk":"Barang Keluar",true,cols);}
 function closeColumnMenus(){document.querySelectorAll(".mv-columns.open").forEach(el=>el.classList.remove("open"));Object.keys(TABLE_STATE).forEach(k=>TABLE_STATE[k].columnMenuOpen=false);}
