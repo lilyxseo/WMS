@@ -47,14 +47,38 @@ export async function supabaseRows(config, path, { count = false } = {}) {
   return { payload, response };
 }
 
-export function orderTransactionRows(rows, direction = 'desc') {
-  const multiplier = direction === 'asc' ? 1 : -1;
+function naturalText(value) {
+  return String(value ?? '').trim();
+}
+
+function stableRowOrder(a, b, direction = 'asc') {
+  const difference = (Number(a.source_row_number) || 0) - (Number(b.source_row_number) || 0);
+  return direction === 'desc' ? -difference : difference;
+}
+
+export function orderTransactionRows(rows, sort = 'latest') {
+  const selected = transactionSort(typeof sort === 'string' ? sort : sort?.name);
   return rows.map(row => ({ row, parsedDate: normalizeTransactionDate(row.tanggal) }))
     .sort((a, b) => {
-      if (a.parsedDate.valid !== b.parsedDate.valid) return a.parsedDate.valid ? -1 : 1;
-      const byDate = a.parsedDate.valid ? a.parsedDate.value.localeCompare(b.parsedDate.value) * multiplier : 0;
-      if (byDate) return byDate;
-      return (Number(b.row.source_row_number) || 0) - (Number(a.row.source_row_number) || 0);
+      let result = 0;
+      if (selected.field === 'tanggal') {
+        if (a.parsedDate.valid !== b.parsedDate.valid) return a.parsedDate.valid ? -1 : 1;
+        result = a.parsedDate.valid ? a.parsedDate.value.localeCompare(b.parsedDate.value) : 0;
+      } else if (selected.field === 'qty') {
+        const leftRaw = naturalText(a.row.qty), rightRaw = naturalText(b.row.qty);
+        const left = Number(leftRaw), right = Number(rightRaw);
+        const leftValid = Boolean(leftRaw) && Number.isFinite(left), rightValid = Boolean(rightRaw) && Number.isFinite(right);
+        if (leftValid !== rightValid) return leftValid ? -1 : 1;
+        result = leftValid ? left - right : 0;
+      } else {
+        const left = naturalText(a.row[selected.field]), right = naturalText(b.row[selected.field]);
+        if (Boolean(left) !== Boolean(right)) return left ? -1 : 1;
+        // Numeric collation gives the expected A2 < A10 ordering without ever
+        // coercing the SKU (and therefore without discarding leading zeroes).
+        result = left.localeCompare(right, 'id', { numeric: true, sensitivity: 'base' });
+      }
+      if (result) return selected.direction === 'desc' ? -result : result;
+      return stableRowOrder(a.row, b.row, selected.direction);
     });
 }
 
@@ -62,9 +86,16 @@ export function orderTransactionRows(rows, direction = 'desc') {
 // Keep the public sort vocabulary separate from PostgREST column names: there
 // is deliberately no `normalized_date` database column in the deployed tables.
 export function transactionSort(sort) {
-  return sort === 'oldest'
-    ? { name: 'oldest', direction: 'asc', databaseOrder: 'source_row_number.asc' }
-    : { name: 'latest', direction: 'desc', databaseOrder: 'source_row_number.desc' };
+  const allowlist = {
+    latest: { field: 'tanggal', direction: 'desc' },
+    oldest: { field: 'tanggal', direction: 'asc' },
+    'sku-asc': { field: 'sku', direction: 'asc' },
+    'name-asc': { field: 'nama_barang', direction: 'asc' },
+    'qty-desc': { field: 'qty', direction: 'desc' },
+    'qty-asc': { field: 'qty', direction: 'asc' },
+  };
+  const name = Object.hasOwn(allowlist, sort) ? sort : 'latest';
+  return { name, ...allowlist[name] };
 }
 
 // `tanggal` is text in the deployed inventory tables, so PostgREST cannot
@@ -72,18 +103,12 @@ export function transactionSort(sort) {
 // normalize before range filtering, and only then apply page boundaries.
 export async function transactionPage(config, table, {
   columns = '*', filterQuery = '', startDate = '', endDate = '', page = 1,
-  limit = 50, direction = 'desc', full = false, bounded = false,
+  limit = 50, sort = 'latest', direction, full = false, bounded = false,
 } = {}) {
-  // The normal list path must stay bounded: PostgREST applies filtering, stable
-  // ordering and the requested range, and returns the exact count in the same
-  // response. Date-range reads retain the legacy normalization path because the
-  // deployed `tanggal` column contains mixed textual formats.
-  if (bounded && !full && !startDate && !endDate) {
-    const offset = (page - 1) * limit;
-    const databaseOrder = direction === 'asc' ? 'source_row_number.asc' : 'source_row_number.desc';
-    const result = await supabaseRows(config, `${table}?select=${columns}${filterQuery}&order=${databaseOrder}&offset=${offset}&limit=${limit}`, { count: true });
-    return { rows: result.payload, total: exactTotal(result.response, result.payload.length), summary: null };
-  }
+  // PostgREST applies the search/status filters first. All matching rows are
+  // then read in bounded batches so normalization and sorting happen server-side
+  // across the complete result set before this function slices the requested page.
+  const selectedSort = transactionSort(sort === 'latest' && direction ? (direction === 'asc' ? 'oldest' : 'latest') : sort);
   const rows = [];
   let sourceTotal = null;
   for (let offset = 0; ; offset += TRANSACTION_READ_BATCH_SIZE) {
@@ -92,7 +117,7 @@ export async function transactionPage(config, table, {
     rows.push(...result.payload);
     if (result.payload.length < TRANSACTION_READ_BATCH_SIZE || rows.length >= sourceTotal) break;
   }
-  const ordered = orderTransactionRows(rows, direction);
+  const ordered = orderTransactionRows(rows, selectedSort);
   const filtered = ordered.filter(({ parsedDate }) => !startDate && !endDate
     || parsedDate.valid && (!startDate || parsedDate.value >= startDate) && (!endDate || parsedDate.value <= endDate));
   const validDates = filtered.filter(item => item.parsedDate.valid).map(item => item.parsedDate.value);

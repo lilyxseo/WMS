@@ -120,7 +120,9 @@ test('mode=full is ignored and cannot bypass bounded pagination', async () => {
   globalThis.fetch = async url => {
     urls.push(String(url));
     if (String(url).includes('inventory_sync_status')) return new Response('[]', { status: 200 });
-    return new Response(JSON.stringify(Array.from({ length: 25 }, (_, index) => ({ sku: `SKU-${index}`, source_row_number: 100 - index }))), { status: 200, headers: { 'content-range': '0-24/1002' } });
+    const offset = Number(new URL(String(url)).searchParams.get('offset') || 0);
+    const length = offset === 0 ? 1000 : 2;
+    return new Response(JSON.stringify(Array.from({ length }, (_, index) => ({ sku: `SKU-${offset + index}`, source_row_number: 1002 - offset - index }))), { status: 200, headers: { 'content-range': `${offset}-${offset + length - 1}/1002` } });
   };
   try {
     const response = await handleBarangMasukRequest({ request: request('?mode=full&page=1&limit=25&sort=latest'), env });
@@ -129,7 +131,7 @@ test('mode=full is ignored and cannot bypass bounded pagination', async () => {
     assert.equal(body.rows.length, 25);
     assert.equal(body.total, 1002);
     assert.equal(body.hasNext, true);
-    assert.match(urls[0], /order=source_row_number.desc&offset=0&limit=25/);
-    assert.equal(urls.filter(url => url.includes('inventory_barang_masuk')).length, 2); // page + summary
+    assert.match(urls[0], /order=source_row_number.desc&offset=0&limit=1000/);
+    assert.equal(urls.filter(url => url.includes('inventory_barang_masuk')).length, 2); // two full-set sort batches
   } finally { globalThis.fetch = originalFetch; }
 });
