@@ -1,5 +1,5 @@
 import { getSecretSupabaseConfig } from '../_supabase-config.js';
-import { escapeLike, exactTotal, supabaseRows, transactionSummary } from '../_transaction-read.js';
+import { escapeLike, supabaseRows, transactionPage } from '../_transaction-read.js';
 
 const TABLE = 'inventory_barang_masuk';
 // Keep reads compatible with the deployed table schema. In particular, synced_at is
@@ -7,7 +7,6 @@ const TABLE = 'inventory_barang_masuk';
 const COLUMNS = '*';
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
-const FULL_BATCH_SIZE = 1000;
 const ERROR_REASON = 'BARANG_MASUK_FETCH_FAILED';
 const SAFE_ERROR_MESSAGE = 'Gagal membaca data Barang Masuk.';
 
@@ -79,29 +78,19 @@ export async function handleBarangMasukRequest({ request, env }) {
     if (from) filters.push(`from_location=eq.${encodeURIComponent(from)}`);
     if (to) filters.push(`to_location=eq.${encodeURIComponent(to)}`);
     if (status) filters.push(`status=eq.${encodeURIComponent(status)}`);
-    if (startDate) filters.push(`tanggal=gte.${encodeURIComponent(startDate)}`);
-    if (endDate) filters.push(`tanggal=lte.${encodeURIComponent(endDate)}`);
     const filterQuery = filters.length ? `&${filters.join('&')}` : '';
 
     let rawRows = [];
     let total = 0;
     console.info('[BarangMasukAPI] query-start');
-    if (mode === 'full') {
-      for (let offset = 0; ; offset += FULL_BATCH_SIZE) {
-        const result = await supabaseGet(supabaseConfig, `${TABLE}?select=${COLUMNS}${filterQuery}&order=source_row_number.asc&offset=${offset}&limit=${FULL_BATCH_SIZE}`, { count: offset === 0 });
-        rawRows.push(...result.payload);
-        if (offset === 0) total = exactTotal(result.response, result.payload.length);
-        if (result.payload.length < FULL_BATCH_SIZE || (total > 0 && rawRows.length >= total)) break;
-      }
-    } else {
-      const offset = (page - 1) * limit;
-      const result = await supabaseGet(supabaseConfig, `${TABLE}?select=${COLUMNS}${filterQuery}&order=source_row_number.asc&offset=${offset}&limit=${limit}`, { count: true });
-      rawRows = result.payload;
-      total = exactTotal(result.response, result.payload.length);
-    }
+    const direction = url.searchParams.get('sort') === 'oldest' ? 'asc' : 'desc';
+    const result = await transactionPage(supabaseConfig, TABLE, { columns: COLUMNS, filterQuery, startDate, endDate, page, limit, direction, full: mode === 'full' });
+    rawRows = result.rows;
+    total = result.total;
     console.info('[BarangMasukAPI] query-ok');
 
-    const [syncStatus, summary] = await Promise.all([fetchSyncStatus(supabaseConfig), mode === 'full' ? Promise.resolve(null) : transactionSummary(supabaseConfig, TABLE, filterQuery)]);
+    const syncStatus = await fetchSyncStatus(supabaseConfig);
+    const summary = result.summary;
     const rows = rawRows.map(mapBarangMasukRow);
     const body = {
       success: true,

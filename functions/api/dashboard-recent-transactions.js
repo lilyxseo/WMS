@@ -1,6 +1,6 @@
 import { getRequestRole } from './_authz.js';
 import { getSecretSupabaseConfig } from './_supabase-config.js';
-import { TRANSACTION_COLUMNS, supabaseRows } from './_transaction-read.js';
+import { TRANSACTION_COLUMNS, transactionPage } from './_transaction-read.js';
 import { mapBarangMasukRow } from './barang-masuk/index.js';
 import { mapBarangKeluarRow } from './barang-keluar/index.js';
 
@@ -11,10 +11,10 @@ export async function handleDashboardRecentTransactionsRequest({ request, env })
   try {
     const config = getSecretSupabaseConfig(env);
     const [masuk, keluar] = await Promise.all([
-      supabaseRows(config, `inventory_barang_masuk?select=${TRANSACTION_COLUMNS}&order=tanggal.desc,source_row_number.desc&limit=50`),
-      supabaseRows(config, `inventory_barang_keluar?select=${TRANSACTION_COLUMNS}&order=tanggal.desc,source_row_number.desc&limit=50`),
+      transactionPage(config, 'inventory_barang_masuk', { columns: TRANSACTION_COLUMNS, limit: 50 }),
+      transactionPage(config, 'inventory_barang_keluar', { columns: TRANSACTION_COLUMNS, limit: 50 }),
     ]);
-    return json({ success: true, barangMasuk: masuk.payload.map(mapBarangMasukRow), barangKeluar: keluar.payload.map(mapBarangKeluarRow) });
+    return json({ success: true, barangMasuk: masuk.rows.map(mapBarangMasukRow), barangKeluar: keluar.rows.map(mapBarangKeluarRow) });
   } catch (error) {
     console.error('[DashboardRecentTransactions]', error?.message || error);
     return json({ success: false, message: 'Gagal memuat transaksi terbaru.' }, 502);

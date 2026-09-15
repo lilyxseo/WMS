@@ -13,20 +13,20 @@ test('dashboard restores both latest-50 tables and monthly insight without full 
   assert.match(dashboardLoaders, /dashboard-recent-transactions/);
   assert.match(dashboardLoaders, /dashboard-monthly-insight/);
   assert.doesNotMatch(dashboardLoaders, /mode=full/);
-  assert.match(recent, /order=tanggal\.desc,source_row_number\.desc&limit=50/g);
+  assert.match(recent, /transactionPage\(config, 'inventory_barang_masuk'/);
+  assert.match(recent, /transactionPage\(config, 'inventory_barang_keluar'/);
   assert.match(monthly, /Auto Insight Bulanan/);
   assert.match(main, /renderDashboardTableSection\("Barang Masuk"[\s\S]*renderDashboardTableSection\("Barang Keluar"/);
 });
 
 test('normal transaction routes request a server page and preserve backend totals', () => {
   const loader = main.slice(main.indexOf('async function loadTransactionTablePage'), main.indexOf('function normalizeMovementRows'));
-  assert.match(loader, /URLSearchParams\(\{page:String\(nextPage\),limit:String\(nextLimit\)\}\)/);
+  assert.match(loader, /URLSearchParams\(\{page:String\(nextPage\),limit:String\(nextLimit\),sort\}\)/);
   assert.match(loader, /st\.total=Number\(data\.total\)/);
   assert.match(loader, /st\.summary=data\.summary/);
   assert.doesNotMatch(loader, /mode=full|slice\(/);
   for (const source of [masuk, keluar]) {
-    assert.match(source, /offset = \(page - 1\) \* limit/);
-    assert.match(source, /transactionSummary\(supabaseConfig, TABLE, filterQuery\)/);
+    assert.match(source, /transactionPage\(supabaseConfig, TABLE/);
   }
 });
 
