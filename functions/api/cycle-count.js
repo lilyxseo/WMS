@@ -1,7 +1,10 @@
-import { requirePicRole } from './_authz.js';
+import { getRequestRole, requirePicRole } from './_authz.js';
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 const SHEET_RANGE = "Cycle Count!A4:G";
+const HISTORY_RANGE = "Cycle Count!A4:G";
+const DEFAULT_HISTORY_LIMIT = 10;
+const MAX_HISTORY_LIMIT = 50;
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -191,6 +194,45 @@ export async function onRequestPost({ request, env }) {
   }
 }
 
-export async function onRequestGet() {
-  return new Response("API OK", { status: 200, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+function historyTimestamp(value) {
+  const text = String(value || '').trim();
+  const match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (match) return Date.UTC(Number(match[3]), Number(match[2]) - 1, Number(match[1]), Number(match[4] || 0), Number(match[5] || 0), Number(match[6] || 0));
+  const parsed = Date.parse(text);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function mapCycleCountHistory(values = []) {
+  return values.map((row, index) => ({
+    tanggal: String(row?.[0] || ''),
+    lokasi: String(row?.[1] || ''),
+    sku: String(row?.[2] || ''),
+    nama_barang: String(row?.[3] || ''),
+    stok: toNumberOrNull(row?.[4]) ?? 0,
+    aktual: toNumberOrNull(row?.[5]) ?? 0,
+    catatan: String(row?.[6] || ''),
+    rowNumber: index + 4,
+  })).filter(row => row.tanggal || row.lokasi || row.sku || row.nama_barang)
+    .sort((a, b) => historyTimestamp(b.tanggal) - historyTimestamp(a.tanggal) || b.rowNumber - a.rowNumber);
+}
+
+export async function onRequestGet({ request, env }) {
+  const role = await getRequestRole(request, env);
+  if (!role) return json({ success: false, message: 'Sesi tidak valid untuk membaca history cycle count' }, 401);
+  try {
+    if (!env.SHEET_ID_INVENTORY) return json({ success: false, message: 'Sheet tidak ditemukan' }, 500);
+    const url = new URL(request.url);
+    const page = Math.max(1, Number.parseInt(url.searchParams.get('page') || '1', 10) || 1);
+    const limit = Math.min(MAX_HISTORY_LIMIT, Math.max(1, Number.parseInt(url.searchParams.get('limit') || String(DEFAULT_HISTORY_LIMIT), 10) || DEFAULT_HISTORY_LIMIT));
+    const accessToken = await createAccessToken(env);
+    const sheetUrl = `https://sheets.googleapis.com/v4/spreadsheets/${env.SHEET_ID_INVENTORY}/values/${encodeURIComponent(HISTORY_RANGE)}`;
+    const sheetRes = await fetch(sheetUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const sheetData = await sheetRes.json().catch(() => ({}));
+    if (!sheetRes.ok) return json({ success: false, message: sheetData?.error?.message || 'Gagal membaca history cycle count' }, 502);
+    const allRows = mapCycleCountHistory(sheetData.values || []);
+    const start = (page - 1) * limit;
+    return json({ rows: allRows.slice(start, start + limit), total: allRows.length, page, limit });
+  } catch (err) {
+    return json({ success: false, message: err?.message || 'Gagal membaca history cycle count' }, 500);
+  }
 }
