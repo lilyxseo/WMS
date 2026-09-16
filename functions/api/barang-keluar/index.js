@@ -22,19 +22,14 @@ export function mapBarangKeluarRow(row = {}) {
   return {
     tanggal: row.tanggal ?? '',
     from: row.from_location ?? '',
-    from_location: row.from_location ?? '',
     to: row.to_location ?? '',
-    to_location: row.to_location ?? '',
     sku: row.sku ?? '',
     namaBarang: row.nama_barang ?? '',
-    nama_barang: row.nama_barang ?? '',
     qty: row.qty ?? 0,
     status: row.status ?? '',
     pic: row.pic ?? '',
     keterangan: row.keterangan ?? '',
     rowNumber: row.source_row_number ?? null,
-    source_row_number: row.source_row_number ?? null,
-    synced_at: row.synced_at ?? null,
   };
 }
 

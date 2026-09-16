@@ -7,7 +7,7 @@ const request = query => new Request(`https://app.example/api/barang-masuk${quer
 
 test('Barang Masuk adapter preserves the existing frontend response shape', () => {
   assert.deepEqual(mapBarangMasukRow({ tanggal: '2026-08-31', from_location: 'Receiving', to_location: 'A-1', sku: 'SKU-1', nama_barang: 'Produk', qty: 3, status: 'OK', pic: 'Ani', keterangan: 'Baik', source_row_number: 42, synced_at: '2026-08-31T01:00:00Z' }), {
-    tanggal: '2026-08-31', from: 'Receiving', from_location: 'Receiving', to: 'A-1', to_location: 'A-1', sku: 'SKU-1', namaBarang: 'Produk', nama_barang: 'Produk', qty: 3, status: 'OK', pic: 'Ani', keterangan: 'Baik', rowNumber: 42, source_row_number: 42, synced_at: '2026-08-31T01:00:00Z',
+    tanggal: '2026-08-31', from: 'Receiving', to: 'A-1', sku: 'SKU-1', namaBarang: 'Produk', qty: 3, status: 'OK', pic: 'Ani', keterangan: 'Baik', rowNumber: 42,
   });
 });
 
