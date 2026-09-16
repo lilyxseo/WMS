@@ -16,21 +16,49 @@ async function exactCount(config, table, filter = '') {
   return total && total !== '*' ? Number(total) : (await response.json()).length;
 }
 
+export function businessDateKey(now = new Date(), timeZone = 'Asia/Jakarta') {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(now);
+  const part = type => parts.find(item => item.type === type)?.value || '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+export function transactionDateRepresentations(date) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date || ''));
+  if (!match) return [];
+  const [, year, month, day] = match;
+  return [...new Set([date, `${Number(month)}/${Number(day)}/${year}`, `${month}/${day}/${year}`])];
+}
+
+async function exactBusinessDateCount(config, table, date, filter = '') {
+  const dates = transactionDateRepresentations(date);
+  const dateFilter = `&or=(${dates.map(value => `tanggal.eq.${encodeURIComponent(value)}`).join(',')})`;
+  return exactCount(config, table, `${filter}${dateFilter}`);
+}
+
 export async function loadTotalMovement(env) {
   const config = getSecretSupabaseConfig(env);
   // An ilike without wildcards is exact but safely accepts legacy casing.
   return exactCount(config, SOURCES.barangMasuk.table, '&status=ilike.Movement');
 }
 
-export async function loadInventoryCounts(env) {
+export async function loadInventoryCounts(env, now = new Date()) {
   const config = getSecretSupabaseConfig(env);
+  const businessDate = businessDateKey(now, env.BUSINESS_TIME_ZONE || 'Asia/Jakarta');
   const entries = await Promise.all([
     exactCount(config, SOURCES.kartuStok.table), exactCount(config, SOURCES.rpl.table), exactCount(config, SOURCES.bulky.table),
     exactCount(config, SOURCES.barangMasuk.table, '&sku=not.is.null&status=ilike.BARANG%20MASUK'),
     exactCount(config, SOURCES.barangKeluar.table, '&tanggal=not.is.null&keterangan=ilike.PENGELUARAN'),
     exactCount(config, SOURCES.barangMasuk.table, '&status=ilike.Movement'),
+    exactBusinessDateCount(config, SOURCES.barangMasuk.table, businessDate, '&status=eq.Barang%20Masuk'),
+    exactBusinessDateCount(config, SOURCES.barangKeluar.table, businessDate, '&keterangan=eq.Pengeluaran'),
+    exactBusinessDateCount(config, SOURCES.barangMasuk.table, businessDate, '&status=eq.Movement'),
   ]);
-  return { kartuStok: entries[0], rpl: entries[1], bulky: entries[2], barangMasuk: entries[3], barangKeluar: entries[4], totalMovement: entries[5] };
+  return {
+    kartuStok: entries[0], rpl: entries[1], bulky: entries[2], barangMasuk: entries[3], barangKeluar: entries[4], totalMovement: entries[5],
+    barangMasukHariIni: entries[6], barangKeluarHariIni: entries[7], totalMovementHariIni: entries[8], businessDate,
+  };
 }
 
 function number(value) {

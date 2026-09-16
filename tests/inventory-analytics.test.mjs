@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { computeInventorySummary, loadInventoryAnalyticsRows } from '../functions/api/_inventory-analytics.js';
+import { businessDateKey, computeInventorySummary, loadInventoryAnalyticsRows, loadInventoryCounts, transactionDateRepresentations } from '../functions/api/_inventory-analytics.js';
 
 test('inventory summary preserves dashboard, accuracy, warning and minus semantics', () => {
   const rows = {
@@ -37,6 +37,41 @@ test('inventory summary preserves dashboard, accuracy, warning and minus semanti
   assert.equal(summary.locationMismatch, 2);
   assert.equal(summary.deadStock, 1);
   assert.equal(summary.reconciliationDifference, 2);
+});
+
+test('Barang Masuk today uses the Jakarta business date and counts supported text dates by row', async () => {
+  assert.equal(businessDateKey(new Date('2026-09-15T17:30:00Z')), '2026-09-16');
+  assert.deepEqual(transactionDateRepresentations('2026-09-16'), ['2026-09-16', '9/16/2026', '09/16/2026']);
+
+  const sample = [
+    { tanggal: '2026-09-15', status: 'Barang Masuk' },
+    { tanggal: '2026-09-16', status: 'Barang Masuk' },
+    { tanggal: '9/16/2026', status: 'Barang Masuk' },
+    { tanggal: '2026-09-16', status: 'Movement' },
+  ];
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async url => {
+    const parsed = new URL(url);
+    requests.push(parsed);
+    const status = parsed.searchParams.get('status')?.replace(/^eq\./, '').replace(/^ilike\./, '');
+    const expression = parsed.searchParams.get('or') || '';
+    const dates = [...expression.matchAll(/tanggal\.eq\.([^,)]+)/g)].map(match => decodeURIComponent(match[1]));
+    const matched = sample.filter(row => (!status || row.status.toLowerCase() === status.toLowerCase()) && (!dates.length || dates.includes(row.tanggal)));
+    return new Response(JSON.stringify(matched.slice(0, 1)), { status: 200, headers: { 'content-range': `0-0/${matched.length}` } });
+  };
+  try {
+    const counts = await loadInventoryCounts({ SUPABASE_URL: 'https://example.supabase.co', SUPABASE_SECRET_KEY: 'sb_secret_test' }, new Date('2026-09-15T17:30:00Z'));
+    assert.equal(counts.businessDate, '2026-09-16');
+    assert.equal(counts.barangMasukHariIni, 2);
+    assert.equal(counts.totalMovementHariIni, 1);
+    const todayRequest = requests.find(url => url.searchParams.get('status') === 'eq.Barang Masuk' && url.searchParams.has('or'));
+    assert.ok(todayRequest);
+    assert.equal(todayRequest.searchParams.get('select'), 'sku');
+    assert.equal(todayRequest.searchParams.get('limit'), '1');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('dashboard bootstrap uses summary API without full mode', async () => {
