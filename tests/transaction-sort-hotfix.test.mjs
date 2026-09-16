@@ -29,5 +29,6 @@ test('both endpoints pass their allowlisted sort into full-set server ordering',
     assert.match(source, /const sort = transactionSort\(url\.searchParams\.get\('sort'\)\)/);
     assert.match(source, /filterQuery, startDate, endDate, page, limit, sort: sort\.name/);
   }
-  assert.match(masuk, /status = String\(url\.searchParams\.get\('status'\) \|\| 'Barang Masuk'\)/);
+  assert.match(masuk, /PAGE_STATUSES = Object\.freeze\(\['Barang Masuk', 'Movement'\]\)/);
+  assert.match(masuk, /status=in\.\(\$\{PAGE_STATUSES\.map\(encodeURIComponent\)\.join\(','\)\}\)/);
 });
