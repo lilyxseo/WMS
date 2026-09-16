@@ -1886,7 +1886,10 @@ for(const sheet of [...INVENTORY_PRELOAD_SHEETS,"Barang Masuk","Barang Keluar"])
 html+="</div>";detail.innerHTML=html;}
 const SKU_DETAIL_LOCATION_FIELDS=new Set(["lokasi","lokasi bulky","lokasi_bulky","lokasiBulky"]);
 function getSkuDetailPresentationCells(row){const source=row&&typeof row==="object"?row:{};const canonical=String(source.lokasi??"").trim();const bulky=String(source.lokasi_bulky??source.lokasiBulky??source["lokasi bulky"]??"").trim();const cells={lokasi:canonical||bulky};for(const [key,value] of Object.entries(source)){if(!SKU_DETAIL_LOCATION_FIELDS.has(key))cells[key]=value;}return cells;}
-function renderSkuDetailTable(sheet,rows){return renderTable(rows,INVENTORY_PRELOAD_SHEETS.includes(sheet)?getSkuDetailPresentationCells:null);}
+const SKU_DETAIL_INTERNAL_COLUMNS=new Set(["rownumber","sourcerownumber","syncedat"]);
+function isSkuDetailInternalColumn(key){return SKU_DETAIL_INTERNAL_COLUMNS.has(String(key??"").replace(/[^a-z0-9]/gi,"").toLowerCase());}
+function getSkuDetailVisibleCells(row){const cells={};for(const [key,value] of Object.entries(row&&typeof row==="object"?row:{})){if(!isSkuDetailInternalColumn(key))cells[key]=value;}return cells;}
+function renderSkuDetailTable(sheet,rows){const inventoryPresentation=INVENTORY_PRELOAD_SHEETS.includes(sheet)?getSkuDetailPresentationCells:null;return renderTable(rows,row=>getSkuDetailVisibleCells(inventoryPresentation?inventoryPresentation(row):row));}
 function renderTable(rows,presentRow=null){if(!rows.length) return `<div class='empty-card'><strong>Data kosong</strong><div>Tidak ada baris untuk sumber ini.</div></div>`;const presented=presentRow?rows.map(presentRow):rows;const headers=Object.keys(presented[0]);let h=`<div class='table-wrap'><table><thead><tr>${headers.map(x=>`<th>${esc(String(x).toUpperCase())}</th>`).join("")}</tr></thead><tbody>`;presented.forEach(r=>h+=`<tr>${headers.map(k=>`<td>${esc(r[k])}</td>`).join("")}</tr>`);h+=`</tbody></table></div><div class='mv-pagination'><span>Menampilkan ${rows.length} dari ${rows.length} data</span></div>`;return h;}
 
 function renderInsightCard(insight){
