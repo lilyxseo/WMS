@@ -9,6 +9,7 @@ const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 50;
 const ERROR_REASON = 'BARANG_MASUK_FETCH_FAILED';
 const SAFE_ERROR_MESSAGE = 'Gagal membaca data Barang Masuk.';
+const PAGE_STATUSES = Object.freeze(['Barang Masuk', 'Movement']);
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -67,9 +68,11 @@ export async function handleBarangMasukRequest({ request, env }) {
     const search = String(url.searchParams.get('q') || '').trim();
     const from = String(url.searchParams.get('from') || '').trim();
     const to = String(url.searchParams.get('to') || '').trim();
-    // The normal inbound ledger excludes Movement rows; callers may still
-    // request an explicit status without changing Movement's own endpoint.
-    const status = String(url.searchParams.get('status') || 'Barang Masuk').trim();
+    // This page is the inbound ledger, which includes both ordinary receipts
+    // and internal stock movements. Never allow arbitrary status values into
+    // this route's scope.
+    const requestedStatus = String(url.searchParams.get('status') || '').trim();
+    const status = PAGE_STATUSES.includes(requestedStatus) ? requestedStatus : '';
     const startDate = String(url.searchParams.get('startDate') || '').trim();
     const endDate = String(url.searchParams.get('endDate') || '').trim();
     const sort = transactionSort(url.searchParams.get('sort'));
@@ -83,6 +86,7 @@ export async function handleBarangMasukRequest({ request, env }) {
     if (from) filters.push(`from_location=eq.${encodeURIComponent(from)}`);
     if (to) filters.push(`to_location=eq.${encodeURIComponent(to)}`);
     if (status) filters.push(`status=eq.${encodeURIComponent(status)}`);
+    else filters.push(`status=in.(${PAGE_STATUSES.map(encodeURIComponent).join(',')})`);
     const filterQuery = filters.length ? `&${filters.join('&')}` : '';
 
     let rawRows = [];

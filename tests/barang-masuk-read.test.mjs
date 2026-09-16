@@ -43,6 +43,46 @@ test('endpoint normalizes dates before pagination while applying non-date filter
   } finally { globalThis.fetch = originalFetch; }
 });
 
+test('default page scope includes only Barang Masuk and Movement in rows, totals, search, and sorting', async () => {
+  const originalFetch = globalThis.fetch;
+  const urls = [];
+  const scopedRows = [
+    { tanggal: '2026-09-01', sku: 'IN-1', nama_barang: 'Receipt', qty: 2, status: 'Barang Masuk', source_row_number: 1 },
+    { tanggal: '2026-09-03', sku: 'MOVE-1', nama_barang: 'Movement target', qty: 5, status: 'Movement', source_row_number: 2 },
+  ];
+  globalThis.fetch = async url => {
+    urls.push(String(url));
+    if (String(url).includes('inventory_sync_status')) return new Response('[]', { status: 200 });
+    return new Response(JSON.stringify(scopedRows), { status: 200, headers: { 'content-range': '0-1/2' } });
+  };
+  try {
+    const response = await handleBarangMasukRequest({ request: request('?q=Movement&sort=qty-desc&page=1&limit=1'), env });
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(body.total, 2);
+    assert.deepEqual(body.rows.map(row => row.status), ['Movement']);
+    assert.deepEqual(body.summary, { totalRows: 2, totalQty: 7, totalSku: 2, latestDate: '2026-09-03', oldestDate: '2026-09-01', invalidDateCount: 0 });
+    const dataUrl = new URL(urls[0]);
+    assert.equal(dataUrl.searchParams.get('status'), 'in.(Barang Masuk,Movement)');
+    assert.match(dataUrl.searchParams.get('or'), /nama_barang\.ilike.*Movement/);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('explicit page status can narrow scope but cannot request an unrelated status', async () => {
+  const originalFetch = globalThis.fetch;
+  const urls = [];
+  globalThis.fetch = async url => {
+    urls.push(String(url));
+    return new Response('[]', { status: 200, headers: { 'content-range': '*/0' } });
+  };
+  try {
+    await handleBarangMasukRequest({ request: request('?status=Movement&includeSummary=0'), env });
+    await handleBarangMasukRequest({ request: request('?status=Unrelated&includeSummary=0'), env });
+    assert.equal(new URL(urls[0]).searchParams.get('status'), 'eq.Movement');
+    assert.equal(new URL(urls[1]).searchParams.get('status'), 'in.(Barang Masuk,Movement)');
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 test('full mode batches and explicit Supabase errors never fall back to Google Sheets', async () => {
   const originalFetch = globalThis.fetch;
   let calls = 0;

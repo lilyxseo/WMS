@@ -10,6 +10,11 @@ test('transaction cache keys isolate source, paging, query, filters and sort', (
   assert.equal(transactionSummaryKey(base), transactionSummaryKey({ ...base, page: 9, limit: 50, sort: 'oldest' }));
 });
 
+test('Barang Masuk keys use a bumped namespace without changing Barang Keluar', () => {
+  assert.match(transactionPageKey({ source: 'barang_masuk', page: 1, limit: 25 }), /^barang_masuk@v2\|/);
+  assert.match(transactionPageKey({ source: 'barang_keluar', page: 1, limit: 25 }), /^barang_keluar@v1\|/);
+});
+
 test('transaction page cache is an eight-page LRU per source', () => {
   const cache = new TransactionPageCache(8);
   for (let page = 1; page <= 8; page++) cache.set('barang_masuk', `page-${page}`, { rows: [{ page }], total: 20 });

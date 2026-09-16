@@ -1,16 +1,23 @@
 export const TRANSACTION_PAGE_CACHE_TTL_MS = 45_000;
 export const TRANSACTION_PAGE_CACHE_LIMIT = 8;
+// Bump only the inbound namespace when its backend data scope changes. Keeping
+// the outbound namespace stable avoids invalidating Barang Keluar needlessly.
+export const TRANSACTION_CACHE_VERSIONS = Object.freeze({ barang_masuk: 2, barang_keluar: 1 });
+
+function versionedSource(source) {
+  return `${source}@v${TRANSACTION_CACHE_VERSIONS[source] || 1}`;
+}
 
 function stableObject(value = {}) {
   return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)));
 }
 
 export function transactionPageKey({ source, page, limit, query = '', filters = {}, sort = 'latest' }) {
-  return `${source}|page=${page}|limit=${limit}|q=${encodeURIComponent(query)}|filters=${encodeURIComponent(JSON.stringify(stableObject(filters)))}|sort=${sort}`;
+  return `${versionedSource(source)}|page=${page}|limit=${limit}|q=${encodeURIComponent(query)}|filters=${encodeURIComponent(JSON.stringify(stableObject(filters)))}|sort=${sort}`;
 }
 
 export function transactionSummaryKey({ source, query = '', filters = {} }) {
-  return `${source}|q=${encodeURIComponent(query)}|filters=${encodeURIComponent(JSON.stringify(stableObject(filters)))}`;
+  return `${versionedSource(source)}|q=${encodeURIComponent(query)}|filters=${encodeURIComponent(JSON.stringify(stableObject(filters)))}`;
 }
 
 export class TransactionPageCache {
@@ -42,6 +49,8 @@ export class TransactionPageCache {
   isFresh(entry, now = Date.now()) { return Boolean(entry && now - entry.fetchedAt < TRANSACTION_PAGE_CACHE_TTL_MS); }
   clearSource(source) {
     this.pages[source]?.clear();
-    for (const key of this.summaries.keys()) if (key.startsWith(`${source}|`)) this.summaries.delete(key);
+    for (const key of this.summaries.keys()) {
+      if (key.startsWith(`${versionedSource(source)}|`) || key.startsWith(`${source}|`)) this.summaries.delete(key);
+    }
   }
 }
