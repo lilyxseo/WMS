@@ -4,7 +4,7 @@ import { computeInventorySummary, loadInventoryAnalyticsRows, loadInventoryCount
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'private, max-age=30' },
+    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'private, no-store' },
   });
 }
 
