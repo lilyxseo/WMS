@@ -58,25 +58,25 @@ begin
       case when p_sort='sku-desc' then jumlah_sku end desc, case when p_sort='sku-asc' then jumlah_sku end asc,
       case when p_sort='qty-desc' then total_qty end desc, case when p_sort='qty-asc' then total_qty end asc,
       case when p_sort='location-asc' then lokasi end asc, jumlah_sku desc, total_qty desc, lokasi asc
-    offset (greatest(p_page,1)-1)*p_limit limit p_limit
+    offset (greatest(p_page,1)-1)*least(greatest(p_limit,1),25) limit least(greatest(p_limit,1),25)
   ) select jsonb_build_object('rows',coalesce(jsonb_agg(jsonb_build_object('lokasi',lokasi,'jumlahSku',jumlah_sku,'totalQty',total_qty,'status',status)),'[]'),
-      'total',(select count(*) from filtered),'page',greatest(p_page,1),'limit',p_limit) into result from ordered;
+      'total',(select count(*) from filtered),'page',greatest(p_page,1),'limit',least(greatest(p_limit,1),25)) into result from ordered;
   return result;
 end $$;
 
 create or replace function public.location_empty(p_page integer default 1, p_limit integer default 25)
 returns jsonb language sql stable security definer set search_path = public as $$
   with empty_rows as (select lokasi from public.location_groups() where status='Kosong' order by lokasi), page_rows as
-  (select lokasi from empty_rows offset (greatest(p_page,1)-1)*p_limit limit p_limit)
+  (select lokasi from empty_rows offset (greatest(p_page,1)-1)*least(greatest(p_limit,1),25) limit least(greatest(p_limit,1),25))
   select jsonb_build_object('rows',coalesce((select jsonb_agg(jsonb_build_object('lokasi',lokasi)) from page_rows),'[]'),
-    'total',(select count(*) from empty_rows),'page',greatest(p_page,1),'limit',p_limit)
+    'total',(select count(*) from empty_rows),'page',greatest(p_page,1),'limit',least(greatest(p_limit,1),25))
 $$;
 
 create or replace function public.location_detail(p_lokasi text, p_page integer default 1, p_limit integer default 25,
   p_search text default '') returns jsonb language sql stable security definer set search_path = public as $$
   with found as (select sku,nama,qty from public.location_inventory_rows() where lokasi=upper(trim(p_lokasi))
     and (p_search='' or sku ilike '%'||p_search||'%' or nama ilike '%'||p_search||'%')),
-  page_rows as (select sku,nama,qty from found order by qty desc,sku asc offset (greatest(p_page,1)-1)*p_limit limit p_limit)
+  page_rows as (select sku,nama,qty from found order by qty desc,sku asc offset (greatest(p_page,1)-1)*least(greatest(p_limit,1),25) limit least(greatest(p_limit,1),25))
   select jsonb_build_object('rows',coalesce((select jsonb_agg(jsonb_build_object('sku',sku,'nama',nama,'qty',qty)) from page_rows),'[]'),
-    'total',(select count(*) from found),'page',greatest(p_page,1),'limit',p_limit,'lokasi',upper(trim(p_lokasi)))
+    'total',(select count(*) from found),'page',greatest(p_page,1),'limit',least(greatest(p_limit,1),25),'lokasi',upper(trim(p_lokasi)))
 $$;

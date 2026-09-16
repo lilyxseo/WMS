@@ -20,7 +20,8 @@ test('Location UI uses independently paginated server APIs and bounded caches', 
   assert.match(section, /\/api\/locations\/empty\?/);
   assert.match(section, /\/api\/location-detail\?/);
   assert.match(section, /debounce\([^]*,400\)/);
-  assert.match(section, /prefetchLocationPage\(page\+1\)/);
+  assert.doesNotMatch(section, /prefetchLocationPage|requestIdleCallback/);
+  assert.match(section, /LOCATION_STATE\.pageSize=25/);
   assert.doesNotMatch(section, /DATA\[|CACHE_SKU|IndexedDB|hydrateAllDataOnInit|preloadData|mode=.?full|buildLocationRows/);
 });
 
@@ -28,7 +29,16 @@ test('database functions aggregate, sort and paginate before transfer', () => {
   assert.match(sql, /inventory_kartu_stok/);
   assert.match(sql, /having sum\(coalesce\(stok_akhir, 0\)\) > 0/);
   assert.match(sql, /count\(distinct sku\)/);
-  assert.match(sql, /offset \(greatest\(p_page,1\)-1\)\*p_limit limit p_limit/);
+  assert.match(sql, /limit least\(greatest\(p_limit,1\),25\)/);
   assert.match(sql, /p_sort='sku-desc'/);
   assert.doesNotMatch(sql, /select \*/i);
+});
+
+test('Location API enforces the 25-row contract and exposes safe timing diagnostics', () => {
+  const helper = readFileSync(new URL('../functions/api/_locations.js', import.meta.url), 'utf8');
+  const list = readFileSync(new URL('../functions/api/locations/index.js', import.meta.url), 'utf8');
+  assert.match(list, /boundedInt\(u\.searchParams\.get\('limit'\),25,25\)/);
+  assert.match(helper, /\[LocationAPI\].*authMs=.*dbMs=.*returnedRows=.*payloadBytes=.*totalMs=/);
+  assert.match(helper, /Server-Timing/);
+  assert.doesNotMatch(helper, /console\.(?:info|log)\([^\n]*(?:apikey|Authorization)/);
 });
