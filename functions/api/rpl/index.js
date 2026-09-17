@@ -17,6 +17,7 @@ function escapeLike(value) {
 }
 
 export function mapRplRow(row = {}) {
+  const hasNetsuite = row.netsuite !== null && row.netsuite !== undefined;
   return {
     lokasi: row.lokasi_bulky ?? '',
     'lokasi bulky': row.lokasi_bulky ?? '',
@@ -27,6 +28,10 @@ export function mapRplRow(row = {}) {
     replenishment: row.replenishment ?? 0,
     pengeluaran: row.pengeluaran ?? 0,
     'stok akhir': row.stok_akhir ?? 0,
+    netsuite: hasNetsuite ? row.netsuite : null,
+    // Preserve the established accuracy difference while using NETSUITE as
+    // its reference. Missing reference data remains missing, never zero.
+    selisih: hasNetsuite ? Number(row.stok_akhir ?? 0) - Number(row.netsuite) : null,
     source_row_number: row.source_row_number ?? null,
     synced_at: row.synced_at ?? null,
   };

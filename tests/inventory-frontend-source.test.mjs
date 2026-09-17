@@ -24,6 +24,16 @@ test('module API maps all inventory names and has no Google Sheets fallback', as
   assert.doesNotMatch(source, /sheets\.googleapis\.com|API_KEY|SPREADSHEET_ID|\/api\/sync\/inventory\//);
 });
 
+test('Stock Accuracy uses only the Supabase-backed RPL NETSUITE reference', async () => {
+  const source = await readFile(new URL('../assets/js/main.js', import.meta.url), 'utf8');
+  const start = source.indexOf('function getStatsSourceRows()');
+  const end = source.indexOf('function getStatsSourceHash', start);
+  const accuracySource = source.slice(start, end);
+  assert.match(accuracySource, /DATA\["RPL"\]/);
+  assert.match(accuracySource, /netsuite/);
+  assert.doesNotMatch(accuracySource, /DATA\["BULKY"\]|sheets\.googleapis\.com/);
+});
+
 test('migrated object rows bypass the legacy Sheets parser', async () => {
   const source = await readFile(new URL('../assets/js/api.js', import.meta.url), 'utf8');
   assert.match(source, /if\(MIGRATED_INVENTORY_SOURCES\.has\(sheetName\)\)/);
