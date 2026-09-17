@@ -4,9 +4,9 @@ import { BULKY_SHEET_NAME, buildSourceRowKey, parseBulkyValues, syncBulky } from
 
 const HEADER = [
   'LOKASI BULKY', 'SKU', 'NAMA BARANG', 'STOK AWAL', 'INTERNAL STOCK TRANSFER', 'REPLENISHMENT',
-  'PENGELUARAN', 'STOK AKHIR',
+  'PENGELUARAN', 'STOK AKHIR', 'NETSUITE',
 ];
-const row = (sku, stokAkhir = '12') => [' bulky%20a ', sku, ` Produk ${sku} `, '10', '2', '3', '3', stokAkhir];
+const row = (sku, stokAkhir = '12', netsuite = '10,081') => [' bulky%20a ', sku, ` Produk ${sku} `, '10', '2', '3', '3', stokAkhir, netsuite];
 const logger = { log() {}, error() {} };
 
 function statefulGateway() {
@@ -30,9 +30,27 @@ test('BULKY maps and normalizes every business field in deterministic hash order
   assert.deepEqual(parsed.rows[0], {
     lokasi_bulky: 'BULKY A', sku: 'SKU-1', nama_barang: 'Produk SKU–1', stok_awal: 10,
     internal_stock_transfer: 2, replenishment: 3, pengeluaran: 3, stok_akhir: 12,
+    netsuite: 10081,
     source_row_key: 'bulky:2', source_row_number: 2, source_hash: parsed.rows[0].source_hash,
   });
   assert.match(parsed.rows[0].source_hash, /^[a-f0-9]{64}$/);
+});
+
+test('BULKY NETSUITE is nullable, numeric, diagnostic, and part of source_hash', async () => {
+  const populated = await parseBulkyValues([HEADER, row('SKU-1', '12', '100')]);
+  const comma = await parseBulkyValues([HEADER, row('SKU-1', '12', '10,081')]);
+  const normalizedComma = await parseBulkyValues([HEADER, row('SKU-1', '12', '10081')]);
+  const blank = await parseBulkyValues([HEADER, row('SKU-1', '12', '')]);
+  const changed = await parseBulkyValues([HEADER, row('SKU-1', '12', '120')]);
+  assert.equal(populated.rows[0].netsuite, 100);
+  assert.equal(comma.rows[0].netsuite, 10081);
+  assert.equal(blank.rows[0].netsuite, null);
+  assert.equal(comma.rows[0].source_hash, normalizedComma.rows[0].source_hash);
+  assert.notEqual(populated.rows[0].source_hash, changed.rows[0].source_hash);
+
+  const invalid = await parseBulkyValues([HEADER, row('SKU-1', '12', 'invalid')]);
+  assert.deepEqual(invalid.invalidRows[0].errors, ['INVALID_NUMBER:NETSUITE']);
+  assert.deepEqual(invalid.reportMetrics, { nullNetsuiteRows: 0, invalidNetsuiteValues: 1 });
 });
 
 test('BULKY validates headers and reports invalid numeric cells without coercing them to zero', async () => {
@@ -53,6 +71,7 @@ test('BULKY first and unchanged second sync preserve valid database count and re
   assert.deepEqual([first.success, first.sourceRows, first.invalidRows, first.inserted, first.updated, first.deleted], [true, 3, 1, 2, 0, 0]);
   assert.equal(gateway.records.size, 2);
   assert.deepEqual(gateway.status, { status: 'success', locked_at: null, lock_id: null });
+  assert.deepEqual([first.nullNetsuiteRows, first.invalidNetsuiteValues], [0, 0]);
 
   const second = await run();
   assert.deepEqual([second.inserted, second.updated, second.deleted, second.unchanged], [0, 0, 0, 2]);

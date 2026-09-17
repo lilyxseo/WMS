@@ -5,7 +5,7 @@ export const SYNC_SOURCE = 'bulky';
 export const BULKY_SHEET_NAME = 'stok bulky';
 export const REQUIRED_HEADERS = Object.freeze([
   'LOKASI BULKY', 'SKU', 'NAMA BARANG', 'STOK AWAL', 'INTERNAL STOCK TRANSFER', 'REPLENISHMENT',
-  'PENGELUARAN', 'STOK AKHIR',
+  'PENGELUARAN', 'STOK AKHIR', 'NETSUITE',
 ]);
 
 const NUMBER_FIELDS = Object.freeze([
@@ -14,6 +14,7 @@ const NUMBER_FIELDS = Object.freeze([
   ['REPLENISHMENT', 'replenishment'],
   ['PENGELUARAN', 'pengeluaran'],
   ['STOK AKHIR', 'stok_akhir'],
+  ['NETSUITE', 'netsuite'],
 ]);
 
 async function parseValues(values, helpers) {
@@ -22,7 +23,8 @@ async function parseValues(values, helpers) {
   const missing = REQUIRED_HEADERS.filter(header => !indexes.has(header));
   if (missing.length) throw new SyncError('INVALID_HEADER', `Header wajib tidak ditemukan: ${missing.join(', ')}`);
 
-  const rows = [], invalidRows = [], sourceKeys = new Set(); let sourceRowCount = 0;
+  const rows = [], invalidRows = [], sourceKeys = new Set();
+  let sourceRowCount = 0, nullNetsuiteRows = 0, invalidNetsuiteValues = 0;
   for (let index = 1; index < values.length; index += 1) {
     const cells = Array.isArray(values[index]) ? values[index] : [], sourceRowNumber = index + 1, read = header => cells[indexes.get(header)];
     if (REQUIRED_HEADERS.every(header => normalizeText(read(header)) === '')) continue;
@@ -40,10 +42,12 @@ async function parseValues(values, helpers) {
     const errors = [];
     if (!row.sku) errors.push('SKU_REQUIRED');
     for (const [header, field] of NUMBER_FIELDS) if (!numbers[field].valid) errors.push(`INVALID_NUMBER:${header}`);
+    if (!numbers.netsuite.valid) invalidNetsuiteValues += 1;
     if (errors.length) { invalidRows.push({ sourceRowNumber, sourceRowKey: source_row_key, errors }); continue; }
+    if (row.netsuite === null) nullNetsuiteRows += 1;
     row.source_hash = await helpers.buildSourceHash(row); rows.push(row);
   }
-  return { rows, invalidRows, sourceKeys, sourceRowCount };
+  return { rows, invalidRows, sourceKeys, sourceRowCount, reportMetrics: { nullNetsuiteRows, invalidNetsuiteValues } };
 }
 
 const service = createInventorySyncService({
@@ -53,7 +57,7 @@ const service = createInventorySyncService({
   parseValues,
   hashFields: [
     'lokasi_bulky', 'sku', 'nama_barang', 'stok_awal', 'internal_stock_transfer', 'replenishment',
-    'pengeluaran', 'stok_akhir',
+    'pengeluaran', 'stok_akhir', 'netsuite',
   ],
 });
 

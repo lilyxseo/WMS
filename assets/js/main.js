@@ -2003,7 +2003,7 @@ return{sku,nama,qty,tanggal,type,sheet,row};
 const STATS_STATE={page:1,pageSize:25,searchInputValue:"",debouncedSearchValue:"",sort:"absDesc",isFiltering:false,_normalizedRows:null,_debounceTimer:null,_idleTimer:null,_computeToken:0,_sourceHash:"",_lastRenderHash:"",_pendingRaf:0};
 const STATS_CACHE_KEY="statsAccuracyCacheV1";
 
-function getStatsSourceRows(){return [...(DATA["RPL"]||[]),...(DATA["BULKY"]||[])].filter(r=>clean(getVal(r,["sku"])));}
+function getStatsSourceRows(){return (DATA["BULKY"]||[]).filter(r=>clean(getVal(r,["sku"]))&&getVal(r,["netsuite"])!==null&&getVal(r,["netsuite"])!==undefined);}
 function getStatsSourceHash(rows){return `${rows.length}|${rows.map(r=>`${getVal(r,["sku"])}|${getVal(r,["lokasi"])}|${getVal(r,["selisih","selisih kartu stok","selisih kartu stock","selisih kartu stok vs iseller","selisih kartu stok vs netsuite"])}|${getVal(r,["nama barang","nama"])}|${getVal(r,["stok bulky"])}|${getVal(r,["stok retail"])}|${getVal(r,["stok global","kartu stok","stok kartu","stok kartu stok"])}|${getVal(r,["status"])}|${getVal(r,["ns dan iseller","iseller vs netsuite"])}`).join("~")}`;}
 function getStatsCache(){try{const raw=localStorage.getItem(STATS_CACHE_KEY);if(!raw)return null;const parsed=JSON.parse(raw);return parsed&&Array.isArray(parsed.normalizedRows)?parsed:null;}catch(_){return null;}}
 function saveStatsCache(payload){try{localStorage.setItem(STATS_CACHE_KEY,JSON.stringify(payload));}catch(_){}}

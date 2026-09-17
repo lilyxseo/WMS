@@ -4,7 +4,7 @@ const BATCH_SIZE = 1000;
 const SOURCES = {
   kartuStok: { table: 'inventory_kartu_stok', select: 'sku,nama_barang,lokasi_bulky,stok_akhir,pengeluaran' },
   rpl: { table: 'inventory_rpl', select: 'sku,nama_barang,lokasi_bulky,stok_akhir' },
-  bulky: { table: 'inventory_bulky', select: 'sku,nama_barang,lokasi_bulky,stok_akhir' },
+  bulky: { table: 'inventory_bulky', select: 'sku,nama_barang,lokasi_bulky,stok_akhir,netsuite' },
   barangMasuk: { table: 'inventory_barang_masuk', select: 'sku,nama_barang,qty,status,tanggal,to_location' },
   barangKeluar: { table: 'inventory_barang_keluar', select: 'sku,nama_barang,qty,status,tanggal,from_location,keterangan' },
 };
@@ -145,18 +145,20 @@ export function computeInventorySummary(rows, now = new Date()) {
   const movement = validInbound.filter(row => key(row.status).includes('MOVEMENT'));
   const outbound = rows.barangKeluar.filter(row => dateKey(row.tanggal) && key(row.keterangan) === 'PENGELUARAN');
   const bySku = new Map();
-  for (const row of [...rows.rpl, ...rows.bulky]) {
+  for (const row of rows.bulky) {
     const sku = key(row.sku);
     if (!sku) continue;
-    const item = bySku.get(sku) || { difference: 0, names: new Set(), locations: new Set() };
-    // This intentionally mirrors the previous browser accuracy calculation:
-    // absent reconciliation/selisih values are treated as zero.
-    item.difference += number(row.selisih);
+    const item = bySku.get(sku) || { difference: 0, hasReference: false, names: new Set(), locations: new Set() };
+    if (row.netsuite !== null && row.netsuite !== undefined) {
+      item.difference += number(row.stok_akhir) - number(row.netsuite);
+      item.hasReference = true;
+    }
     if (row.nama_barang) item.names.add(key(row.nama_barang));
     if (row.lokasi_bulky) item.locations.add(key(row.lokasi_bulky));
     bySku.set(sku, item);
   }
-  const accurate = [...bySku.values()].filter(item => item.difference === 0).length;
+  const referenced = [...bySku.values()].filter(item => item.hasReference);
+  const accurate = referenced.filter(item => item.difference === 0).length;
   const minusRows = rows.kartuStok.filter(row => number(row.stok_akhir) < 0);
   const minusSkus = new Set(minusRows.map(row => key(row.sku)).filter(Boolean));
   const duplicateSku = [...bySku.values()].filter(item => item.names.size > 1).length;
@@ -178,13 +180,14 @@ export function computeInventorySummary(rows, now = new Date()) {
     minusStock: minusSkus.size,
     minusQuantity: Math.abs(minusRows.reduce((sum, row) => sum + number(row.stok_akhir), 0)),
     warningCount,
-    accuracy: bySku.size ? Number(((accurate / bySku.size) * 100).toFixed(2)) : 0,
+    accuracy: referenced.length ? Number(((accurate / referenced.length) * 100).toFixed(2)) : 0,
     accurateSku: accurate,
-    inaccurateSku: bySku.size - accurate,
+    inaccurateSku: referenced.length - accurate,
+    missingAccuracyReference: bySku.size - referenced.length,
     duplicateSku,
     missingSku,
     locationMismatch,
-    reconciliationDifference: [...bySku.values()].reduce((sum, item) => sum + item.difference, 0),
+    reconciliationDifference: referenced.reduce((sum, item) => sum + item.difference, 0),
     overstock: rows.kartuStok.filter(row => number(row.stok_akhir) > 0 && number(row.pengeluaran) === 0).length,
     deadStock: rows.kartuStok.filter(row => number(row.stok_akhir) > 0 && number(row.pengeluaran) === 0).length,
   };
