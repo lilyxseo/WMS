@@ -49,7 +49,9 @@ declare result jsonb;
 begin
   with filtered as (
     select g.* from public.location_groups() g
-    where (p_search='' or g.lokasi ilike '%'||p_search||'%')
+    where (p_search='' or g.lokasi ilike '%'||p_search||'%'
+      or exists (select 1 from public.location_inventory_rows() r where r.lokasi=g.lokasi
+        and (r.sku ilike '%'||p_search||'%' or r.nama ilike '%'||p_search||'%')))
       and (p_status='all' or g.status=p_status)
       and (p_location_type='all' or (p_location_type='bulky' and length(g.lokasi)=5) or (p_location_type='retail' and length(g.lokasi)=8))
       and (p_sku_search='' or exists (select 1 from public.location_inventory_rows() r where r.lokasi=g.lokasi and (r.sku ilike '%'||p_sku_search||'%' or r.nama ilike '%'||p_sku_search||'%')))
