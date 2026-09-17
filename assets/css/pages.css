@@ -501,8 +501,7 @@ body.dark .insight-card strong{color:#5eead4}
   #page-cycle-count .row button{flex:1 1 auto}
 }
 
-#locationsFilters #locSearchInput,
-#locationsFilters #locSkuSearchInput{
+#locationsFilters #locSearchInput{
   height:44px;
   border:1px solid #d7dee8;
   background:linear-gradient(180deg,#ffffff,#f8fbff);
@@ -511,19 +510,16 @@ body.dark .insight-card strong{color:#5eead4}
   font-weight:500;
   transition:border-color .2s ease, box-shadow .2s ease, background .2s ease;
 }
-#locationsFilters #locSearchInput::placeholder,
-#locationsFilters #locSkuSearchInput::placeholder{
+#locationsFilters #locSearchInput::placeholder{
   color:#7a8799;
 }
-#locationsFilters #locSearchInput:focus,
-#locationsFilters #locSkuSearchInput:focus{
+#locationsFilters #locSearchInput:focus{
   border-color:#93c5fd;
   box-shadow:0 0 0 3px rgba(59,130,246,.15);
   background:#fff;
   outline:none;
 }
-body.dark #locationsFilters #locSearchInput,
-body.dark #locationsFilters #locSkuSearchInput{
+body.dark #locationsFilters #locSearchInput{
   background:#0f172a;
   border-color:#334155;
   color:#e2e8f0;

@@ -29,6 +29,16 @@ test('Location UI uses independently paginated server APIs and bounded caches', 
   assert.doesNotMatch(section, /DATA\[|CACHE_SKU|IndexedDB|hydrateAllDataOnInit|preloadData|mode=.?full|buildLocationRows/);
 });
 
+test('Location page has one search field for location, SKU, and product name', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const section = main.slice(main.indexOf('const LOCATION_CACHE_LIMIT='), main.indexOf('function getRecentSearches'));
+  assert.equal((html.match(/id="locSearchInput"/g) || []).length, 1);
+  assert.doesNotMatch(html, /locSkuSearchInput/);
+  assert.match(html, /placeholder="Cari SKU, nama barang, atau lokasi"/);
+  assert.doesNotMatch(section, /skuSearch|locSkuSearchInput/);
+  assert.match(sql, /g\.lokasi ilike[^]*or exists[^]*r\.sku ilike[^]*r\.nama ilike/);
+});
+
 test('database functions aggregate, sort and paginate before transfer', () => {
   assert.equal(migration, sql);
   assert.match(sql, /inventory_kartu_stok/);
