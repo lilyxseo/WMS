@@ -40,7 +40,7 @@ async function fetchSkuSource(config, source, sku) {
     rawRows.push(...payload);
     if (payload.length < batchSize) break;
   }
-  const rows = source.transaction ? orderTransactionRows(rawRows, 'desc').map(item => item.row) : rawRows;
+  const rows = source.transaction ? orderTransactionRows(rawRows, 'oldest').map(item => item.row) : rawRows;
   return rows.map(source.map).map(toSkuDetailRow);
 }
 
