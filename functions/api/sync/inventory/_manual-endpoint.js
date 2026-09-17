@@ -22,6 +22,12 @@ export async function handleManualInventorySync({ request, env }, { source, sync
     return inventorySyncJson(result, result.skipped ? 409 : 200);
   } catch (error) {
     console.error(`[InventorySync:${source}] ERROR ${error?.code || 'SYNC_FAILED'}: ${error?.message || error}`);
-    return inventorySyncJson({ success: false, source, reason: error instanceof SyncError ? error.code : 'SYNC_FAILED', message: error?.message || 'Sinkronisasi gagal' }, 500);
+    const headerDebug = error instanceof SyncError && error.code === 'INVALID_HEADER' ? {
+      missingHeader: error.missingHeader,
+      headerRowNumber: error.headerRowNumber,
+      detectedHeaders: error.detectedHeaders,
+      normalizedHeaders: error.normalizedHeaders,
+    } : {};
+    return inventorySyncJson({ success: false, source, reason: error instanceof SyncError ? error.code : 'SYNC_FAILED', message: error?.message || 'Sinkronisasi gagal', ...headerDebug }, 500);
   }
 }

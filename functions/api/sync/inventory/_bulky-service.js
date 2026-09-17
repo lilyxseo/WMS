@@ -1,45 +1,96 @@
-import { createInventorySyncService, normalizeLocation, normalizeNumber, normalizeSku, normalizeText, normalizedHeader, SyncError } from './_sync-engine.js';
+import { createInventorySyncService, normalizeLocation, normalizeNumber, normalizeSku, normalizeText, SyncError } from './_sync-engine.js';
 
 export const SYNC_SOURCE = 'bulky';
 // Keep the internal source identifier separate from the Google Sheets tab name.
 export const BULKY_SHEET_NAME = 'stok bulky';
-export const REQUIRED_HEADERS = Object.freeze([
-  'LOKASI BULKY', 'SKU', 'NAMA BARANG', 'STOK AWAL', 'INTERNAL STOCK TRANSFER', 'REPLENISHMENT',
-  'PENGELUARAN', 'STOK AKHIR',
-]);
+export function normalizeBulkyHeader(value) {
+  return normalizeText(value).replace(/\s+/g, '').toLowerCase();
+}
+
+const HEADER_LABELS = Object.freeze({
+  lokasibulky: 'LOKASI BULKY', sku: 'SKU', namabarang: 'NAMA BARANG', stokawal: 'STOK AWAL',
+  internalstocktransfer: 'INTERNAL STOCK TRANSFER', replenishment: 'REPLENISHMENT',
+  pengeluaran: 'PENGELUARAN', stokakhir: 'STOK AKHIR', netsuite: 'Netsuite',
+});
+export const REQUIRED_HEADERS = Object.freeze(Object.keys(HEADER_LABELS));
 
 const NUMBER_FIELDS = Object.freeze([
-  ['STOK AWAL', 'stok_awal'],
-  ['INTERNAL STOCK TRANSFER', 'internal_stock_transfer'],
-  ['REPLENISHMENT', 'replenishment'],
-  ['PENGELUARAN', 'pengeluaran'],
-  ['STOK AKHIR', 'stok_akhir'],
+  ['stokawal', 'stok_awal'],
+  ['internalstocktransfer', 'internal_stock_transfer'],
+  ['replenishment', 'replenishment'],
+  ['pengeluaran', 'pengeluaran'],
+  ['stokakhir', 'stok_akhir'],
+  ['netsuite', 'netsuite'],
 ]);
 
+function detectHeaderRow(values) {
+  let best = null;
+  for (let index = 0; index < values.length; index += 1) {
+    if (!Array.isArray(values[index])) continue;
+    const normalized = values[index].map(normalizeBulkyHeader);
+    const keys = new Set(normalized);
+    if (!keys.has('sku') || !keys.has('namabarang')) continue;
+    const score = REQUIRED_HEADERS.filter(header => keys.has(header)).length;
+    if (!best || score > best.score) best = { index, normalized, score };
+  }
+  return best || (Array.isArray(values[0]) ? { index: 0, normalized: values[0].map(normalizeBulkyHeader), score: 0 } : null);
+}
+
+function headerDebug(values, detected) {
+  const rawHeaders = detected ? values[detected.index].map(value => String(value ?? '')) : [];
+  const normalizedHeaders = detected?.normalized || [];
+  return {
+    sheetName: BULKY_SHEET_NAME,
+    range: `'${BULKY_SHEET_NAME}'!A:ZZ`,
+    headerRow: detected ? detected.index + 1 : null,
+    rawHeaders,
+    normalizedHeaders,
+    headerIndexes: rawHeaders.map((raw, index) => ({
+      index,
+      raw,
+      escaped: JSON.stringify(raw).slice(1, -1),
+      characterCodes: [...raw].map(character => character.codePointAt(0)),
+      normalized: normalizedHeaders[index],
+    })),
+    expectedNetsuiteHeader: 'netsuite',
+  };
+}
+
 async function parseValues(values, helpers) {
-  if (!Array.isArray(values) || !Array.isArray(values[0])) throw new SyncError('INVALID_HEADER', 'Header BULKY tidak ditemukan');
-  const indexes = new Map(values[0].map((header, index) => [normalizedHeader(header), index]));
+  if (!Array.isArray(values)) throw new SyncError('INVALID_HEADER', 'Header BULKY tidak ditemukan');
+  const detected = detectHeaderRow(values);
+  const debug = headerDebug(values, detected);
+  helpers.logger?.log?.(`[BulkyHeaderDebug] ${JSON.stringify(debug)}`);
+  if (!detected) throw new SyncError('INVALID_HEADER', 'Header BULKY tidak ditemukan', {
+    missingHeader: 'Netsuite', headerRowNumber: null, detectedHeaders: [], normalizedHeaders: [],
+  });
+  const indexes = new Map(detected.normalized.map((header, index) => [header, index]));
   const missing = REQUIRED_HEADERS.filter(header => !indexes.has(header));
-  if (missing.length) throw new SyncError('INVALID_HEADER', `Header wajib tidak ditemukan: ${missing.join(', ')}`);
+  if (missing.length) throw new SyncError('INVALID_HEADER', `Header wajib tidak ditemukan: ${missing.map(header => HEADER_LABELS[header]).join(', ')}`, {
+    missingHeader: missing.map(header => HEADER_LABELS[header]).join(', '),
+    headerRowNumber: detected.index + 1,
+    detectedHeaders: debug.rawHeaders,
+    normalizedHeaders: debug.normalizedHeaders,
+  });
 
   const rows = [], invalidRows = [], sourceKeys = new Set(); let sourceRowCount = 0;
-  for (let index = 1; index < values.length; index += 1) {
+  for (let index = detected.index + 1; index < values.length; index += 1) {
     const cells = Array.isArray(values[index]) ? values[index] : [], sourceRowNumber = index + 1, read = header => cells[indexes.get(header)];
     if (REQUIRED_HEADERS.every(header => normalizeText(read(header)) === '')) continue;
     sourceRowCount += 1;
     const source_row_key = helpers.buildSourceRowKey(sourceRowNumber); sourceKeys.add(source_row_key);
     const numbers = Object.fromEntries(NUMBER_FIELDS.map(([header, field]) => [field, normalizeNumber(read(header))]));
     const row = {
-      lokasi_bulky: normalizeLocation(read('LOKASI BULKY')),
-      sku: normalizeSku(read('SKU')),
-      nama_barang: normalizeText(read('NAMA BARANG')),
+      lokasi_bulky: normalizeLocation(read('lokasibulky')),
+      sku: normalizeSku(read('sku')),
+      nama_barang: normalizeText(read('namabarang')),
       ...Object.fromEntries(NUMBER_FIELDS.map(([, field]) => [field, numbers[field].value])),
       source_row_key,
       source_row_number: sourceRowNumber,
     };
     const errors = [];
     if (!row.sku) errors.push('SKU_REQUIRED');
-    for (const [header, field] of NUMBER_FIELDS) if (!numbers[field].valid) errors.push(`INVALID_NUMBER:${header}`);
+    for (const [header, field] of NUMBER_FIELDS) if (!numbers[field].valid) errors.push(`INVALID_NUMBER:${HEADER_LABELS[header].toUpperCase()}`);
     if (errors.length) { invalidRows.push({ sourceRowNumber, sourceRowKey: source_row_key, errors }); continue; }
     row.source_hash = await helpers.buildSourceHash(row); rows.push(row);
   }
@@ -53,8 +104,20 @@ const service = createInventorySyncService({
   parseValues,
   hashFields: [
     'lokasi_bulky', 'sku', 'nama_barang', 'stok_awal', 'internal_stock_transfer', 'replenishment',
-    'pengeluaran', 'stok_akhir',
+    'pengeluaran', 'stok_akhir', 'netsuite',
   ],
+  metadataFields: ['netsuite'],
+  needsUpdate: (existing, row) => existing.netsuite == null && row.netsuite != null,
+  buildMetrics({ parsed, existing, diff }) {
+    const existingByKey = new Map(existing.map(row => [row.source_row_key, row]));
+    const isBackfill = row => existingByKey.get(row.source_row_key)?.netsuite == null && row.netsuite != null;
+    return {
+      netsuiteSourceValues: parsed.rows.filter(row => row.netsuite != null).length,
+      netsuiteBackfilledRows: diff.rowsToUpdate.filter(isBackfill).length,
+      nullNetsuiteRows: parsed.rows.filter(row => row.netsuite == null).length,
+      invalidNetsuiteValues: parsed.invalidRows.filter(row => row.errors.includes('INVALID_NUMBER:NETSUITE')).length,
+    };
+  },
 });
 
 export const buildSourceRowKey = service.buildSourceRowKey;
