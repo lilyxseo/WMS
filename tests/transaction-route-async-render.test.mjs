@@ -36,4 +36,13 @@ test('transaction loading and errors stay inside the table container', () => {
   assert.match(renderer, /Gagal memuat data/);
   assert.match(renderer, /data-mv-action='retry'/);
   assert.match(renderer, /mv-pagination/);
+  assert.match(renderer, /Array\.from\(\{length:8\}/);
+  assert.match(renderer, /transaction-loading-table/);
+});
+
+test('transaction skeleton fills the complete loading table', async () => {
+  const styles = await readFile(new URL('../assets/css/pages.css', import.meta.url), 'utf8');
+  assert.match(styles, /\.transaction-loading-table\{[^}]*height:243px[^}]*table-layout:fixed/);
+  assert.match(styles, /\.transaction-loading-table tbody tr\{height:calc\(\(100% - 29px\)\/8\)\}/);
+  assert.match(styles, /\.mv-skeleton-cell\{[^}]*width:100%/);
 });
