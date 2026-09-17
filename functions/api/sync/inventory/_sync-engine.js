@@ -55,14 +55,14 @@ export function normalizedHeader(value) { return normalizeText(value).toUpperCas
 function bytesToHex(buffer) { return [...new Uint8Array(buffer)].map(byte => byte.toString(16).padStart(2, '0')).join(''); }
 export async function sha256(value) { return bytesToHex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))); }
 
-export function diffRows(sourceRows, sourceKeys, existingRows) {
+export function diffRows(sourceRows, sourceKeys, existingRows, needsUpdate = () => false) {
   const existingByKey = new Map(existingRows.map(row => [row.source_row_key, row]));
   const rowsToInsert = [], rowsToUpdate = [];
   let unchanged = 0;
   for (const row of sourceRows) {
     const existing = existingByKey.get(row.source_row_key);
     if (!existing) rowsToInsert.push(row);
-    else if (existing.source_hash !== row.source_hash) rowsToUpdate.push(row);
+    else if (existing.source_hash !== row.source_hash || needsUpdate(existing, row)) rowsToUpdate.push(row);
     else unchanged += 1;
   }
   const keysToDelete = existingRows.map(row => row.source_row_key).filter(key => !sourceKeys.has(key));
@@ -127,7 +127,7 @@ export function createInventorySyncService(config) {
       finishError(lockSource, lockId, message, durationMs) { return rpc('finish_inventory_sync_error', { p_source: lockSource, p_lock_id: lockId, p_error: message, p_duration_ms: durationMs }); },
       async insertHistory(row) { const result = await request('/rest/v1/inventory_sync_history?select=id', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) }); return result?.[0]?.id; },
       updateHistory(id, row) { return request(`/rest/v1/inventory_sync_history?id=eq.${encodeURIComponent(id)}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) }); },
-      async existingMetadata() { const all = []; for (let offset = 0; ; offset += SYNC_READ_PAGE_SIZE) { const page = await request(`/rest/v1/${tableName}?select=source_row_key,source_hash&order=source_row_key&limit=${SYNC_READ_PAGE_SIZE}&offset=${offset}`, {}, 'read'); all.push(...page); if (page.length < SYNC_READ_PAGE_SIZE) return all; } },
+      async existingMetadata() { const all = [], columns = ['source_row_key', 'source_hash', ...(config.metadataFields || [])].join(','); for (let offset = 0; ; offset += SYNC_READ_PAGE_SIZE) { const page = await request(`/rest/v1/${tableName}?select=${columns}&order=source_row_key&limit=${SYNC_READ_PAGE_SIZE}&offset=${offset}`, {}, 'read'); all.push(...page); if (page.length < SYNC_READ_PAGE_SIZE) return all; } },
       async upsertRows(rows) { for (const batch of chunks(rows)) await request(`/rest/v1/${tableName}?on_conflict=source_row_key`, { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(batch) }); },
       async deleteKeys(keys) { for (const batch of chunks(keys)) { const values = batch.map(item => `"${String(item).replace(/"/g, '\\"')}"`).join(','); await request(`/rest/v1/${tableName}?source_row_key=in.(${encodeURIComponent(values)})`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }); } },
     };
@@ -154,8 +154,9 @@ export function createInventorySyncService(config) {
       log(`sheet rows: ${metrics.sourceRows}\nexisting rows: ${existing.length}`);
       if (existing.length > 0 && parsed.sourceRowCount === 0) throw new SyncError('SUSPICIOUS_SOURCE_SIZE', 'Source kosong sementara database masih berisi data');
       if (existing.length > SOURCE_SIZE_GUARD.previousMinimum && parsed.sourceRowCount < existing.length * SOURCE_SIZE_GUARD.minimumRatio) throw new SyncError('SOURCE_ROW_COUNT_DROPPED_UNEXPECTEDLY', `Source ${parsed.sourceRowCount}, sebelumnya ${existing.length}`);
-      const diff = diffRows(parsed.rows, parsed.sourceKeys, existing);
+      const diff = diffRows(parsed.rows, parsed.sourceKeys, existing, config.needsUpdate);
       metrics = { ...metrics, inserted: diff.rowsToInsert.length, updated: diff.rowsToUpdate.length, deleted: diff.keysToDelete.length, unchanged: diff.unchanged };
+      if (config.buildMetrics) metrics = { ...metrics, ...config.buildMetrics({ parsed, existing, diff }) };
       const sourceVersion = await sha256(JSON.stringify(parsed.rows.map(row => [row.source_row_key, row.source_hash])));
       await gateway.upsertRows([...diff.rowsToInsert, ...diff.rowsToUpdate].map(row => ({ ...row, synced_at: new Date().toISOString() })));
       await gateway.deleteKeys(diff.keysToDelete);

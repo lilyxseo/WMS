@@ -5,7 +5,7 @@ export const SYNC_SOURCE = 'bulky';
 export const BULKY_SHEET_NAME = 'stok bulky';
 export const REQUIRED_HEADERS = Object.freeze([
   'LOKASI BULKY', 'SKU', 'NAMA BARANG', 'STOK AWAL', 'INTERNAL STOCK TRANSFER', 'REPLENISHMENT',
-  'PENGELUARAN', 'STOK AKHIR',
+  'PENGELUARAN', 'STOK AKHIR', 'NETSUITE',
 ]);
 
 const NUMBER_FIELDS = Object.freeze([
@@ -14,6 +14,7 @@ const NUMBER_FIELDS = Object.freeze([
   ['REPLENISHMENT', 'replenishment'],
   ['PENGELUARAN', 'pengeluaran'],
   ['STOK AKHIR', 'stok_akhir'],
+  ['NETSUITE', 'netsuite'],
 ]);
 
 async function parseValues(values, helpers) {
@@ -53,8 +54,20 @@ const service = createInventorySyncService({
   parseValues,
   hashFields: [
     'lokasi_bulky', 'sku', 'nama_barang', 'stok_awal', 'internal_stock_transfer', 'replenishment',
-    'pengeluaran', 'stok_akhir',
+    'pengeluaran', 'stok_akhir', 'netsuite',
   ],
+  metadataFields: ['netsuite'],
+  needsUpdate: (existing, row) => existing.netsuite == null && row.netsuite != null,
+  buildMetrics({ parsed, existing, diff }) {
+    const existingByKey = new Map(existing.map(row => [row.source_row_key, row]));
+    const isBackfill = row => existingByKey.get(row.source_row_key)?.netsuite == null && row.netsuite != null;
+    return {
+      netsuiteSourceValues: parsed.rows.filter(row => row.netsuite != null).length,
+      netsuiteBackfilledRows: diff.rowsToUpdate.filter(isBackfill).length,
+      nullNetsuiteRows: parsed.rows.filter(row => row.netsuite == null).length,
+      invalidNetsuiteValues: parsed.invalidRows.filter(row => row.errors.includes('INVALID_NUMBER:NETSUITE')).length,
+    };
+  },
 });
 
 export const buildSourceRowKey = service.buildSourceRowKey;
