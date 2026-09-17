@@ -26,6 +26,12 @@ export async function runInventorySync(env, dependencies = {}) {
         source,
         reason: error?.code || 'SYNC_FAILED',
         message: error?.message || String(error),
+        ...(error?.code === 'INVALID_HEADER' ? {
+          missingHeader: error.missingHeader,
+          headerRowNumber: error.headerRowNumber,
+          detectedHeaders: error.detectedHeaders,
+          normalizedHeaders: error.normalizedHeaders,
+        } : {}),
       });
     }
   }

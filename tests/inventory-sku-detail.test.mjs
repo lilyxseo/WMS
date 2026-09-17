@@ -42,6 +42,26 @@ test('returns not found only after every SKU-specific source is empty', async ()
   } finally { globalThis.fetch = originalFetch; }
 });
 
+test('orders SKU detail transactions from oldest at the top to newest at the bottom', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async url => {
+    const table = new URL(url).pathname.split('/').pop();
+    if (!table.includes('barang_')) return new Response('[]', { status: 200 });
+    return new Response(JSON.stringify([
+      { sku: 'SKU-1', tanggal: '2026-08-29', source_row_number: 3 },
+      { sku: 'SKU-1', tanggal: '01/05/2026', source_row_number: 1 },
+      { sku: 'SKU-1', tanggal: '2026-03-12', source_row_number: 2 },
+    ]), { status: 200 });
+  };
+  try {
+    const response = await handleInventorySkuDetailRequest({ request: request('SKU-1'), env });
+    const body = await response.json();
+    const expectedDates = ['01/05/2026', '2026-03-12', '2026-08-29'];
+    assert.deepEqual(body.sources['Barang Masuk'].map(row => row.tanggal), expectedDates);
+    assert.deepEqual(body.sources['Barang Keluar'].map(row => row.tanggal), expectedDates);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 test('direct SKU route renders and fetches independently of global caches and hydration', async () => {
   const source = await readFile(new URL('../assets/js/main.js', import.meta.url), 'utf8');
   const route = source.slice(source.indexOf('function routeFromPath'), source.indexOf('function syncDeveloperMenuVisibility'));
