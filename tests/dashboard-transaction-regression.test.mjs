@@ -19,6 +19,13 @@ test('dashboard restores both latest-50 tables and monthly insight without full 
   assert.match(main, /renderDashboardTableSection\("Barang Masuk"[\s\S]*renderDashboardTableSection\("Barang Keluar"/);
 });
 
+test('most important insight renders the formatting supplied by the monthly insight API', () => {
+  const renderer = main.slice(main.indexOf('function renderInsightCard'), main.indexOf('function normalizeStatus'));
+  assert.match(renderer, /<span>\$\{insight\.important\.text\|\|''\}<\/span>/);
+  assert.doesNotMatch(renderer, /<span>\$\{esc\(insight\.important\.text\|\|''\)\}<\/span>/);
+  assert.match(monthly, /SKU terlaris: <strong>\$\{safe\(topOutSku\)\}<\/strong>/);
+});
+
 test('normal transaction routes request a server page and preserve backend totals', () => {
   const loader = main.slice(main.indexOf('async function loadTransactionTablePage'), main.indexOf('function normalizeMovementRows'));
   assert.match(loader, /URLSearchParams\(\{page:String\(nextPage\),limit:String\(nextLimit\),sort,includeSummary:String\(!cachedSummary\)\}\)/);
