@@ -6,9 +6,15 @@ const env = { SUPABASE_URL: 'https://db.example', SUPABASE_SECRET_KEY: 'sb_secre
 const request = query => new Request(`https://app.example/api/rpl${query}`);
 
 test('RPL adapter preserves the existing frontend row shape', () => {
-  assert.deepEqual(mapRplRow({ lokasi_bulky: 'RAK RPL', sku: 'SKU-1', nama_barang: 'Produk', stok_awal: 2, internal_stock_transfer: 3, replenishment: 4, pengeluaran: 1, stok_akhir: 8, source_row_number: 9, synced_at: '2026-08-31T00:00:00Z' }), {
-    lokasi: 'RAK RPL', 'lokasi bulky': 'RAK RPL', sku: 'SKU-1', 'nama barang': 'Produk', 'stok awal': 2, 'internal stock transfer': 3, replenishment: 4, pengeluaran: 1, 'stok akhir': 8, source_row_number: 9, synced_at: '2026-08-31T00:00:00Z',
+  assert.deepEqual(mapRplRow({ lokasi_bulky: 'RAK RPL', sku: 'SKU-1', nama_barang: 'Produk', stok_awal: 2, internal_stock_transfer: 3, replenishment: 4, pengeluaran: 1, stok_akhir: 8, netsuite: 6, source_row_number: 9, synced_at: '2026-08-31T00:00:00Z' }), {
+    lokasi: 'RAK RPL', 'lokasi bulky': 'RAK RPL', sku: 'SKU-1', 'nama barang': 'Produk', 'stok awal': 2, 'internal stock transfer': 3, replenishment: 4, pengeluaran: 1, 'stok akhir': 8, netsuite: 6, selisih: 2, source_row_number: 9, synced_at: '2026-08-31T00:00:00Z',
   });
+});
+
+test('RPL adapter preserves missing NETSUITE instead of treating it as zero', () => {
+  const mapped = mapRplRow({ sku: 'SKU-NULL', stok_akhir: 8, netsuite: null });
+  assert.equal(mapped.netsuite, null);
+  assert.equal(mapped.selisih, null);
 });
 
 test('GET /api/rpl paginates and applies SKU, name, and location filters in Supabase', async () => {
