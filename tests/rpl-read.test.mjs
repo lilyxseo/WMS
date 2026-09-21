@@ -31,8 +31,8 @@ test('GET /api/rpl paginates and applies SKU, name, and location filters in Supa
     const dataUrl = calls[0].url;
     assert.match(dataUrl, /offset=100&limit=100/);
     assert.match(dataUrl, /sku=ilike/);
-    assert.match(dataUrl, /nama_barang=ilike/);
-    assert.match(dataUrl, /lokasi_bulky=eq/);
+    assert.match(dataUrl, /nama_barang\.ilike/);
+    assert.match(dataUrl, /lokasi_bulky\.ilike/);
     assert.equal(calls[0].options.headers.apikey, env.SUPABASE_SECRET_KEY);
     assert.equal(calls.some(call => call.url.includes('googleapis.com')), false);
   } finally { globalThis.fetch = originalFetch; }

@@ -1,4 +1,5 @@
 import { getSecretSupabaseConfig } from '../_supabase-config.js';
+import { buildInventorySearchFilters, normalizeSearchQuery } from '../_inventory-search.js';
 
 const TABLE = 'inventory_rpl';
 const DEFAULT_LIMIT = 50;
@@ -65,12 +66,12 @@ export async function handleRplRequest({ request, env }) {
     const page = Math.max(1, Number.parseInt(url.searchParams.get('page') || '1', 10) || 1);
     const limit = Math.min(MAX_LIMIT, Math.max(1, Number.parseInt(url.searchParams.get('limit') || String(DEFAULT_LIMIT), 10) || DEFAULT_LIMIT));
     const sku = String(url.searchParams.get('sku') || '').trim();
-    const search = String(url.searchParams.get('q') || '').trim();
+    const search = normalizeSearchQuery(url.searchParams.get('q'));
     const lokasi = String(url.searchParams.get('lokasi') || '').trim();
     const filters = [];
     if (sku) filters.push(`sku=ilike.${encodeURIComponent(`%${escapeLike(sku)}%`)}`);
-    if (search) filters.push(`nama_barang=ilike.${encodeURIComponent(`%${escapeLike(search)}%`)}`);
-    if (lokasi) filters.push(`lokasi_bulky=eq.${encodeURIComponent(lokasi)}`);
+    filters.push(...buildInventorySearchFilters(search, ['sku', 'nama_barang', 'lokasi_bulky']));
+    if (lokasi) filters.push(...buildInventorySearchFilters(lokasi, ['lokasi_bulky']));
     const filterQuery = filters.length ? `&${filters.join('&')}` : '';
 
     let rawRows = [];

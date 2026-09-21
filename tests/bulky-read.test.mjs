@@ -35,7 +35,7 @@ test('GET /api/bulky paginates and applies SKU, name/SKU search, and location fi
     assert.match(calls[0].url, /sku=ilike/);
     assert.match(calls[0].url, /or=%28sku\.ilike|or=\(sku\.ilike/);
     assert.match(calls[0].url, /nama_barang\.ilike/);
-    assert.match(calls[0].url, /lokasi_bulky=eq/);
+    assert.match(calls[0].url, /lokasi_bulky\.ilike/);
     assert.equal(calls[0].options.headers.apikey, env.SUPABASE_SECRET_KEY);
     assert.equal(calls.some(call => call.url.includes('googleapis.com')), false);
   } finally { globalThis.fetch = originalFetch; }

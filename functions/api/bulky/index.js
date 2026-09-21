@@ -1,4 +1,5 @@
 import { getSecretSupabaseConfig } from '../_supabase-config.js';
+import { buildInventorySearchFilters, normalizeSearchQuery } from '../_inventory-search.js';
 
 const TABLE = 'inventory_bulky';
 const COLUMNS = 'lokasi_bulky,sku,nama_barang,stok_awal,internal_stock_transfer,replenishment,pengeluaran,stok_akhir,source_row_number,synced_at';
@@ -66,15 +67,12 @@ export async function handleBulkyRequest({ request, env }) {
     const page = Math.max(1, Number.parseInt(url.searchParams.get('page') || '1', 10) || 1);
     const limit = Math.min(MAX_LIMIT, Math.max(1, Number.parseInt(url.searchParams.get('limit') || String(DEFAULT_LIMIT), 10) || DEFAULT_LIMIT));
     const sku = String(url.searchParams.get('sku') || '').trim();
-    const search = String(url.searchParams.get('q') || '').trim();
+    const search = normalizeSearchQuery(url.searchParams.get('q'));
     const lokasi = String(url.searchParams.get('lokasi') || '').trim();
     const filters = [];
     if (sku) filters.push(`sku=ilike.${encodeURIComponent(`%${escapeLike(sku)}%`)}`);
-    if (search) {
-      const term = encodeURIComponent(`*${escapeLike(search)}*`);
-      filters.push(`or=(sku.ilike.${term},nama_barang.ilike.${term})`);
-    }
-    if (lokasi) filters.push(`lokasi_bulky=eq.${encodeURIComponent(lokasi)}`);
+    filters.push(...buildInventorySearchFilters(search, ['sku', 'nama_barang', 'lokasi_bulky']));
+    if (lokasi) filters.push(...buildInventorySearchFilters(lokasi, ['lokasi_bulky']));
     const filterQuery = filters.length ? `&${filters.join('&')}` : '';
 
     let rawRows = [];

@@ -64,7 +64,7 @@ test('default page scope includes only Barang Masuk and Movement in rows, totals
     assert.deepEqual(body.summary, { totalRows: 2, totalQty: 7, totalSku: 2, latestDate: '2026-09-03', oldestDate: '2026-09-01', invalidDateCount: 0 });
     const dataUrl = new URL(urls[0]);
     assert.equal(dataUrl.searchParams.get('status'), 'in.(Barang Masuk,Movement)');
-    assert.match(dataUrl.searchParams.get('or'), /nama_barang\.ilike.*Movement/);
+    assert.match(dataUrl.searchParams.get('or'), /nama_barang\.ilike.*movement/);
   } finally { globalThis.fetch = originalFetch; }
 });
 

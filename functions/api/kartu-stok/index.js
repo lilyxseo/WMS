@@ -1,5 +1,6 @@
 import { getRequestRole } from '../_authz.js';
 import { getSecretSupabaseConfig } from '../_supabase-config.js';
+import { buildInventorySearchFilters, normalizeSearchQuery } from '../_inventory-search.js';
 
 const TABLE = 'inventory_kartu_stok';
 const COLUMNS = 'lokasi_bulky,sku,nama_barang,stok_awal,internal_stock_transfer,replenishment,pengeluaran,stok_akhir,source_row_number,synced_at';
@@ -67,18 +68,15 @@ export async function handleKartuStokRequest({ request, env }) {
     const startedAt = Date.now();
     const url = new URL(request.url);
     const mode = url.searchParams.get('mode') === 'full' ? 'full' : 'page';
-    const search = String(url.searchParams.get('search') || '').trim();
+    const search = normalizeSearchQuery(url.searchParams.get('search') || url.searchParams.get('q'));
     const sku = String(url.searchParams.get('sku') || '').trim();
     const lokasi = String(url.searchParams.get('lokasi') || '').trim();
     const page = Math.max(1, Number.parseInt(url.searchParams.get('page') || '1', 10) || 1);
     const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Number.parseInt(url.searchParams.get('pageSize') || '50', 10) || 50));
     const filters = [];
     if (sku) filters.push(`sku=ilike.${encodeURIComponent(`%${escapeLike(sku)}%`)}`);
-    if (lokasi) filters.push(`lokasi_bulky=eq.${encodeURIComponent(lokasi)}`);
-    if (search) {
-      const term = encodeURIComponent(`*${escapeLike(search)}*`);
-      filters.push(`or=(sku.ilike.${term},nama_barang.ilike.${term})`);
-    }
+    if (lokasi) filters.push(...buildInventorySearchFilters(lokasi, ['lokasi_bulky']));
+    filters.push(...buildInventorySearchFilters(search, ['sku', 'nama_barang', 'lokasi_bulky']));
     const filterQuery = filters.length ? `&${filters.join('&')}` : '';
     let rawRows = [];
     let total = 0;

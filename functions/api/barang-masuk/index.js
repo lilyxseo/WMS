@@ -1,5 +1,6 @@
 import { getSecretSupabaseConfig } from '../_supabase-config.js';
 import { escapeLike, supabaseRows, transactionPage, transactionSort, transactionSummary } from '../_transaction-read.js';
+import { buildInventorySearchFilters, normalizeSearchQuery } from '../_inventory-search.js';
 
 const TABLE = 'inventory_barang_masuk';
 // Keep reads compatible with the deployed table schema. In particular, synced_at is
@@ -60,7 +61,7 @@ export async function handleBarangMasukRequest({ request, env }) {
     const limit = Math.min(MAX_LIMIT, Math.max(1, Number.parseInt(url.searchParams.get('limit') || String(DEFAULT_LIMIT), 10) || DEFAULT_LIMIT));
     const filters = [];
     const sku = String(url.searchParams.get('sku') || '').trim();
-    const search = String(url.searchParams.get('q') || '').trim();
+    const search = normalizeSearchQuery(url.searchParams.get('q'));
     const from = String(url.searchParams.get('from') || '').trim();
     const to = String(url.searchParams.get('to') || '').trim();
     // This page is the inbound ledger, which includes both ordinary receipts
@@ -74,10 +75,7 @@ export async function handleBarangMasukRequest({ request, env }) {
     console.info('[BarangMasukAPI] params', { page, limit, sort: sort.name, hasSearch: Boolean(search), hasDateRange: Boolean(startDate || endDate) });
 
     if (sku) filters.push(`sku=ilike.${encodeURIComponent(`%${escapeLike(sku)}%`)}`);
-    if (search) {
-      const term = encodeURIComponent(`*${escapeLike(search)}*`);
-      filters.push(`or=(sku.ilike.${term},nama_barang.ilike.${term})`);
-    }
+    filters.push(...buildInventorySearchFilters(search, ['sku', 'nama_barang', 'from_location', 'to_location']));
     if (from) filters.push(`from_location=eq.${encodeURIComponent(from)}`);
     if (to) filters.push(`to_location=eq.${encodeURIComponent(to)}`);
     if (status) filters.push(`status=eq.${encodeURIComponent(status)}`);
