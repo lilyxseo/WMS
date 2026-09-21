@@ -2290,7 +2290,7 @@ async function loadTransactionTablePage(mode,{page,limit,search,force=false}={})
 const st=TABLE_STATE[mode],requestId=++st.requestId;st.abortController?.abort();const controller=new AbortController();st.abortController=controller;st.error="";
 const nextPage=Math.max(1,Number(page)||st.page||1),nextLimit=[25,50].includes(Number(limit))?Number(limit):st.pageSize;
 st.page=nextPage;st.pageSize=nextLimit;
-const q=String(search??(mode==='in'?inSearch?.value:outSearch?.value)??'').trim();
+const q=normalizeSearch(search??(mode==='in'?inSearch?.value:outSearch?.value)??'');
 const sort=st.sort||'latest';
 const source=transactionSource(mode),filters=transactionFilters(mode);const key=transactionPageKey({source,page:nextPage,limit:nextLimit,query:q,filters,sort});const summaryKey=transactionSummaryKey({source,query:q,filters});const cached=!force&&TRANSACTION_PAGE_CACHE.get(source,key);const cachedSummary=TRANSACTION_PAGE_CACHE.getSummary(summaryKey);
 if(cached){applyTransactionPayload(mode,{...cached,summary:cached.summary||cachedSummary?.summary},{page:nextPage,limit:nextLimit});st.loading=false;renderDataTablePage(mode,mode==='in'?'Barang Masuk':'Barang Keluar',true);if(TRANSACTION_PAGE_CACHE.isFresh(cached)){st.abortController=null;queueMicrotask(()=>prefetchTransactionPage(mode,{page:nextPage+1,limit:nextLimit,query:q,sort,filters,summaryKey}));return cached.rows;}}
@@ -2424,7 +2424,7 @@ const LOCATION_STATE={rows:[],page:1,pageSize:25,total:0,selected:"",loading:fal
 const LOCATION_STATUS_META={"Kosong":{cls:"loc-status-empty",icon:"map-pin-off"},"Sedikit":{cls:"loc-status-low",icon:"package-minus"},"Normal":{cls:"loc-status-normal",icon:"badge-check"},"Padat":{cls:"loc-status-dense",icon:"boxes"}};
 function renderLocationStatusBadge(status){const meta=LOCATION_STATUS_META[status]||LOCATION_STATUS_META.Normal;return `<span class='loc-status-badge ${meta.cls}'><i data-lucide='${meta.icon}'></i><span>${esc(status)}</span></span>`;}
 function renderLocationMetric(icon,label,value,extraClass=""){return `<span class='loc-cell-metric ${extraClass}'><i data-lucide='${icon}'></i><span class='loc-cell-label'>${esc(label)}</span><strong>${esc(value)}</strong></span>`;}
-function locationParams(page=LOCATION_STATE.page){return {page:String(page),limit:String(LOCATION_STATE.pageSize),search:String(locSearchInput?.value||'').trim(),status:locStatusFilter?.value||'all',type:locTypeFilter?.value||'all',sort:locSort?.value||'skuDesc'};}
+function locationParams(page=LOCATION_STATE.page){return {page:String(page),limit:String(LOCATION_STATE.pageSize),search:normalizeSearch(locSearchInput?.value),status:locStatusFilter?.value||'all',type:locTypeFilter?.value||'all',sort:locSort?.value||'skuDesc'};}
 function locationCacheKey(params){return new URLSearchParams(params).toString();}
 function setLimitedCache(cache,key,value){cache.delete(key);cache.set(key,value);while(cache.size>LOCATION_CACHE_LIMIT)cache.delete(cache.keys().next().value);}
 async function fetchLocationJson(path){const headers=await getAuthHeaders();const {res,data}=await fetchJsonSafe(path,{headers});if(!res.ok||!data?.success)throw new Error(data?.message||'Gagal memuat data lokasi');return data;}

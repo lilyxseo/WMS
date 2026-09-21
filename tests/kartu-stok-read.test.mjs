@@ -32,7 +32,7 @@ test('endpoint applies server-side SKU/name/location filters and returns sync fr
     assert.doesNotMatch(statusUrl, /last_attempt_at/);
     assert.match(urls[0], /sku=ilike/);
     assert.match(urls[0], /nama_barang\.ilike/);
-    assert.match(urls[0], /lokasi_bulky=eq/);
+    assert.match(urls[0], /lokasi_bulky\.ilike/);
     assert.equal(urls.some(url => url.includes('googleapis.com')), false);
   } finally { globalThis.fetch = originalFetch; }
 });
