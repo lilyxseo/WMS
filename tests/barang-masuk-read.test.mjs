@@ -5,9 +5,9 @@ import { handleBarangMasukRequest, mapBarangMasukRow } from '../functions/api/ba
 const env = { SUPABASE_URL: 'https://db.example', SUPABASE_SECRET_KEY: 'sb_secret_server-only' };
 const request = query => new Request(`https://app.example/api/barang-masuk${query}`);
 
-test('Barang Masuk adapter preserves the existing frontend response shape', () => {
-  assert.deepEqual(mapBarangMasukRow({ tanggal: '2026-08-31', from_location: 'Receiving', to_location: 'A-1', sku: 'SKU-1', nama_barang: 'Produk', qty: 3, status: 'OK', pic: 'Ani', keterangan: 'Baik', source_row_number: 42, synced_at: '2026-08-31T01:00:00Z' }), {
-    tanggal: '2026-08-31', from: 'Receiving', to: 'A-1', sku: 'SKU-1', namaBarang: 'Produk', qty: 3, status: 'OK', pic: 'Ani', keterangan: 'Baik', rowNumber: 42,
+test('Barang Masuk adapter returns all business fields without sync metadata', () => {
+  assert.deepEqual(mapBarangMasukRow({ tanggal: '2026-08-31', from_location: 'Receiving', to_location: 'A-1', sku: 'SKU-1', nama_barang: 'Produk', qty: 3, status: 'OK', pic: 'Ani', keterangan: 'Baik', no_iseller: 'IS-1', netsuite: '00042', keterangan_lainnya: 'Fragile', lokasi_surat_jalan: 'Rack SJ', stockout: 'No', dokumen: 'https://docs.example/1', source_row_number: 42, synced_at: '2026-08-31T01:00:00Z' }), {
+    tanggal: '2026-08-31', from: 'Receiving', to: 'A-1', sku: 'SKU-1', namaBarang: 'Produk', qty: 3, status: 'OK', pic: 'Ani', keterangan: 'Baik', no_iseller: 'IS-1', netsuite: '00042', keterangan_lainnya: 'Fragile', lokasi_surat_jalan: 'Rack SJ', stockout: 'No', dokumen: 'https://docs.example/1', rowNumber: 42,
   });
 });
 
@@ -29,7 +29,7 @@ test('endpoint normalizes dates before pagination while applying non-date filter
     assert.equal(body.lastSync, '2026-08-31T01:00:00Z');
     assert.equal(body.data[0].namaBarang, 'Produk');
     const dataUrl = calls[0].url;
-    assert.equal(new URL(dataUrl).searchParams.get('select'), 'tanggal,from_location,to_location,sku,nama_barang,qty,status,pic,keterangan,source_row_number');
+    assert.equal(new URL(dataUrl).searchParams.get('select'), 'tanggal,from_location,to_location,sku,nama_barang,qty,status,pic,keterangan,no_iseller,netsuite,keterangan_lainnya,lokasi_surat_jalan,stockout,dokumen,source_row_number');
     assert.match(dataUrl, /offset=0&limit=1000/);
     assert.match(dataUrl, /sku=ilike/);
     assert.match(dataUrl, /or=\(sku\.ilike.*nama_barang\.ilike/);

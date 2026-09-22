@@ -2,7 +2,7 @@ export const TRANSACTION_PAGE_CACHE_TTL_MS = 45_000;
 export const TRANSACTION_PAGE_CACHE_LIMIT = 8;
 // Bump only the inbound namespace when its backend data scope changes. Keeping
 // the outbound namespace stable avoids invalidating Barang Keluar needlessly.
-export const TRANSACTION_CACHE_VERSIONS = Object.freeze({ barang_masuk: 2, barang_keluar: 1 });
+export const TRANSACTION_CACHE_VERSIONS = Object.freeze({ barang_masuk: 3, barang_keluar: 1 });
 
 function versionedSource(source) {
   return `${source}@v${TRANSACTION_CACHE_VERSIONS[source] || 1}`;

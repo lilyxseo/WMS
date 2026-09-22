@@ -11,7 +11,7 @@ test('transaction cache keys isolate source, paging, query, filters and sort', (
 });
 
 test('Barang Masuk keys use a bumped namespace without changing Barang Keluar', () => {
-  assert.match(transactionPageKey({ source: 'barang_masuk', page: 1, limit: 25 }), /^barang_masuk@v2\|/);
+  assert.match(transactionPageKey({ source: 'barang_masuk', page: 1, limit: 25 }), /^barang_masuk@v3\|/);
   assert.match(transactionPageKey({ source: 'barang_keluar', page: 1, limit: 25 }), /^barang_keluar@v1\|/);
 });
 

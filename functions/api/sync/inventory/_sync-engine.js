@@ -90,7 +90,7 @@ export function createInventorySyncService(config) {
     const accessToken = await (dependencies.getGoogleAccessToken || getGoogleAccessToken)(env);
     const fetchFn = dependencies.fetch || fetch;
     const wait = dependencies.sleep || sleep;
-    const range = `'${sheetName}'!A:ZZ`;
+    const range = config.sheetRange || `'${sheetName}'!A:ZZ`;
     for (let attempt = 0; ; attempt += 1) {
       if (dependencies.requestMetrics) dependencies.requestMetrics.googleRequests += 1;
       const response = await fetchFn(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}/values/${encodeURIComponent(range)}`, { headers: { Authorization: `Bearer ${accessToken}` } });

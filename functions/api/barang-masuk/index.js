@@ -5,7 +5,8 @@ import { buildInventorySearchFilters, normalizeSearchQuery } from '../_inventory
 const TABLE = 'inventory_barang_masuk';
 // Keep reads compatible with the deployed table schema. In particular, synced_at is
 // optional metadata and must not make the whole endpoint fail when it is not present.
-const COLUMNS = 'tanggal,from_location,to_location,sku,nama_barang,qty,status,pic,keterangan,source_row_number';
+export const BARANG_MASUK_COLUMNS = Object.freeze(['tanggal', 'from', 'to', 'sku', 'namaBarang', 'qty', 'status', 'pic', 'keterangan', 'no_iseller', 'netsuite', 'keterangan_lainnya', 'lokasi_surat_jalan', 'stockout', 'dokumen']);
+const COLUMNS = 'tanggal,from_location,to_location,sku,nama_barang,qty,status,pic,keterangan,no_iseller,netsuite,keterangan_lainnya,lokasi_surat_jalan,stockout,dokumen,source_row_number';
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 50;
 const ERROR_REASON = 'BARANG_MASUK_FETCH_FAILED';
@@ -31,6 +32,12 @@ export function mapBarangMasukRow(row = {}) {
     status: row.status ?? '',
     pic: row.pic ?? '',
     keterangan: row.keterangan ?? '',
+    no_iseller: row.no_iseller ?? '',
+    netsuite: row.netsuite ?? '',
+    keterangan_lainnya: row.keterangan_lainnya ?? '',
+    lokasi_surat_jalan: row.lokasi_surat_jalan ?? '',
+    stockout: row.stockout ?? '',
+    dokumen: row.dokumen ?? '',
     rowNumber: row.source_row_number ?? null,
   };
 }
@@ -115,10 +122,10 @@ export async function handleBarangMasukRequest({ request, env }) {
       table: `public.${TABLE}`,
       sheetName: 'Barang Masuk',
       startRow: 2,
-      columns: ['tanggal', 'from', 'to', 'sku', 'namaBarang', 'qty', 'status', 'pic', 'keterangan'],
+      columns: BARANG_MASUK_COLUMNS,
       data: rows,
       rows,
-      values: rows.map(row => ['tanggal', 'from', 'to', 'sku', 'namaBarang', 'qty', 'status', 'pic', 'keterangan'].map(key => row[key] ?? '')),
+      values: rows.map(row => BARANG_MASUK_COLUMNS.map(key => row[key] ?? '')),
       total,
       ...(summary ? { summary } : {}),
       page,
