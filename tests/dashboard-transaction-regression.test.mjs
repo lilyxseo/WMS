@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const main = await readFile(new URL('../assets/js/main.js', import.meta.url), 'utf8');
+const pagesCss = await readFile(new URL('../assets/css/pages.css', import.meta.url), 'utf8');
 const recent = await readFile(new URL('../functions/api/dashboard-recent-transactions.js', import.meta.url), 'utf8');
 const monthly = await readFile(new URL('../functions/api/dashboard-monthly-insight.js', import.meta.url), 'utf8');
 const masuk = await readFile(new URL('../functions/api/barang-masuk/index.js', import.meta.url), 'utf8');
@@ -21,9 +22,16 @@ test('dashboard restores both latest-50 tables and monthly insight without full 
 
 test('most important insight renders the formatting supplied by the monthly insight API', () => {
   const renderer = main.slice(main.indexOf('function renderInsightCard'), main.indexOf('function normalizeStatus'));
-  assert.match(renderer, /<span>\$\{insight\.important\.text\|\|''\}<\/span>/);
+  assert.match(renderer, /<\/strong> <span>\$\{insight\.important\.text\|\|''\}<\/span>/);
   assert.doesNotMatch(renderer, /<span>\$\{esc\(insight\.important\.text\|\|''\)\}<\/span>/);
   assert.match(monthly, /SKU terlaris: <strong>\$\{safe\(topOutSku\)\}<\/strong>/);
+});
+
+test('most important insight keeps its heading and content in one flowing line', () => {
+  assert.match(pagesCss, /\.auto-insight-important\{display:block;/);
+  assert.doesNotMatch(pagesCss, /\.auto-insight-important strong[^}]*display:block/);
+  assert.doesNotMatch(pagesCss, /\.auto-insight-important span[^}]*display:block/);
+  assert.doesNotMatch(pagesCss, /\.auto-insight-important strong\{white-space:nowrap\}/);
 });
 
 test('normal transaction routes request a server page and preserve backend totals', () => {
