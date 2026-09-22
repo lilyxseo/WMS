@@ -37,3 +37,13 @@ test('freshness is 45 seconds and source invalidation stays isolated', () => {
   assert.equal(cache.get('barang_masuk', 'in'), null);
   assert.ok(cache.get('barang_keluar', 'out'));
 });
+
+test('source versions make prefetched pages stale immediately', () => {
+  const cache = new TransactionPageCache();
+  cache.set('barang_masuk', 'page-1', { rows: [], fetchedAt: 1_000, sourceVersion: 'v1' });
+  const entry = cache.get('barang_masuk', 'page-1');
+  assert.equal(cache.isFresh(entry, 1_001, 'v1'), true);
+  assert.equal(cache.isFresh(entry, 1_001, 'v2'), false);
+  cache.markSourceStale('barang_masuk');
+  assert.equal(cache.isFresh(entry, 1_001, 'v1'), false);
+});

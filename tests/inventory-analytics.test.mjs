@@ -109,7 +109,7 @@ test('daily transaction dates share strict normalization and outbound uses a com
 test('dashboard bootstrap uses summary API without full mode', async () => {
   const source = await import('node:fs/promises').then(fs => fs.readFile(new URL('../assets/js/main.js', import.meta.url), 'utf8'));
   const summaryBootstrap = source.slice(source.indexOf('async function initAppData()'), source.indexOf('await hydrateModuleCachesFromDb()', source.indexOf('async function initAppData()')));
-  assert.match(summaryBootstrap, /loadDashboardPayload\(\)/);
+  assert.match(summaryBootstrap, /startInitialPrefetch\(\)/);
   assert.match(source, /fetchJsonSafe\('\/api\/dashboard-summary'/);
   assert.doesNotMatch(summaryBootstrap, /mode=full/);
   assert.match(source, /!\["dashboard","search"\]\.includes\(page\)&&!LOADED_DETAIL_PAGES\.has\(page\)/);

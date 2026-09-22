@@ -12,10 +12,11 @@ function bodyBetween(start, end) {
   return source.slice(startIndex, endIndex);
 }
 
-test('dashboard initialization fetches its lightweight dashboard payload', () => {
+test('dashboard initialization starts its lightweight prioritized prefetch', () => {
   const init = bodyBetween('async function initAppData()', 'async function refreshDataInBackground()');
   const landing = init.slice(0, init.indexOf('await hydrateModuleCachesFromDb()'));
-  assert.match(landing, /Promise\.allSettled\(\[loadDashboardPayload\(\),loadInventorySyncStatus\(\)\]\)/);
+  assert.match(landing, /void startInitialPrefetch\(\)/);
+  assert.match(landing, /void loadInventorySyncStatus\(\)/);
   assert.doesNotMatch(landing, /hydrateAllDataOnInit|preloadData|mode=['"]full|BARCODE/);
 
   const summary = bodyBetween('async function loadDashboardSummary()', 'async function loadDetailPageData(page)');
