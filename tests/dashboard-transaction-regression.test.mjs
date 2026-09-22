@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const main = await readFile(new URL('../assets/js/main.js', import.meta.url), 'utf8');
+const pagesCss = await readFile(new URL('../assets/css/pages.css', import.meta.url), 'utf8');
 const recent = await readFile(new URL('../functions/api/dashboard-recent-transactions.js', import.meta.url), 'utf8');
 const monthly = await readFile(new URL('../functions/api/dashboard-monthly-insight.js', import.meta.url), 'utf8');
 const masuk = await readFile(new URL('../functions/api/barang-masuk/index.js', import.meta.url), 'utf8');
@@ -24,6 +25,12 @@ test('most important insight renders the formatting supplied by the monthly insi
   assert.match(renderer, /<span>\$\{insight\.important\.text\|\|''\}<\/span>/);
   assert.doesNotMatch(renderer, /<span>\$\{esc\(insight\.important\.text\|\|''\)\}<\/span>/);
   assert.match(monthly, /SKU terlaris: <strong>\$\{safe\(topOutSku\)\}<\/strong>/);
+});
+
+test('most important insight stacks its heading and content at every viewport width', () => {
+  assert.match(pagesCss, /\.auto-insight-important\{display:grid;gap:3px;/);
+  assert.match(pagesCss, /\.auto-insight-important strong,\.auto-insight-important span\{display:block;min-width:0\}/);
+  assert.doesNotMatch(pagesCss, /\.auto-insight-important strong\{white-space:nowrap\}/);
 });
 
 test('normal transaction routes request a server page and preserve backend totals', () => {
