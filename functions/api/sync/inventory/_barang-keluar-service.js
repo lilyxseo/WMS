@@ -7,7 +7,13 @@ export const REQUIRED_HEADERS = Object.freeze(['TANGGAL', 'FROM', 'TO', 'SKU', '
 
 async function parseValues(values, helpers) {
   if (!Array.isArray(values) || !Array.isArray(values[0])) throw new SyncError('INVALID_HEADER', 'Header Barang Keluar tidak ditemukan');
-  const indexes = new Map(values[0].map((header, index) => [normalizedHeader(header), index]));
+  // Google Sheets can contain duplicate column names. Keep the leftmost
+  // occurrence so Barang Keluar uses the first STATUS column from the sheet.
+  const indexes = new Map();
+  values[0].forEach((header, index) => {
+    const normalized = normalizedHeader(header);
+    if (!indexes.has(normalized)) indexes.set(normalized, index);
+  });
   const missing = REQUIRED_HEADERS.filter(header => !indexes.has(header));
   if (missing.length) throw new SyncError('INVALID_HEADER', `Header wajib tidak ditemukan: ${missing.join(', ')}`);
   const rows = [], invalidRows = [], sourceKeys = new Set(); let sourceRowCount = 0;
