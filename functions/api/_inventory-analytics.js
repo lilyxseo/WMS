@@ -25,10 +25,11 @@ export function businessDateKey(now = new Date(), timeZone = 'Asia/Jakarta') {
 }
 
 export function transactionDateRepresentations(date) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date || ''));
+  const normalized = normalizeTransactionDate(date);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(normalized);
   if (!match) return [];
   const [, year, month, day] = match;
-  return [...new Set([date, `${Number(month)}/${Number(day)}/${year}`, `${month}/${day}/${year}`])];
+  return [...new Set([normalized, `${Number(month)}/${Number(day)}/${year}`, `${month}/${day}/${year}`])];
 }
 
 async function exactBusinessDateCount(config, table, date, filter = '') {
@@ -51,13 +52,13 @@ export async function loadInventoryCounts(env, now = new Date()) {
     exactCount(config, SOURCES.barangMasuk.table, '&sku=not.is.null&status=ilike.BARANG%20MASUK'),
     exactCount(config, SOURCES.barangKeluar.table, '&tanggal=not.is.null&keterangan=ilike.PENGELUARAN'),
     exactCount(config, SOURCES.barangMasuk.table, '&status=ilike.Movement'),
-    exactBusinessDateCount(config, SOURCES.barangMasuk.table, businessDate, '&status=eq.Barang%20Masuk'),
-    exactBusinessDateCount(config, SOURCES.barangKeluar.table, businessDate, '&keterangan=eq.Pengeluaran'),
-    exactBusinessDateCount(config, SOURCES.barangMasuk.table, businessDate, '&status=eq.Movement'),
+    exactBusinessDateCount(config, SOURCES.barangMasuk.table, businessDate, '&status=ilike.Barang%20Masuk'),
+    exactBusinessDateCount(config, SOURCES.barangKeluar.table, businessDate, '&keterangan=ilike.Pengeluaran'),
+    exactBusinessDateCount(config, SOURCES.barangMasuk.table, businessDate, '&status=ilike.Movement'),
   ]);
   return {
     kartuStok: entries[0], rpl: entries[1], bulky: entries[2], barangMasuk: entries[3], barangKeluar: entries[4], totalMovement: entries[5],
-    barangMasukHariIni: entries[6], barangKeluarHariIni: entries[7], totalMovementHariIni: entries[8], businessDate,
+    barangMasukHariIni: entries[6], barangKeluarHariIni: entries[7], totalMovementHariIni: entries[8], businessDate, today: businessDate,
   };
 }
 
@@ -70,7 +71,7 @@ function key(value) {
   return String(value ?? '').normalize('NFKC').trim().toUpperCase();
 }
 
-function dateKey(value) {
+export function normalizeTransactionDate(value) {
   const raw = String(value ?? '').trim();
   if (!raw) return '';
   const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -81,8 +82,7 @@ function dateKey(value) {
     if (year < 100) year += 2000;
     return `${year}-${String(local[1]).padStart(2, '0')}-${String(local[2]).padStart(2, '0')}`;
   }
-  const parsed = new Date(raw);
-  return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString().slice(0, 10);
+  return '';
 }
 
 async function readAll(config, source) {
@@ -139,11 +139,11 @@ export async function loadInventoryAnalyticsRows(env) {
 export function computeInventorySummary(rows, now = new Date()) {
   const all = Object.values(rows).flat();
   const skuSet = new Set(all.map(row => key(row.sku)).filter(Boolean));
-  const today = now.toISOString().slice(0, 10);
+  const today = businessDateKey(now);
   const validInbound = rows.barangMasuk.filter(row => key(row.sku));
   const inbound = validInbound.filter(row => key(row.status) === 'BARANG MASUK');
   const movement = validInbound.filter(row => key(row.status).includes('MOVEMENT'));
-  const outbound = rows.barangKeluar.filter(row => dateKey(row.tanggal) && key(row.keterangan) === 'PENGELUARAN');
+  const outbound = rows.barangKeluar.filter(row => normalizeTransactionDate(row.tanggal) && key(row.keterangan) === 'PENGELUARAN');
   const bySku = new Map();
   for (const row of [...rows.rpl, ...rows.bulky]) {
     const sku = key(row.sku);
@@ -166,15 +166,15 @@ export function computeInventorySummary(rows, now = new Date()) {
   const totalMovement = movement.length;
   return {
     barangMasuk: inbound.length,
-    barangMasukHariIni: inbound.filter(row => dateKey(row.tanggal) === today).length,
+    barangMasukHariIni: inbound.filter(row => normalizeTransactionDate(row.tanggal) === today).length,
     barangKeluar: outbound.length,
-    barangKeluarHariIni: outbound.filter(row => dateKey(row.tanggal) === today).length,
+    barangKeluarHariIni: outbound.filter(row => normalizeTransactionDate(row.tanggal) === today).length,
     kartuStok: rows.kartuStok.length,
     rpl: rows.rpl.length,
     bulky: rows.bulky.length,
     totalSku: skuSet.size,
     totalMovement,
-    totalMovementHariIni: movement.filter(row => dateKey(row.tanggal) === today).length,
+    totalMovementHariIni: movement.filter(row => normalizeTransactionDate(row.tanggal) === today).length,
     minusStock: minusSkus.size,
     minusQuantity: Math.abs(minusRows.reduce((sum, row) => sum + number(row.stok_akhir), 0)),
     warningCount,
