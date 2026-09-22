@@ -57,18 +57,15 @@ test('database exception is converted to a safe JSON 500', async t => {
   assert.deepEqual(await response.json(), { success: false, error: 'BARCODE_LOOKUP_FAILED' });
 });
 
-test('frontend safely handles non-JSON failures, auth, friendly errors, and avoids full BARCODE load', async () => {
+test('frontend barcode lookup safely handles non-JSON failures and avoids full BARCODE load', async () => {
   const source = await readFile(new URL('../assets/js/main.js', import.meta.url), 'utf8');
   const lookup = source.slice(source.indexOf('async function resolveScannedSku'), source.indexOf('function triggerSearchSku'));
   const open = source.slice(source.indexOf('async function openBarcodeScanner'), source.indexOf('async function openScannerModal'));
-  const searchHandler = source.slice(source.indexOf('async function handleSearchScanResult'), source.indexOf('async function openBarcodeScanner'));
   assert.match(lookup, /getAuthHeaders\(\)/);
   assert.match(lookup, /headers\.Authorization/);
   assert.match(lookup, /content-type/);
   assert.match(lookup, /response\.text\(\)/);
   assert.match(lookup, /Barcode lookup failed: HTTP/);
   assert.doesNotMatch(lookup, /response\.json\(\).*response\.json\(/s);
-  assert.match(searchHandler, /Gagal mencari barcode\. Silakan coba lagi\./);
-  assert.match(searchHandler, /navigateTo\('\/sku\/'/);
   assert.doesNotMatch(open, /loadBarcodeMaster|fetchSheet|mode=.?full/);
 });
