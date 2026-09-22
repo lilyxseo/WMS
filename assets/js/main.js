@@ -2551,7 +2551,7 @@ function syncSearchModalUi(_open){}
 window.loadAllData=loadAllData;window.syncData=syncData;window.loadCache=loadCache;window.saveCache=saveCache;window.isCacheFresh=isCacheFresh;window.clearCache=clearCache;window.clearSystemCache=clearSystemCache;window.exportLocationCsv=exportLocationCsv;window.toggleDark=toggleDark;window.toggleCompact=toggleCompact;window.setFilter=setFilter;window.copySku=copySku;window.copyText=copyText;window.showDetail=showDetail;window.navigateTo=navigateTo;window.navigateToSku=navigateToSku;window.goBackToPreviousPage=goBackToPreviousPage;window.showPage=showPage;window.resetMovementFilter=resetMovementFilter;window.renderDataTablePage=renderDataTablePage;window.applyTableFilters=applyTableFilters;window.sortTableRows=sortTableRows;window.paginateRows=paginateRows;window.exportFilteredCsv=exportFilteredCsv;window.getUniqueOptions=getUniqueOptions;window.toggleColumnVisibility=toggleColumnVisibility;window.toggleAllColumns=toggleAllColumns;window.changeStokMinusPage=changeStokMinusPage;window.openStokMinusTrace=openStokMinusTrace;window.exportStokMinusCsv=exportStokMinusCsv;
 
 const ANOMALY_CACHE_KEY="anomalyCacheV1";
-const WARNING_ENGINE_VERSION="7";
+const WARNING_ENGINE_VERSION="8";
 const ANOMALY_STATE={page:1,pageSize:25,rows:[],filtered:[],q:"",severity:"all",type:"all",types:[],rendered:false,isLoading:false,_searchDebounce:null,lastRenderToken:0};
 function normalizeSku(v){return clean(String(v||'').replace(/[^A-Za-z0-9-]/g,''));}
 function getSkuName(row){return String(getVal(row,["nama barang","nama","item","description"])||"").trim();}
@@ -2582,7 +2582,7 @@ function sevClass(s){return s==='High'?'b-high':s==='Medium'?'b-medium':'b-low';
 function getWarningSourceVersion(){return [WARNING_ENGINE_VERSION,REFRESH_STATE.dataVersion,DATA["Kartu Stock"]?.length||0,getBarangMasukRows().length,getBarangKeluarRows().length,DATA["RPL"]?.length||0,DATA["BULKY"]?.length||0].join("|");}
 function setAnomalyCache(rows=[],warningSourceVersion=getWarningSourceVersion()){try{localStorage.setItem(ANOMALY_CACHE_KEY,JSON.stringify({rows,warningSourceVersion,updatedAt:Date.now()}));}catch(_){} }
 function getAnomalyCache(){try{const parsed=JSON.parse(localStorage.getItem(ANOMALY_CACHE_KEY)||"null");return Array.isArray(parsed?.rows)?parsed:null;}catch(_){return null;}}
-const ANOMALY_TYPE_LABELS={OUTBOUND_EXCEEDS_INBOUND:"Qty Keluar > Masuk",OUTBOUND_WITHOUT_INBOUND:"SKU Keluar Tanpa Data Masuk",SKU_NAME_MISMATCH:"SKU/Nama Berbeda",INVALID_LOCATION:"Salah Lokasi",SKU_NOT_IN_LOCATION:"SKU/Lokasi",STOCK_OUT_MISMATCH:"Kartu Stok Tidak Balance",TRANSACTION_NOT_IN_STOCK:"Kartu Stok Tidak Balance",INPUT_FORMAT:"Input Format",DUPLICATE_TRANSACTION:"Duplicate",SYNC:"Sync"};
+const ANOMALY_TYPE_LABELS={OUTBOUND_EXCEEDS_INBOUND:"Qty Keluar > Masuk",OUTBOUND_WITHOUT_INBOUND:"SKU Keluar Tanpa Data Masuk",SKU_NAME_MISMATCH:"SKU/Nama Berbeda",INVALID_LOCATION:"Salah Lokasi",SKU_NOT_IN_LOCATION:"SKU/Lokasi",INPUT_FORMAT:"Input Format",DUPLICATE_TRANSACTION:"Duplicate"};
 function anomalyTypeKey(row){return row.type||row.issue;}function anomalyTypeLabel(type){return ANOMALY_TYPE_LABELS[type]||type;}
 function setAnomalyLoading(loading=true,msg="Memuat warning..."){ANOMALY_STATE.isLoading=loading;const wrap=document.getElementById('anomalyLoading');if(!wrap)return;wrap.classList.toggle('hidden',!loading);wrap.textContent=msg;}
 function scheduleAnomalySearch(value=""){ANOMALY_STATE.q=value;clearTimeout(ANOMALY_STATE._searchDebounce);ANOMALY_STATE._searchDebounce=setTimeout(()=>applyAnomalyFilters(true),300);}
