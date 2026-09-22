@@ -46,7 +46,14 @@ export class TransactionPageCache {
 
   setSummary(key, summary) { this.summaries.set(key, { summary, fetchedAt: Date.now() }); }
   getSummary(key) { return this.summaries.get(key) || null; }
-  isFresh(entry, now = Date.now()) { return Boolean(entry && now - entry.fetchedAt < TRANSACTION_PAGE_CACHE_TTL_MS); }
+  isFresh(entry, now = Date.now(), sourceVersion) {
+    return Boolean(entry && !entry.stale
+      && now - entry.fetchedAt < TRANSACTION_PAGE_CACHE_TTL_MS
+      && (sourceVersion == null || entry.sourceVersion === sourceVersion));
+  }
+  markSourceStale(source) {
+    for (const entry of this.pages[source]?.values() || []) entry.stale = true;
+  }
   clearSource(source) {
     this.pages[source]?.clear();
     for (const key of this.summaries.keys()) {

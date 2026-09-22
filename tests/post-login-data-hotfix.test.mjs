@@ -13,11 +13,12 @@ test('login persists and verifies the session before protected startup requests'
   assert.match(auth.slice(getSession), /sessionData\?\.session\?\.access_token/);
   const login = main.slice(main.indexOf('form.addEventListener("submit"'), main.indexOf("signupForm?.addEventListener"));
   assert.ok(login.indexOf('supabase.auth.getSession()') < login.indexOf('isAuthStateReady=true'));
-  assert.ok(login.indexOf('isAuthStateReady=true') < login.indexOf('await initAppData()'));
+  assert.ok(login.indexOf('isAuthStateReady=true') < login.indexOf('void startInitialPrefetch()'));
+  assert.doesNotMatch(login, /await initAppData\(\)/);
 });
 
-test('first dashboard and sync-status reads run in parallel with current auth headers', () => {
-  assert.match(main, /Promise\.allSettled\(\[loadDashboardPayload\(\),loadInventorySyncStatus\(\)\]\)/);
+test('dashboard prefetch and sync-status reads are non-blocking and use current auth headers', () => {
+  assert.match(main, /void startInitialPrefetch\(\);\s*void loadInventorySyncStatus\(\)/);
   for (const endpoint of ['/api/dashboard-summary', '/api/inventory-sync-status']) {
     const call = main.slice(main.indexOf(`fetchJsonSafe('${endpoint}'`) - 100, main.indexOf(`fetchJsonSafe('${endpoint}'`) + 100);
     assert.match(call, /await getAuthHeaders\(\)/);
