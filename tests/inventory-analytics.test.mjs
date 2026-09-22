@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { businessDateKey, computeInventorySummary, loadInventoryAnalyticsRows, loadInventoryCounts, transactionDateRepresentations } from '../functions/api/_inventory-analytics.js';
+import { businessDateKey, computeInventorySummary, loadInventoryAnalyticsRows, loadInventoryCounts, normalizeTransactionDate, transactionDateRepresentations } from '../functions/api/_inventory-analytics.js';
 
 test('inventory summary preserves dashboard, accuracy, warning and minus semantics', () => {
   const rows = {
@@ -65,10 +65,42 @@ test('Barang Masuk today uses the Jakarta business date and counts supported tex
     assert.equal(counts.businessDate, '2026-09-16');
     assert.equal(counts.barangMasukHariIni, 2);
     assert.equal(counts.totalMovementHariIni, 1);
-    const todayRequest = requests.find(url => url.searchParams.get('status') === 'eq.Barang Masuk' && url.searchParams.has('or'));
+    const todayRequest = requests.find(url => url.searchParams.get('status') === 'ilike.Barang Masuk' && url.searchParams.has('or'));
     assert.ok(todayRequest);
     assert.equal(todayRequest.searchParams.get('select'), 'sku');
     assert.equal(todayRequest.searchParams.get('limit'), '1');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('daily transaction dates share strict normalization and outbound uses a complete database count', async () => {
+  assert.equal(normalizeTransactionDate('2026-09-22'), '2026-09-22');
+  assert.equal(normalizeTransactionDate('9/22/2026'), '2026-09-22');
+  assert.equal(normalizeTransactionDate('09/22/2026'), '2026-09-22');
+  assert.equal(normalizeTransactionDate('not a transaction date'), '');
+
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async url => {
+    const parsed = new URL(url);
+    requests.push(parsed);
+    const isOutgoingToday = parsed.pathname.endsWith('/inventory_barang_keluar') && parsed.searchParams.has('or');
+    return new Response(JSON.stringify(isOutgoingToday ? [{ sku: 'OUT-1' }] : []), {
+      status: 200,
+      headers: { 'content-range': isOutgoingToday ? '0-0/2' : '*/0' },
+    });
+  };
+  try {
+    const counts = await loadInventoryCounts({ SUPABASE_URL: 'https://example.supabase.co', SUPABASE_SECRET_KEY: 'sb_secret_test' }, new Date('2026-09-21T17:30:00Z'));
+    assert.equal(counts.today, '2026-09-22');
+    assert.equal(counts.barangKeluarHariIni, 2);
+    const request = requests.find(url => url.pathname.endsWith('/inventory_barang_keluar') && url.searchParams.has('or'));
+    assert.equal(request.searchParams.get('select'), 'sku');
+    assert.equal(request.searchParams.get('limit'), '1');
+    assert.equal(request.searchParams.get('keterangan'), 'ilike.Pengeluaran');
+    assert.match(request.searchParams.get('or'), /tanggal\.eq\.2026-09-22/);
+    assert.match(request.searchParams.get('or'), /tanggal\.eq\.9\/22\/2026/);
   } finally {
     globalThis.fetch = originalFetch;
   }
