@@ -40,11 +40,11 @@ test('movement detail routes lazy-load independently', () => {
   assert.match(showPage, /loadDetailPageData\(page\)/);
 });
 
-test('barcode master is memory-only and loaded only when scanner opens', () => {
+test('barcode master is not loaded at startup or when scanner opens', () => {
   const rebuild = bodyBetween('function rebuildBarcodeMap(rows=[])', 'function detectHeaderIndex(values)');
   assert.doesNotMatch(rebuild, /localStorage\.setItem|inventory_barcode_master/);
   const startupHydration = bodyBetween('async function hydrateAllDataOnInit', 'function preloadInventoryData()');
   assert.doesNotMatch(startupHydration, /loadBarcodeMaster|BARCODE/);
   const scanner = bodyBetween('async function openBarcodeScanner', 'async function openScannerModal');
-  assert.match(scanner, /await loadBarcodeMaster\(\)/);
+  assert.doesNotMatch(scanner, /loadBarcodeMaster|fetchSheet\(["']BARCODE["']\)|mode=.?full/);
 });
