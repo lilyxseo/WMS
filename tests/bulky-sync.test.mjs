@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BULKY_SHEET_NAME, buildSourceRowKey, normalizeBulkyHeader, parseBulkyValues, syncBulky } from '../functions/api/sync/inventory/_bulky-service.js';
+import { BULKY_SHEET_NAME, BULKY_SHEET_RANGE, buildSourceRowKey, normalizeBulkyHeader, parseBulkyValues, syncBulky } from '../functions/api/sync/inventory/_bulky-service.js';
 
 const HEADER = [
   'LOKASI BULKY', 'SKU', 'NAMA BARANG', 'STOK AWAL', 'INTERNAL STOCK TRANSFER', 'REPLENISHMENT',
-  'PENGELUARAN', 'STOK AKHIR', 'Netsuite',
+  'PENGELUARAN', 'STOK AKHIR', 'Iseller', 'Netsuite', 'Selisih', 'Pendingan IT',
 ];
-const row = (sku, stokAkhir = '12', netsuite = '11') => [' bulky%20a ', sku, ` Produk ${sku} `, '10', '2', '3', '3', stokAkhir, netsuite];
+const row = (sku, stokAkhir = '12', values = {}) => [' bulky%20a ', sku, ` Produk ${sku} `, '10', '2', '3', '3', stokAkhir, values.iseller ?? '12', values.netsuite ?? '11', values.selisih ?? '1', values.pendingan_it ?? '2'];
 const logger = { log() {}, error() {} };
 
 function statefulGateway() {
@@ -16,7 +16,7 @@ function statefulGateway() {
     records, status,
     async acquireLock(source, lockId) { assert.equal(source, 'bulky'); status.status = 'syncing'; status.locked_at = new Date().toISOString(); status.lock_id = lockId; return true; },
     async insertHistory() { return 'history-1'; }, async updateHistory() {},
-    async existingMetadata() { return [...records.values()].map(({ source_row_key, source_hash, netsuite }) => ({ source_row_key, source_hash, netsuite })); },
+    async existingMetadata() { return [...records.values()].map(({ source_row_key, source_hash, iseller, netsuite, selisih, pendingan_it }) => ({ source_row_key, source_hash, iseller, netsuite, selisih, pendingan_it })); },
     async upsertRows(rows) { rows.forEach(item => records.set(item.source_row_key, item)); },
     async deleteKeys(keys) { keys.forEach(key => records.delete(key)); },
     async finishSuccess(args) { assert.equal(args.source, 'bulky'); status.status = 'success'; status.locked_at = null; status.lock_id = null; },
@@ -29,32 +29,31 @@ test('BULKY maps and normalizes every business field in deterministic hash order
   assert.equal(buildSourceRowKey(2), 'bulky:2');
   assert.deepEqual(parsed.rows[0], {
     lokasi_bulky: 'BULKY A', sku: 'SKU-1', nama_barang: 'Produk SKU–1', stok_awal: 10,
-    internal_stock_transfer: 2, replenishment: 3, pengeluaran: 3, stok_akhir: 12, netsuite: 11,
+    internal_stock_transfer: 2, replenishment: 3, pengeluaran: 3, stok_akhir: 12, iseller: 12, netsuite: 11, selisih: 1, pendingan_it: 2,
     source_row_key: 'bulky:2', source_row_number: 2, source_hash: parsed.rows[0].source_hash,
   });
   assert.match(parsed.rows[0].source_hash, /^[a-f0-9]{64}$/);
 });
 
-test('BULKY validates and maps every supported spelling of the Netsuite header through one canonical key', async () => {
-  const variants = ['Netsuite', 'NETSUITE', 'netsuite', ' Net Suite ', 'Netsuite\u00a0', '\ufeffNetsuite'];
-  assert.deepEqual(variants.map(normalizeBulkyHeader), variants.map(() => 'netsuite'));
-  for (const header of variants) {
-    const values = [[...HEADER.slice(0, -1), header], row(`SKU-${normalizeBulkyHeader(header)}`, '12', '10075')];
-    const parsed = await parseBulkyValues(values);
-    assert.equal(parsed.rows[0].netsuite, 10075);
-    const result = await syncBulky({}, { gateway: statefulGateway(), fetchValues: async () => values, logger });
-    assert.equal(result.success, true);
+test('BULKY detects every new header case-insensitively through canonical keys', async () => {
+  for (const index of [8, 9, 10, 11]) {
+    for (const spelling of [HEADER[index], HEADER[index].toUpperCase(), HEADER[index].toLowerCase()]) {
+      const headers = [...HEADER]; headers[index] = spelling;
+      const parsed = await parseBulkyValues([headers, row(`SKU-${index}`)]);
+      assert.equal(parsed.rows.length, 1);
+    }
   }
+  assert.equal(normalizeBulkyHeader(' Pendingan IT '), 'pendinganit');
 });
 
 test('BULKY detects a header below title and empty rows and reports safe header-only diagnostics', async () => {
   const messages = [];
-  const values = [['LAPORAN STOK BULKY'], [], [HEADER[0], HEADER[1], HEADER[2], ...HEADER.slice(3, -1)], row('SKU-1')];
+  const values = [['LAPORAN STOK BULKY'], [], HEADER.slice(0, -1), row('SKU-1')];
   await assert.rejects(
     () => syncBulky({}, { gateway: statefulGateway(), fetchValues: async () => values, logger: { log(message) { messages.push(message); }, error() {} } }),
     error => {
       assert.equal(error.code, 'INVALID_HEADER');
-      assert.equal(error.missingHeader, 'Netsuite');
+      assert.equal(error.missingHeader, 'Pendingan IT');
       assert.equal(error.headerRowNumber, 3);
       assert.deepEqual(error.detectedHeaders, values[2]);
       assert.deepEqual(error.normalizedHeaders.slice(0, 3), ['lokasibulky', 'sku', 'namabarang']);
@@ -63,53 +62,41 @@ test('BULKY detects a header below title and empty rows and reports safe header-
   );
   const debug = JSON.parse(messages.find(message => message.startsWith('[BulkyHeaderDebug] ')).slice('[BulkyHeaderDebug] '.length));
   assert.equal(debug.sheetName, 'stok bulky');
-  assert.equal(debug.range, "'stok bulky'!A:ZZ");
+  assert.equal(debug.range, "'stok bulky'!A:L");
   assert.equal(debug.headerRow, 3);
-  assert.equal(debug.expectedNetsuiteHeader, 'netsuite');
+  assert.deepEqual(debug.expectedBusinessHeaders, ['iseller', 'netsuite', 'selisih', 'pendinganit']);
   assert.deepEqual(debug.headerIndexes[0].characterCodes, [...HEADER[0]].map(character => character.codePointAt(0)));
   assert.doesNotMatch(JSON.stringify(debug), /SKU-1/);
 });
 
 test('BULKY validates headers and reports invalid numeric cells without coercing them to zero', async () => {
   await assert.rejects(() => parseBulkyValues([HEADER.slice(1)]), error => error.code === 'INVALID_HEADER');
-  const invalid = row('SKU-1'); invalid[3] = '#VALUE!'; invalid[7] = 'not-a-number'; invalid[8] = 'invalid-netsuite';
+  const invalid = row('SKU-1'); invalid[3] = '#VALUE!'; invalid[7] = 'not-a-number'; invalid[8] = 'invalid-iseller'; invalid[9] = 'invalid-netsuite'; invalid[10] = 'invalid-selisih'; invalid[11] = 'invalid-pending';
   const parsed = await parseBulkyValues([HEADER, invalid]);
   assert.equal(parsed.rows.length, 0);
-  assert.deepEqual(parsed.invalidRows, [{ sourceRowNumber: 2, sourceRowKey: 'bulky:2', errors: ['INVALID_NUMBER:STOK AWAL', 'INVALID_NUMBER:STOK AKHIR', 'INVALID_NUMBER:NETSUITE'] }]);
+  assert.deepEqual(parsed.invalidRows, [{ sourceRowNumber: 2, sourceRowKey: 'bulky:2', errors: ['INVALID_NUMBER:STOK AWAL', 'INVALID_NUMBER:STOK AKHIR', 'INVALID_NUMBER:ISELLER', 'INVALID_NUMBER:NETSUITE', 'INVALID_NUMBER:SELISIH', 'INVALID_NUMBER:PENDINGAN IT'] }]);
   assert.equal(parsed.sourceKeys.has('bulky:2'), true);
 });
 
-test('BULKY backfills missing Netsuite once, preserves blanks, and reports invalid values', async () => {
+test('BULKY backfills every newly synchronized field once and reports diagnostics', async () => {
   const gateway = statefulGateway();
-  const source = await parseBulkyValues([HEADER, row('BACKFILL-A', '12', '10075'), row('BACKFILL-B', '8', '8000')]);
-  for (const sourceRow of source.rows) {
-    gateway.records.set(sourceRow.source_row_key, {
-      ...sourceRow,
-      netsuite: null,
-      // Reproduce a legacy/equivalent hash that alone would classify the row unchanged.
-      source_hash: sourceRow.source_hash,
-    });
-  }
-  const values = [HEADER, row('BACKFILL-A', '12', '10075'), row('BACKFILL-B', '8', '8000'), row('BLANK', '5', ''), row('INVALID', '6', 'not-a-number')];
+  const values = [HEADER, row('BACKFILL'), row('BLANK', '8', { iseller: '', netsuite: '', selisih: '', pendingan_it: '' }), row('INVALID', '6', { iseller: 'bad' })];
+  const source = await parseBulkyValues(values);
+  gateway.records.set('bulky:2', { ...source.rows[0], iseller: null, netsuite: null, selisih: null, pendingan_it: null, source_hash: source.rows[0].source_hash });
   const run = () => syncBulky({}, { gateway, fetchValues: async () => values, logger });
-
   const first = await run();
-  assert.deepEqual({
-    inserted: first.inserted,
-    updated: first.updated,
-    unchanged: first.unchanged,
-    netsuiteSourceValues: first.netsuiteSourceValues,
-    netsuiteBackfilledRows: first.netsuiteBackfilledRows,
-    nullNetsuiteRows: first.nullNetsuiteRows,
-    invalidNetsuiteValues: first.invalidNetsuiteValues,
-  }, { inserted: 1, updated: 2, unchanged: 0, netsuiteSourceValues: 2, netsuiteBackfilledRows: 2, nullNetsuiteRows: 1, invalidNetsuiteValues: 1 });
-  assert.equal(gateway.records.get('bulky:2').netsuite, 10075);
-  assert.equal(gateway.records.get('bulky:2').source_hash, source.rows[0].source_hash);
-  assert.equal(gateway.records.get('bulky:3').netsuite, 8000);
-  assert.equal(gateway.records.get('bulky:4').netsuite, null);
-
+  assert.deepEqual({ updated: first.updated, backfilledRows: first.backfilledRows, nullIsellerRows: first.nullIsellerRows, nullNetsuiteRows: first.nullNetsuiteRows, nullSelisihRows: first.nullSelisihRows, nullPendinganItRows: first.nullPendinganItRows, invalidNumericValues: first.invalidNumericValues }, { updated: 1, backfilledRows: 1, nullIsellerRows: 1, nullNetsuiteRows: 1, nullSelisihRows: 1, nullPendinganItRows: 1, invalidNumericValues: 1 });
+  assert.deepEqual([gateway.records.get('bulky:2').iseller, gateway.records.get('bulky:2').netsuite, gateway.records.get('bulky:2').selisih, gateway.records.get('bulky:2').pendingan_it], [12, 11, 1, 2]);
   const second = await run();
-  assert.deepEqual([second.inserted, second.updated, second.unchanged, second.netsuiteBackfilledRows], [0, 0, 3, 0]);
+  assert.deepEqual([second.inserted, second.updated, second.unchanged, second.backfilledRows], [0, 0, 2, 0]);
+});
+
+test('each added BULKY field participates in source_hash', async () => {
+  const base = (await parseBulkyValues([HEADER, row('HASH')])).rows[0].source_hash;
+  for (const field of ['iseller', 'netsuite', 'selisih', 'pendingan_it']) {
+    const changed = (await parseBulkyValues([HEADER, row('HASH', '12', { [field]: '99' })])).rows[0].source_hash;
+    assert.notEqual(changed, base, field);
+  }
 });
 
 test('BULKY first and unchanged second sync preserve valid database count and release status lock', async () => {
@@ -139,6 +126,7 @@ test('BULKY sync keeps its source identifier separate from the existing sheet ta
   });
 
   assert.equal(BULKY_SHEET_NAME, 'stok bulky');
-  assert.equal(messages[0], "[InventorySync:bulky]\nsheetName: stok bulky\nrange: 'stok bulky'!A:ZZ");
+  assert.equal(BULKY_SHEET_RANGE, "'stok bulky'!A:L");
+  assert.equal(messages[0], "[InventorySync:bulky]\nsheetName: stok bulky\nrange: 'stok bulky'!A:L");
   assert.doesNotMatch(messages.join('\n'), /spreadsheet-id|secret@example\.test/);
 });

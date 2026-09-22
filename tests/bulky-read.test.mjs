@@ -5,10 +5,12 @@ import { handleBulkyRequest, mapBulkyRow } from '../functions/api/bulky/index.js
 const env = { SUPABASE_URL: 'https://db.example', SUPABASE_SECRET_KEY: 'sb_secret_server-only' };
 const request = query => new Request(`https://app.example/api/bulky${query}`);
 
-test('BULKY adapter preserves the existing frontend row shape', () => {
-  assert.deepEqual(mapBulkyRow({ lokasi_bulky: 'A01-1', sku: 'SKU-1', nama_barang: 'Produk', stok_awal: 2, internal_stock_transfer: 3, replenishment: 4, pengeluaran: 1, stok_akhir: 8, source_row_number: 9, synced_at: '2026-08-31T00:00:00Z' }), {
-    lokasi: 'A01-1', 'lokasi bulky': 'A01-1', sku: 'SKU-1', 'nama barang': 'Produk', 'stok awal': 2, 'internal stock transfer': 3, replenishment: 4, pengeluaran: 1, 'stok akhir': 8, source_row_number: 9, synced_at: '2026-08-31T00:00:00Z',
+test('BULKY adapter returns every business field in UI order without metadata or duplicate location', () => {
+  const mapped = mapBulkyRow({ lokasi_bulky: 'A01-1', sku: 'SKU-1', nama_barang: 'Produk', stok_awal: 2, internal_stock_transfer: 3, replenishment: 4, pengeluaran: 1, stok_akhir: 8, iseller: 8, netsuite: 7, selisih: 1, pendingan_it: 2, source_row_number: 9, synced_at: '2026-08-31T00:00:00Z' });
+  assert.deepEqual(mapped, {
+    lokasi: 'A01-1', sku: 'SKU-1', 'nama barang': 'Produk', 'stok awal': 2, 'internal stock transfer': 3, replenishment: 4, pengeluaran: 1, 'stok akhir': 8, iseller: 8, netsuite: 7, selisih: 1, 'pendingan it': 2,
   });
+  assert.deepEqual(Object.keys(mapped).map(key => key.toUpperCase()), ['LOKASI', 'SKU', 'NAMA BARANG', 'STOK AWAL', 'INTERNAL STOCK TRANSFER', 'REPLENISHMENT', 'PENGELUARAN', 'STOK AKHIR', 'ISELLER', 'NETSUITE', 'SELISIH', 'PENDINGAN IT']);
 });
 
 test('GET /api/bulky paginates and applies SKU, name/SKU search, and location filters', async () => {
@@ -17,7 +19,7 @@ test('GET /api/bulky paginates and applies SKU, name/SKU search, and location fi
   globalThis.fetch = async (url, options) => {
     calls.push({ url: String(url), options });
     if (String(url).includes('inventory_sync_status')) return new Response(JSON.stringify([{ source: 'bulky', status: 'success', last_success_at: '2026-08-31T01:00:00Z' }]), { status: 200 });
-    return new Response(JSON.stringify([{ lokasi_bulky: 'A01-1', sku: 'SKU-1', nama_barang: 'Produk', stok_akhir: 8 }]), { status: 200, headers: { 'content-range': '100-100/205' } });
+    return new Response(JSON.stringify([{ lokasi_bulky: 'A01-1', sku: 'SKU-1', nama_barang: 'Produk', stok_akhir: 8, iseller: 8, netsuite: 7, selisih: 1, pendingan_it: 2 }]), { status: 200, headers: { 'content-range': '100-100/205' } });
   };
   try {
     const response = await handleBulkyRequest({ request: request('?page=2&limit=500&sku=SKU-1&q=Produk&lokasi=A01-1'), env });
@@ -31,6 +33,8 @@ test('GET /api/bulky paginates and applies SKU, name/SKU search, and location fi
     assert.equal(new URL(statusUrl).searchParams.get('select'), '*');
     assert.doesNotMatch(statusUrl, /last_attempt_at/);
     assert.equal(body.data[0]['nama barang'], 'Produk');
+    assert.deepEqual([body.data[0].iseller, body.data[0].netsuite, body.data[0].selisih, body.data[0]['pendingan it']], [8, 7, 1, 2]);
+    assert.doesNotMatch(new URL(calls[0].url).searchParams.get('select'), /source_row_number|synced_at|source_hash|source_row_key/);
     assert.match(calls[0].url, /offset=100&limit=100/);
     assert.match(calls[0].url, /sku=ilike/);
     assert.match(calls[0].url, /or=%28sku\.ilike|or=\(sku\.ilike/);
