@@ -2,7 +2,8 @@ import { getSecretSupabaseConfig } from '../_supabase-config.js';
 import { buildInventorySearchFilters, normalizeSearchQuery } from '../_inventory-search.js';
 
 const TABLE = 'inventory_bulky';
-const COLUMNS = 'lokasi_bulky,sku,nama_barang,stok_awal,internal_stock_transfer,replenishment,pengeluaran,stok_akhir,source_row_number,synced_at';
+export const BULKY_BUSINESS_COLUMNS = Object.freeze(['lokasi_bulky', 'sku', 'nama_barang', 'stok_awal', 'internal_stock_transfer', 'replenishment', 'pengeluaran', 'stok_akhir', 'iseller', 'netsuite', 'selisih', 'pendingan_it']);
+const COLUMNS = BULKY_BUSINESS_COLUMNS.join(',');
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
 const FULL_BATCH_SIZE = 1000;
@@ -21,7 +22,6 @@ function escapeLike(value) {
 export function mapBulkyRow(row = {}) {
   return {
     lokasi: row.lokasi_bulky ?? '',
-    'lokasi bulky': row.lokasi_bulky ?? '',
     sku: row.sku ?? '',
     'nama barang': row.nama_barang ?? '',
     'stok awal': row.stok_awal ?? 0,
@@ -29,8 +29,10 @@ export function mapBulkyRow(row = {}) {
     replenishment: row.replenishment ?? 0,
     pengeluaran: row.pengeluaran ?? 0,
     'stok akhir': row.stok_akhir ?? 0,
-    source_row_number: row.source_row_number ?? null,
-    synced_at: row.synced_at ?? null,
+    iseller: row.iseller ?? null,
+    netsuite: row.netsuite ?? null,
+    selisih: row.selisih ?? null,
+    'pendingan it': row.pendingan_it ?? null,
   };
 }
 

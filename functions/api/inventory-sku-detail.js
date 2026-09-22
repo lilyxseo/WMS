@@ -8,13 +8,14 @@ import { mapBarangMasukRow } from './barang-masuk/index.js';
 import { mapBarangKeluarRow } from './barang-keluar/index.js';
 
 const INVENTORY_COLUMNS = 'lokasi_bulky,sku,nama_barang,stok_awal,internal_stock_transfer,replenishment,pengeluaran,stok_akhir,source_row_number';
+const BULKY_COLUMNS = 'lokasi_bulky,sku,nama_barang,stok_awal,internal_stock_transfer,replenishment,pengeluaran,stok_akhir,iseller,netsuite,selisih,pendingan_it,source_row_number';
 const TRANSACTION_COLUMNS = 'tanggal,from_location,to_location,sku,nama_barang,qty,status,pic,keterangan,source_row_number';
 const BARANG_MASUK_TRANSACTION_COLUMNS = 'tanggal,from_location,to_location,sku,nama_barang,qty,status,pic,keterangan,no_iseller,netsuite,keterangan_lainnya,lokasi_surat_jalan,stockout,dokumen,source_row_number';
 const BARANG_KELUAR_TRANSACTION_COLUMNS = 'tanggal,from_location,to_location,sku,nama_barang,qty,status,pic,keterangan,no_iseller,netsuite,keterangan_lainnya,status_lanjutan,lokasi_surat_jalan,no_iseller_awal,dokumen,source_row_number';
 const SOURCES = {
   'Kartu Stock': { table: 'inventory_kartu_stok', select: INVENTORY_COLUMNS, map: mapKartuStokRow, order: 'source_row_number.asc' },
   RPL: { table: 'inventory_rpl', select: INVENTORY_COLUMNS, map: mapRplRow, order: 'source_row_number.asc' },
-  BULKY: { table: 'inventory_bulky', select: INVENTORY_COLUMNS, map: mapBulkyRow, order: 'source_row_number.asc' },
+  BULKY: { table: 'inventory_bulky', select: BULKY_COLUMNS, map: mapBulkyRow, order: 'source_row_number.asc' },
   'Barang Masuk': { table: 'inventory_barang_masuk', select: BARANG_MASUK_TRANSACTION_COLUMNS, map: mapBarangMasukRow, transaction: true },
   'Barang Keluar': { table: 'inventory_barang_keluar', select: BARANG_KELUAR_TRANSACTION_COLUMNS, map: mapBarangKeluarRow, transaction: true },
 };
