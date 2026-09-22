@@ -165,7 +165,7 @@ export function createInventorySyncService(config) {
       await gateway.updateHistory(historyId, { status: 'success', finished_at: new Date().toISOString(), source_row_count: metrics.sourceRows, inserted_count: metrics.inserted, updated_count: metrics.updated, deleted_count: metrics.deleted, duration_ms: durationMs, error_message: null, source_version: sourceVersion });
       log(`insert: ${metrics.inserted}\nupdate: ${metrics.updated}\ndelete: ${metrics.deleted}\nunchanged: ${metrics.unchanged}\nduration: ${durationMs}ms`);
       const requests = logRequestSummary();
-      return { success: true, source, ...metrics, invalidRowDiagnostics: parsed.invalidRows, durationMs, sourceVersion, requests };
+      return { success: true, source, ...metrics, ...(parsed.reportMetrics || {}), invalidRowDiagnostics: parsed.invalidRows, durationMs, sourceVersion, requests };
     } catch (error) {
       const durationMs = Date.now() - started;
       if (lockAcquired) { try { await gateway.finishError(source, lockId, errorText(error), durationMs); } catch (releaseError) { logger.error?.(`[InventorySync:${source}] lock release failed: ${releaseError.message}`); } }

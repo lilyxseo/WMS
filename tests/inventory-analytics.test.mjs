@@ -9,8 +9,8 @@ test('inventory summary preserves dashboard, accuracy, warning and minus semanti
       { sku: 'B', stok_akhir: 5, pengeluaran: 0 },
     ],
     rpl: [
-      { sku: 'A', nama_barang: 'Alpha', lokasi_bulky: 'AA-1-1-A', selisih: 0 },
-      { sku: 'B', nama_barang: 'Beta', lokasi_bulky: 'AA-1-1-B', selisih: 2 },
+      { sku: 'A', nama_barang: 'Alpha', lokasi_bulky: 'AA-1-1-A', stok_akhir: 10, netsuite: 10 },
+      { sku: 'B', nama_barang: 'Beta', lokasi_bulky: 'AA-1-1-B', stok_akhir: 12, netsuite: 10 },
     ],
     bulky: [
       { sku: 'A', nama_barang: 'Alpha', lokasi_bulky: 'A01-1', selisih: 0 },
@@ -32,10 +32,26 @@ test('inventory summary preserves dashboard, accuracy, warning and minus semanti
   assert.equal(summary.minusStock, 1);
   assert.equal(summary.minusQuantity, 3);
   assert.equal(summary.accuracy, 50);
-  assert.equal(summary.duplicateSku, 1);
+  assert.equal(summary.duplicateSku, 0);
   assert.equal(summary.missingSku, 1);
-  assert.equal(summary.locationMismatch, 2);
+  assert.equal(summary.locationMismatch, 0);
   assert.equal(summary.deadStock, 1);
+  assert.equal(summary.reconciliationDifference, 2);
+});
+
+test('accuracy uses RPL Supabase NETSUITE and excludes NULL references', () => {
+  const summary = computeInventorySummary({
+    kartuStok: [], bulky: [{ sku: 'A', stok_akhir: 999, netsuite: 999 }], barangMasuk: [], barangKeluar: [],
+    rpl: [
+      { sku: 'A', stok_akhir: 12, netsuite: 10 },
+      { sku: 'B', stok_akhir: 7, netsuite: 7 },
+      { sku: 'C', stok_akhir: 5, netsuite: null },
+    ],
+  });
+  assert.equal(summary.accuracy, 50);
+  assert.equal(summary.accurateSku, 1);
+  assert.equal(summary.inaccurateSku, 1);
+  assert.equal(summary.missingAccuracyReference, 1);
   assert.equal(summary.reconciliationDifference, 2);
 });
 

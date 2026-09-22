@@ -4,9 +4,9 @@ import { RPL_SHEET_NAME, buildSourceRowKey, parseRplValues, syncRpl } from '../f
 
 const HEADER = [
   'LOKASI BULKY', 'SKU', 'NAMA BARANG', 'STOK AWAL', 'INTERNAL STOCK TRANSFER', 'REPLENISHMENT',
-  'PENGELUARAN', 'STOK AKHIR',
+  'PENGELUARAN', 'STOK AKHIR', 'NETSUITE',
 ];
-const row = (sku, stokAkhir = '12') => [' rak%20rpl ', sku, ` Produk ${sku} `, '10', '2', '3', '3', stokAkhir];
+const row = (sku, stokAkhir = '12', netsuite = '10,081') => [' rak%20rpl ', sku, ` Produk ${sku} `, '10', '2', '3', '3', stokAkhir, netsuite];
 const logger = { log() {}, error() {} };
 
 function statefulGateway() {
@@ -30,9 +30,26 @@ test('RPL maps and normalizes all business fields with the requested row key and
   assert.deepEqual(parsed.rows[0], {
     lokasi_bulky: 'RAK RPL', sku: 'SKU-1', nama_barang: 'Produk SKU–1', stok_awal: 10,
     internal_stock_transfer: 2, replenishment: 3, pengeluaran: 3, stok_akhir: 12,
+    netsuite: 10081,
     source_row_key: 'rpl:2', source_row_number: 2, source_hash: parsed.rows[0].source_hash,
   });
   assert.match(parsed.rows[0].source_hash, /^[a-f0-9]{64}$/);
+});
+
+test('RPL NETSUITE is nullable, numeric, and participates in source_hash', async () => {
+  const populated = await parseRplValues([HEADER, row('SKU-1', '12', '10081')]);
+  const comma = await parseRplValues([HEADER, row('SKU-1', '12', '10,081')]);
+  const blank = await parseRplValues([HEADER, row('SKU-1', '12', '')]);
+  const changed = await parseRplValues([HEADER, row('SKU-1', '12', '10082')]);
+  assert.equal(populated.rows[0].netsuite, 10081);
+  assert.equal(comma.rows[0].netsuite, 10081);
+  assert.equal(blank.rows[0].netsuite, null);
+  assert.equal(populated.rows[0].source_hash, comma.rows[0].source_hash);
+  assert.notEqual(populated.rows[0].source_hash, changed.rows[0].source_hash);
+
+  const invalid = await parseRplValues([HEADER, row('SKU-1', '12', 'not-a-number')]);
+  assert.deepEqual(invalid.invalidRows[0].errors, ['INVALID_NUMBER:NETSUITE']);
+  assert.deepEqual(invalid.reportMetrics, { nullNetsuiteRows: 0, invalidNetsuiteValues: 1 });
 });
 
 test('RPL validates headers and diagnoses invalid non-empty numbers without coercing them', async () => {
@@ -54,6 +71,7 @@ test('RPL first and unchanged second sync have valid row count, idempotent diff,
   assert.deepEqual([first.success, first.sourceRows, first.invalidRows, first.inserted, first.updated, first.deleted], [true, 3, 1, 2, 0, 0]);
   assert.equal(gateway.records.size, 2);
   assert.deepEqual(gateway.status, { status: 'success', locked_at: null, lock_id: null });
+  assert.deepEqual([first.nullNetsuiteRows, first.invalidNetsuiteValues], [0, 0]);
 
   const second = await run();
   assert.deepEqual([second.inserted, second.updated, second.deleted, second.unchanged], [0, 0, 0, 2]);
