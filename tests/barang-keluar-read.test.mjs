@@ -5,9 +5,9 @@ import { handleBarangKeluarRequest, mapBarangKeluarRow } from '../functions/api/
 const env = { SUPABASE_URL: 'https://db.example', SUPABASE_SECRET_KEY: 'sb_secret_server-only' };
 const request = query => new Request(`https://app.example/api/barang-keluar${query}`);
 
-test('Barang Keluar adapter preserves the legacy frontend fields', () => {
-  assert.deepEqual(mapBarangKeluarRow({ tanggal: '2026-08-31', from_location: 'A-1', to_location: 'Store', sku: 'SKU-1', nama_barang: 'Produk', qty: 3, status: 'OK', pic: 'Ani', keterangan: 'Baik', source_row_number: 42 }), {
-    tanggal: '2026-08-31', from: 'A-1', to: 'Store', sku: 'SKU-1', namaBarang: 'Produk', qty: 3, status: 'OK', pic: 'Ani', keterangan: 'Baik', rowNumber: 42,
+test('Barang Keluar adapter exposes all business fields without sync metadata', () => {
+  assert.deepEqual(mapBarangKeluarRow({ tanggal: '2026-08-31', from_location: 'A-1', to_location: 'Store', sku: 'SKU-1', nama_barang: 'Produk', qty: 3, status: 'OK', pic: 'Ani', keterangan: 'Baik', no_iseller: 'IS-1', netsuite: '42', keterangan_lainnya: 'Fragile', status_lanjutan: 'Closed', lokasi_surat_jalan: 'Rack', no_iseller_awal: 'IS-0', dokumen: 'https://docs.example/1', source_row_number: 42, synced_at: 'hidden' }), {
+    tanggal: '2026-08-31', from: 'A-1', to: 'Store', sku: 'SKU-1', namaBarang: 'Produk', qty: 3, status: 'OK', pic: 'Ani', keterangan: 'Baik', no_iseller: 'IS-1', netsuite: '42', keterangan_lainnya: 'Fragile', status_lanjutan: 'Closed', lokasi_surat_jalan: 'Rack', no_iseller_awal: 'IS-0', dokumen: 'https://docs.example/1', rowNumber: 42,
   });
 });
 

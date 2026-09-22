@@ -5,7 +5,8 @@ import { buildInventorySearchFilters, normalizeSearchQuery } from '../_inventory
 const TABLE = 'inventory_barang_keluar';
 // Keep reads compatible with the deployed table schema. In particular, synced_at is
 // optional metadata and must not make the whole endpoint fail when it is not present.
-const COLUMNS = 'tanggal,from_location,to_location,sku,nama_barang,qty,status,pic,keterangan,source_row_number';
+export const BARANG_KELUAR_COLUMNS = Object.freeze(['tanggal', 'from', 'to', 'sku', 'namaBarang', 'qty', 'status', 'pic', 'keterangan', 'no_iseller', 'netsuite', 'keterangan_lainnya', 'status_lanjutan', 'lokasi_surat_jalan', 'no_iseller_awal', 'dokumen']);
+const COLUMNS = 'tanggal,from_location,to_location,sku,nama_barang,qty,status,pic,keterangan,no_iseller,netsuite,keterangan_lainnya,status_lanjutan,lokasi_surat_jalan,no_iseller_awal,dokumen,source_row_number';
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 50;
 const ERROR_REASON = 'BARANG_KELUAR_FETCH_FAILED';
@@ -30,6 +31,13 @@ export function mapBarangKeluarRow(row = {}) {
     status: row.status ?? '',
     pic: row.pic ?? '',
     keterangan: row.keterangan ?? '',
+    no_iseller: row.no_iseller ?? '',
+    netsuite: row.netsuite ?? '',
+    keterangan_lainnya: row.keterangan_lainnya ?? '',
+    status_lanjutan: row.status_lanjutan ?? '',
+    lokasi_surat_jalan: row.lokasi_surat_jalan ?? '',
+    no_iseller_awal: row.no_iseller_awal ?? '',
+    dokumen: row.dokumen ?? '',
     rowNumber: row.source_row_number ?? null,
   };
 }
@@ -64,7 +72,7 @@ export async function handleBarangKeluarRequest({ request, env }) {
     console.info('[BarangKeluarAPI] params', { page, limit, sort: sort.name, hasSearch: Boolean(search), hasDateRange: Boolean(startDate || endDate) });
 
     if (sku) filters.push(`sku=ilike.${encodeURIComponent(`%${escapeLike(sku)}%`)}`);
-    filters.push(...buildInventorySearchFilters(search, ['sku', 'nama_barang', 'from_location', 'to_location']));
+    filters.push(...buildInventorySearchFilters(search, ['sku', 'nama_barang', 'from_location', 'to_location', 'status', 'pic', 'keterangan', 'no_iseller', 'netsuite', 'keterangan_lainnya', 'status_lanjutan', 'lokasi_surat_jalan', 'no_iseller_awal', 'dokumen']));
     if (status) filters.push(`status=eq.${encodeURIComponent(status)}`);
     const filterQuery = filters.length ? `&${filters.join('&')}` : '';
 
@@ -95,7 +103,7 @@ export async function handleBarangKeluarRequest({ request, env }) {
     console.info('[BarangKeluar] summaryMs', summaryMs);
     const rows = rawRows.map(mapBarangKeluarRow);
     const serializationStartedAt = Date.now();
-    const columns = ['tanggal', 'from', 'to', 'sku', 'namaBarang', 'qty', 'status', 'pic', 'keterangan'];
+    const columns = BARANG_KELUAR_COLUMNS;
     const response = json({
       success: true,
       source: 'supabase',

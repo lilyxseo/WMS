@@ -10,9 +10,9 @@ test('transaction cache keys isolate source, paging, query, filters and sort', (
   assert.equal(transactionSummaryKey(base), transactionSummaryKey({ ...base, page: 9, limit: 50, sort: 'oldest' }));
 });
 
-test('Barang Masuk keys use a bumped namespace without changing Barang Keluar', () => {
+test('transaction schema changes use bumped cache namespaces', () => {
   assert.match(transactionPageKey({ source: 'barang_masuk', page: 1, limit: 25 }), /^barang_masuk@v3\|/);
-  assert.match(transactionPageKey({ source: 'barang_keluar', page: 1, limit: 25 }), /^barang_keluar@v1\|/);
+  assert.match(transactionPageKey({ source: 'barang_keluar', page: 1, limit: 25 }), /^barang_keluar@v2\|/);
 });
 
 test('transaction page cache is an eight-page LRU per source', () => {
