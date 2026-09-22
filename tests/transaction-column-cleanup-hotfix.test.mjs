@@ -5,13 +5,15 @@ import vm from 'node:vm';
 
 const source = fs.readFileSync(new URL('../assets/js/main.js', import.meta.url), 'utf8');
 const columnsDeclaration = source.match(/const TRANSACTION_PRESENTATION_COLUMNS=[^;]+;/)?.[0];
+const inboundColumnsDeclaration = source.match(/const BARANG_MASUK_PRESENTATION_COLUMNS=[^;]+;/)?.[0];
 const helper = source.match(/function getTransactionPresentationCells\([^\n]+/)?.[0];
 assert.ok(columnsDeclaration);
 assert.ok(helper);
+assert.ok(inboundColumnsDeclaration);
 const context = {};
-vm.runInNewContext(`${columnsDeclaration}${helper};result={columns:TRANSACTION_PRESENTATION_COLUMNS,cells:getTransactionPresentationCells}`, context);
+vm.runInNewContext(`${columnsDeclaration}${inboundColumnsDeclaration}${helper};result={columns:BARANG_MASUK_PRESENTATION_COLUMNS,cells:row=>getTransactionPresentationCells(row,"Barang Masuk")}`, context);
 
-const expected = ['tanggal', 'from', 'to', 'sku', 'namaBarang', 'qty', 'status', 'pic', 'keterangan'];
+const expected = ['tanggal', 'from', 'to', 'sku', 'namaBarang', 'qty', 'status', 'pic', 'keterangan', 'no_iseller', 'netsuite', 'keterangan_lainnya', 'lokasi_surat_jalan', 'stockout', 'dokumen'];
 
 test('Barang Masuk and Barang Keluar expose one fixed canonical column layout', () => {
   assert.deepEqual([...context.result.columns], expected);
@@ -29,8 +31,13 @@ test('Barang Masuk and Barang Keluar expose one fixed canonical column layout', 
 });
 
 test('loading, empty, rendered, and export states share the canonical columns', () => {
-  assert.match(source, /const columns=st\.columns\?\.length\?st\.columns:TRANSACTION_PRESENTATION_COLUMNS/);
-  assert.match(source, /function getMovementColumns\(\)\{return \[\.\.\.TRANSACTION_PRESENTATION_COLUMNS\];\}/);
+  assert.match(source, /const columns=st\.columns\?\.length\?st\.columns:\(mode==="in"\?BARANG_MASUK_PRESENTATION_COLUMNS:TRANSACTION_PRESENTATION_COLUMNS\)/);
+  assert.match(source, /function getMovementColumns\(rows=\[\]\)\{return rows\[0\]\?Object\.keys\(rows\[0\]\._rawCells\|\|\{\}\):\[\.\.\.TRANSACTION_PRESENTATION_COLUMNS\];\}/);
   assert.match(source, /const cols=st\.columns\|\|\[\];const lines=\[cols\.join\(","\)/);
   assert.match(source, /colspan='\$\{st\.columns\.length\+2\}'/);
+});
+
+test('DOKUMEN renders only HTTP(S) values as safe links', () => {
+  assert.match(source, /url\.protocol==="https:"\|\|url\.protocol==="http:"/);
+  assert.match(source, /target='_blank' rel='noopener noreferrer'>Lihat Dokumen<\/a>/);
 });

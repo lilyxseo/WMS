@@ -8,7 +8,7 @@ import {
 } from '../functions/api/_barang-ops.js';
 
 test('range Barang Masuk tidak dibatasi sampai baris 20.000', () => {
-  assert.equal(barangDataRange(SHEET_BARANG_MASUK), 'Barang Masuk!A2:I');
+  assert.equal(barangDataRange(SHEET_BARANG_MASUK), 'Barang Masuk!A2:O');
 });
 
 test('range Barang Keluar tidak dibatasi sampai baris 20.000', () => {

@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildSourceRowKey, parseBarangMasukValues, syncBarangMasuk } from '../functions/api/sync/inventory/_barang-masuk-service.js';
+import { BARANG_MASUK_SHEET_RANGE, buildSourceRowKey, fetchBarangMasukValues, parseBarangMasukValues, syncBarangMasuk } from '../functions/api/sync/inventory/_barang-masuk-service.js';
 
-const HEADER = ['TANGGAL', 'FROM', 'TO', 'SKU', 'NAMA BARANG', 'QTY', 'STATUS', 'PIC', 'KETERANGAN'];
-const row = (sku, qty = '10') => ['2026-08-30', ' inbound ', ' a%20-01 ', sku, `Produk ${sku}`, qty, 'Received', 'Abi', 'Baik'];
+const HEADER = ['TANGGAL', 'FROM', 'TO', 'SKU', 'NAMA BARANG', 'QTY', 'STATUS', 'PIC', 'KETERANGAN', 'NO ISELLER', 'NETSUITE', 'KETERANGAN LAINNYA', 'LOKASI SURAT JALAN', 'STOCKOUT', 'DOKUMEN'];
+const row = (sku, qty = '10', extra = {}) => ['2026-08-30', ' inbound ', ' a%20-01 ', sku, `Produk ${sku}`, qty, 'Received', 'Abi', 'Baik', extra.no_iseller ?? 'IS-001', extra.netsuite ?? '00042', extra.keterangan_lainnya ?? 'Fragile', extra.lokasi_surat_jalan ?? 'Archive A', extra.stockout ?? 'Pending', extra.dokumen ?? 'https://docs.example/sj/1'];
 const logger = { log() {}, error() {} };
 
 function statefulGateway() {
@@ -12,7 +12,7 @@ function statefulGateway() {
     records,
     async acquireLock(source) { assert.equal(source, 'barang_masuk'); return true; },
     async insertHistory() { return 'history-1'; }, async updateHistory() {},
-    async existingMetadata() { return [...records.values()].map(({ source_row_key, source_hash }) => ({ source_row_key, source_hash })); },
+    async existingMetadata() { return [...records.values()].map(({ source_row_key, source_hash, no_iseller, netsuite, keterangan_lainnya, lokasi_surat_jalan, stockout, dokumen }) => ({ source_row_key, source_hash, no_iseller, netsuite, keterangan_lainnya, lokasi_surat_jalan, stockout, dokumen })); },
     async upsertRows(rows) { rows.forEach(item => records.set(item.source_row_key, item)); },
     async deleteKeys(keys) { keys.forEach(key => records.delete(key)); },
     async finishSuccess(args) { assert.equal(args.source, 'barang_masuk'); }, async finishError() {},
@@ -25,10 +25,44 @@ test('Barang Masuk maps headers, normalizes values, and retains original sheet i
   assert.deepEqual(parsed.rows.map(item => item.source_row_key), ['barang_masuk:2', 'barang_masuk:4']);
   assert.deepEqual(parsed.rows[0], {
     tanggal: '2026-08-30', from_location: 'INBOUND', to_location: 'A -01', sku: 'SKU-1', nama_barang: 'Produk SKU–1',
-    qty: 10, status: 'Received', pic: 'Abi', keterangan: 'Baik', source_row_key: 'barang_masuk:2', source_row_number: 2,
+    qty: 10, status: 'Received', pic: 'Abi', keterangan: 'Baik', no_iseller: 'IS-001', netsuite: '00042',
+    keterangan_lainnya: 'Fragile', lokasi_surat_jalan: 'Archive A', stockout: 'Pending', dokumen: 'https://docs.example/sj/1', source_row_key: 'barang_masuk:2', source_row_number: 2,
     source_hash: parsed.rows[0].source_hash,
   });
   assert.match(parsed.rows[0].source_hash, /^[a-f0-9]{64}$/);
+});
+
+test('Barang Masuk reads the detected 15-column header range through DOKUMEN', async () => {
+  let requestedUrl = '';
+  const values = [HEADER, row('SKU-RANGE')];
+  const result = await fetchBarangMasukValues({ SHEET_ID_2026: 'sheet' }, {
+    getGoogleAccessToken: async () => 'token',
+    fetch: async url => { requestedUrl = String(url); return { ok: true, status: 200, json: async () => ({ values }) }; },
+  });
+  assert.deepEqual(result[0], HEADER);
+  assert.equal(BARANG_MASUK_SHEET_RANGE, "'Barang Masuk'!A:O");
+  assert.equal(decodeURIComponent(new URL(requestedUrl).pathname.split('/').at(-1)), "'Barang Masuk'!A:O");
+});
+
+test('each added field participates in source_hash', async () => {
+  const base = (await parseBarangMasukValues([HEADER, row('HASH')])).rows[0].source_hash;
+  for (const field of ['no_iseller', 'netsuite', 'keterangan_lainnya', 'lokasi_surat_jalan', 'stockout', 'dokumen']) {
+    const changed = (await parseBarangMasukValues([HEADER, row('HASH', '10', { [field]: `changed-${field}` })])).rows[0].source_hash;
+    assert.notEqual(changed, base, field);
+  }
+});
+
+test('first deployment sync backfills missing business fields and the second sync is idempotent', async () => {
+  const gateway = statefulGateway();
+  const values = [HEADER, row('BACKFILL')];
+  const parsed = await parseBarangMasukValues(values);
+  gateway.records.set('barang_masuk:2', { source_row_key: 'barang_masuk:2', source_hash: parsed.rows[0].source_hash });
+  const run = () => syncBarangMasuk({}, { gateway, fetchValues: async () => values, logger });
+  const first = await run();
+  assert.deepEqual([first.updated, first.unchanged], [1, 0]);
+  assert.equal(gateway.records.get('barang_masuk:2').dokumen, 'https://docs.example/sj/1');
+  const second = await run();
+  assert.deepEqual([second.updated, second.unchanged], [0, 1]);
 });
 
 test('Barang Masuk rejects missing headers and diagnoses invalid rows without deleting their identity', async () => {
@@ -91,7 +125,7 @@ test('7000-row sync uses paged metadata and 1000-row mutation batches', async ()
     if (path.endsWith('/inventory_barang_masuk') && !options.method) {
       calls.reads += 1;
       const offset = Number(parsedUrl.searchParams.get('offset'));
-      const page = [...records.values()].slice(offset, offset + 1000).map(({ source_row_key, source_hash }) => ({ source_row_key, source_hash }));
+      const page = [...records.values()].slice(offset, offset + 1000).map(({ source_row_key, source_hash, no_iseller, netsuite, keterangan_lainnya, lokasi_surat_jalan, stockout, dokumen }) => ({ source_row_key, source_hash, no_iseller, netsuite, keterangan_lainnya, lokasi_surat_jalan, stockout, dokumen }));
       return { ok: true, status: 200, json: async () => page };
     }
     if (path.endsWith('/inventory_barang_masuk') && options.method === 'POST') {

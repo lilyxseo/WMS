@@ -2,7 +2,9 @@ import { createInventorySyncService, normalizeDate, normalizeLocation, normalize
 
 export const SYNC_SOURCE = 'barang_masuk';
 export const BARANG_MASUK_SHEET_NAME = 'Barang Masuk';
-export const REQUIRED_HEADERS = Object.freeze(['TANGGAL', 'FROM', 'TO', 'SKU', 'NAMA BARANG', 'QTY', 'STATUS', 'PIC', 'KETERANGAN']);
+export const REQUIRED_HEADERS = Object.freeze(['TANGGAL', 'FROM', 'TO', 'SKU', 'NAMA BARANG', 'QTY', 'STATUS', 'PIC', 'KETERANGAN', 'NO ISELLER', 'NETSUITE', 'KETERANGAN LAINNYA', 'LOKASI SURAT JALAN', 'STOCKOUT', 'DOKUMEN']);
+export const BARANG_MASUK_SHEET_RANGE = `'${BARANG_MASUK_SHEET_NAME}'!A:O`;
+export const BUSINESS_FIELDS = Object.freeze(['no_iseller', 'netsuite', 'keterangan_lainnya', 'lokasi_surat_jalan', 'stockout', 'dokumen']);
 
 async function parseValues(values, helpers) {
   if (!Array.isArray(values) || !Array.isArray(values[0])) throw new SyncError('INVALID_HEADER', 'Header Barang Masuk tidak ditemukan');
@@ -20,6 +22,9 @@ async function parseValues(values, helpers) {
       tanggal: tanggal.value, from_location: normalizeLocation(read('FROM')), to_location: normalizeLocation(read('TO')),
       sku: normalizeSku(read('SKU')), nama_barang: normalizeText(read('NAMA BARANG')), qty: qty.value,
       status: normalizeText(read('STATUS')), pic: normalizeText(read('PIC')), keterangan: normalizeText(read('KETERANGAN')),
+      no_iseller: normalizeText(read('NO ISELLER')), netsuite: normalizeText(read('NETSUITE')),
+      keterangan_lainnya: normalizeText(read('KETERANGAN LAINNYA')), lokasi_surat_jalan: normalizeText(read('LOKASI SURAT JALAN')),
+      stockout: normalizeText(read('STOCKOUT')), dokumen: normalizeText(read('DOKUMEN')),
       source_row_key, source_row_number: sourceRowNumber,
     };
     const errors = []; if (!row.sku) errors.push('SKU_REQUIRED'); if (!qty.valid) errors.push('INVALID_NUMBER:QTY'); if (!tanggal.valid) errors.push('INVALID_DATE:TANGGAL');
@@ -30,8 +35,10 @@ async function parseValues(values, helpers) {
 }
 
 const service = createInventorySyncService({
-  source: SYNC_SOURCE, sheetName: BARANG_MASUK_SHEET_NAME, tableName: 'inventory_barang_masuk', parseValues,
-  hashFields: ['tanggal', 'from_location', 'to_location', 'sku', 'nama_barang', 'qty', 'status', 'pic', 'keterangan'],
+  source: SYNC_SOURCE, sheetName: BARANG_MASUK_SHEET_NAME, sheetRange: BARANG_MASUK_SHEET_RANGE, tableName: 'inventory_barang_masuk', parseValues,
+  hashFields: ['tanggal', 'from_location', 'to_location', 'sku', 'nama_barang', 'qty', 'status', 'pic', 'keterangan', ...BUSINESS_FIELDS],
+  metadataFields: BUSINESS_FIELDS,
+  needsUpdate: (existing, row) => BUSINESS_FIELDS.some(field => existing[field] == null && row[field] !== ''),
 });
 export const buildSourceRowKey = service.buildSourceRowKey;
 export const buildSourceHash = service.buildSourceHash;
