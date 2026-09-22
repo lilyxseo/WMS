@@ -2173,3 +2173,6 @@ body.dark .loc-status-dense{background:rgba(239,68,68,.16);color:#fca5a5;border-
 
 /* Warning detail identity actions */
 .warning-detail-heading{min-width:0}.warning-detail-copy-row{display:flex;align-items:center;gap:8px;min-width:0}.warning-detail-copy-row h3,.warning-detail-copy-row p{min-width:0;overflow-wrap:anywhere}.warning-detail-copy-row .warning-copy-btn{flex:0 0 auto;width:28px;height:28px;padding:0;display:inline-grid;place-items:center}.warning-detail-header-actions{display:flex;align-items:center;gap:10px;flex:0 0 auto}.warning-detail-header-actions .btn-primary{white-space:nowrap}@media(max-width:520px){.warning-detail-drawer header{align-items:flex-start;gap:12px}.warning-detail-header-actions{flex-direction:column-reverse;align-items:flex-end}.warning-detail-header-actions .btn-primary{padding-inline:10px}}
+.barcode-lookup-status{margin-top:8px;color:var(--muted);font-size:13px}
+.barcode-lookup-status.is-error{color:var(--danger, #dc2626)}
+.barcode-lookup-status .btn-ghost{margin-left:8px;padding:4px 10px}
