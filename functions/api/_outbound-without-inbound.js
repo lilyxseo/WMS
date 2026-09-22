@@ -2,13 +2,23 @@ import { getSecretSupabaseConfig } from './_supabase-config.js';
 
 export function mapOutboundWithoutInbound(rows = []) {
   return rows.map(row => ({
-    type: 'OUTBOUND_WITHOUT_INBOUND',
+    type: Number(row?.inbound_qty) > 0 ? 'OUTBOUND_EXCEEDS_INBOUND' : 'OUTBOUND_WITHOUT_INBOUND',
     severity: 'High',
     sku: String(row?.sku ?? '').trim(),
     nama: String(row?.nama_barang ?? '-').trim() || '-',
-    issue: 'Ada barang keluar, tetapi barang masuk belum tercatat.',
-    source: 'Barang Keluar',
-    recommendation: 'Periksa dan lengkapi data Barang Masuk.',
+    issue: Number(row?.inbound_qty) > 0
+      ? `Barang keluar ${Number(row.outbound_qty)} pcs, barang masuk ${Number(row.inbound_qty)} pcs (lebih ${Number(row.outbound_qty) - Number(row.inbound_qty)} pcs).`
+      : 'Ada barang keluar, tetapi barang masuk belum tercatat.',
+    source: Number(row?.inbound_qty) > 0 ? 'Barang Masuk/Barang Keluar' : 'Barang Keluar',
+    recommendation: Number(row?.inbound_qty) > 0
+      ? 'Periksa data Barang Masuk dan Barang Keluar.'
+      : 'Periksa dan lengkapi data Barang Masuk.',
+    detail: Number(row?.inbound_qty) > 0 ? {
+      scope: 'Perbandingan kumulatif',
+      inboundQty: Number(row.inbound_qty),
+      outboundQty: Number(row.outbound_qty),
+      difference: Number(row.outbound_qty) - Number(row.inbound_qty),
+    } : undefined,
   })).filter(row => row.sku);
 }
 
