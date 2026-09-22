@@ -10,6 +10,25 @@ test('warning RPC maps one row per nonblank SKU without numeric coercion', () =>
   ]).map(row => row.sku), ['0682200005566']);
 });
 
+test('warning RPC does not turn multi-location quantities into an SKU warning', () => {
+  const [warning] = mapOutboundWithoutInbound([
+    { sku: '682200001519', nama_barang: 'GOTO PRODUCT' },
+  ]);
+  assert.equal(warning.type, 'OUTBOUND_WITHOUT_INBOUND');
+  assert.equal(warning.issue, 'Ada barang keluar, tetapi barang masuk belum tercatat.');
+  assert.equal(warning.detail, undefined);
+});
+
+test('warning checks SKU presence and never sums quantities across locations', async () => {
+  const main = await readFile(new URL('../assets/js/main.js', import.meta.url), 'utf8');
+  const report = main.slice(main.indexOf('function buildAnomalyReport()'), main.indexOf('function sevClass'));
+  assert.doesNotMatch(report, /getSkuTotals|OUTBOUND_EXCEEDS_INBOUND/);
+  const sql = await readFile(new URL('../supabase/migrations/20260922010000_fix_multilocation_outbound_warning.sql', import.meta.url), 'utf8');
+  assert.match(sql, /where not exists[\s\S]*inventory_barang_masuk bm/i);
+  assert.match(sql, /inventory_normalize_sku\(bm\.sku::text\) = o\.normalized_sku/i);
+  assert.doesNotMatch(sql, /sum\(|inbound_qty|outbound_qty|from_location|to_location/i);
+});
+
 test('warning loader uses one backend RPC and does not download transaction datasets', async () => {
   const originalFetch = globalThis.fetch;
   const requests = [];
