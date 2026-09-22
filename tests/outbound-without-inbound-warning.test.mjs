@@ -10,6 +10,27 @@ test('warning RPC maps one row per nonblank SKU without numeric coercion', () =>
   ]).map(row => row.sku), ['0682200005566']);
 });
 
+test('warning RPC uses authoritative database quantities in its message', () => {
+  const [warning] = mapOutboundWithoutInbound([
+    { sku: '682200001519', nama_barang: 'GOTO PRODUCT', inbound_qty: 30, outbound_qty: 40 },
+  ]);
+  assert.equal(warning.type, 'OUTBOUND_EXCEEDS_INBOUND');
+  assert.equal(warning.issue, 'Barang keluar 40 pcs, barang masuk 30 pcs (lebih 10 pcs).');
+  assert.deepEqual(warning.detail, {
+    scope: 'Perbandingan kumulatif', inboundQty: 30, outboundQty: 40, difference: 10,
+  });
+});
+
+test('quantity warning is aggregated on the server instead of the paginated browser rows', async () => {
+  const main = await readFile(new URL('../assets/js/main.js', import.meta.url), 'utf8');
+  const report = main.slice(main.indexOf('function buildAnomalyReport()'), main.indexOf('function sevClass'));
+  assert.doesNotMatch(report, /getSkuTotals|OUTBOUND_EXCEEDS_INBOUND/);
+  const sql = await readFile(new URL('../supabase/migrations/20260922010000_server_side_outbound_inbound_totals.sql', import.meta.url), 'utf8');
+  assert.match(sql, /sum\(coalesce\(bm\.qty, 0\)\) as inbound_qty/i);
+  assert.match(sql, /sum\(coalesce\(bk\.qty, 0\)\) as outbound_qty/i);
+  assert.match(sql, /left join inbound i using \(normalized_sku\)/i);
+});
+
 test('warning loader uses one backend RPC and does not download transaction datasets', async () => {
   const originalFetch = globalThis.fetch;
   const requests = [];
