@@ -7,22 +7,24 @@ const toB64=i=>btoa(typeof i==='string'?i:JSON.stringify(i)).replace(/=/g,'').re
 const pemToBuf=p=>{const c=String(p||'').replace(/\\n/g,'\n').replace('-----BEGIN PRIVATE KEY-----','').replace('-----END PRIVATE KEY-----','').replace(/\s/g,'');const b=atob(c);const u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u.buffer;};
 export async function token(env){const now=Math.floor(Date.now()/1000);const unsigned=`${toB64({alg:'RS256',typ:'JWT'})}.${toB64({iss:env.GOOGLE_CLIENT_EMAIL,scope:SCOPE,aud:TOKEN_URL,exp:now+3600,iat:now})}`;const key=await crypto.subtle.importKey('pkcs8',pemToBuf(env.GOOGLE_PRIVATE_KEY),{name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'},false,['sign']);const sig=await crypto.subtle.sign('RSASSA-PKCS1-v1_5',key,new TextEncoder().encode(unsigned));let bin='';new Uint8Array(sig).forEach(b=>bin+=String.fromCharCode(b));const jwt=`${unsigned}.${btoa(bin).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_')}`;const r=await fetch(TOKEN_URL,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:jwt})});const d=await r.json();if(!r.ok||!d.access_token)throw new Error(d.error_description||d.error||'Gagal membuat access token');return d.access_token;}
 export const FIELD_MAP={tanggal:'A',from:'B',to:'C',sku:'D',namaBarang:'E',qty:'F',status:'G',pic:'H',keterangan:'I',no_iseller:'J',netsuite:'K',keterangan_lainnya:'L',lokasi_surat_jalan:'M',stockout:'N',dokumen:'O'};
+export const BARANG_KELUAR_FIELD_MAP={tanggal:'A',from:'B',to:'C',sku:'D',namaBarang:'E',qty:'F',status:'G',pic:'H',keterangan:'I',no_iseller:'J',netsuite:'K',keterangan_lainnya:'L',status_lanjutan:'M',lokasi_surat_jalan:'N',no_iseller_awal:'O',dokumen:'P'};
 export const BARANG_COLUMNS=['tanggal','from','to','sku','namaBarang','qty','status','pic','keterangan'];
 export const BARANG_MASUK_COLUMNS=[...BARANG_COLUMNS,'no_iseller','netsuite','keterangan_lainnya','lokasi_surat_jalan','stockout','dokumen'];
-export const barangDataRange=(sheetName,startRowNumber=2)=>`${sheetName}!A${startRowNumber}:${sheetName===SHEET_BARANG_MASUK?'O':'I'}`;
+export const BARANG_KELUAR_COLUMNS=[...BARANG_COLUMNS,'no_iseller','netsuite','keterangan_lainnya','status_lanjutan','lokasi_surat_jalan','no_iseller_awal','dokumen'];
+export const barangDataRange=(sheetName,startRowNumber=2)=>`${sheetName}!A${startRowNumber}:${sheetName===SHEET_BARANG_MASUK?'O':'P'}`;
 export function mapBarangSheetValues(values,startRowNumber=2){
   return (Array.isArray(values)?values:[])
     .map((row,index)=>({row:Array.isArray(row)?row:[],rowNumber:startRowNumber+index}))
     .filter(({row})=>row.some(cell=>String(cell??'').trim()))
     .map(({row,rowNumber})=>{
       const item={rowNumber};
-      const columns=row.length>BARANG_COLUMNS.length?BARANG_MASUK_COLUMNS:BARANG_COLUMNS;
+      const columns=row.length>BARANG_COLUMNS.length?(row.length===BARANG_MASUK_COLUMNS.length?BARANG_MASUK_COLUMNS:BARANG_KELUAR_COLUMNS):BARANG_COLUMNS;
       columns.forEach((key,index)=>{item[key]=row[index]??'';});
       return item;
     });
 }
 
-export async function updateCells({env,sheetName,rowNumber,updates}){const access=await token(env);const sheetId=env.SHEET_ID_2026;const data=Object.entries(updates).filter(([k])=>FIELD_MAP[k]).map(([k,v])=>({range:`${sheetName}!${FIELD_MAP[k]}${rowNumber}`,values:[[v??'']]}));
+export async function updateCells({env,sheetName,rowNumber,updates}){const access=await token(env);const sheetId=env.SHEET_ID_2026;const fieldMap=sheetName===SHEET_BARANG_KELUAR?BARANG_KELUAR_FIELD_MAP:FIELD_MAP;const data=Object.entries(updates).filter(([k])=>fieldMap[k]).map(([k,v])=>({range:`${sheetName}!${fieldMap[k]}${rowNumber}`,values:[[v??'']]}));
 const res=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchUpdate`,{method:'POST',headers:{Authorization:`Bearer ${access}`,'Content-Type':'application/json'},body:JSON.stringify({valueInputOption:'USER_ENTERED',data})});
 const out=await res.json();if(!res.ok)throw new Error(out.error?.message||'Gagal update');
 }
