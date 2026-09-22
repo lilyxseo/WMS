@@ -14,6 +14,7 @@ const ABC_ANALYSIS_CACHE_KEY="ABC_ANALYSIS_CACHE";
 const CACHE_VERSION="2";
 const AUTO_SYNC_INTERVAL_MS=5*60*1000;
 const AUTO_SYNC_CHECK_INTERVAL_MS=30*1000;
+const INVENTORY_VERSION_CHECK_INTERVAL_MS=45*1000;
 const IDB_NAME="inventory_cache_db";
 const IDB_VERSION=1;
 const IDB_STORE="sheets";
@@ -150,7 +151,7 @@ return isActivityLogAllowed();
 }
 window.currentUser=getCurrentUser();
 const nativeFetch=window.fetch.bind(window);
-const AUTHENTICATED_INVENTORY_PATHS=new Set(['/api/dashboard-summary','/api/dashboard-recent-transactions','/api/dashboard-monthly-insight','/api/movement/summary','/api/inventory-sync-status','/api/kartu-stok','/api/barang-masuk','/api/barang-keluar','/api/rpl','/api/bulky','/api/inventory-sku-detail','/api/barcode-lookup']);
+const AUTHENTICATED_INVENTORY_PATHS=new Set(['/api/dashboard-summary','/api/dashboard-recent-transactions','/api/dashboard-monthly-insight','/api/movement/summary','/api/inventory-sync-status','/api/inventory-version','/api/kartu-stok','/api/barang-masuk','/api/barang-keluar','/api/rpl','/api/bulky','/api/inventory-sku-detail','/api/barcode-lookup']);
 window.fetch=async(input,init={})=>{
   const url=typeof input==='string'?input:String(input?.url||'');
   if(url.startsWith('/api/')){
@@ -1473,6 +1474,39 @@ function maybeAutoSync(){if(REFRESH_STATE.isRefreshing||isSyncing)return;if(shou
 function startAutoSync(){
 maybeAutoSync();
 setInterval(maybeAutoSync,AUTO_SYNC_CHECK_INTERVAL_MS);
+startInventoryVersionWatcher();
+}
+
+const INVENTORY_VERSION_STATE={versions:null,inFlight:null,controller:null,generation:0,timer:null,lastCheckAt:0};
+function comparableInventoryVersions(payload){return Object.fromEntries(Object.entries(payload||{}).filter(([key])=>key.endsWith('Version')));}
+function changedInventorySources(previous,next){return Object.keys(next).filter(key=>previous?.[key]!==next[key]);}
+async function refreshVisibleInventoryPage(changed,generation){
+const page=getActivePage();
+setRefreshIndicator(true,'Memperbarui data...');
+try{
+if(page==='barang-masuk'&&changed.includes('barangMasukVersion')){TRANSACTION_PAGE_CACHE.clearSource('barang_masuk');await loadTransactionTablePage('in',{page:TABLE_STATE.in.page,force:true,background:true});}
+else if(page==='barang-keluar'&&changed.includes('barangKeluarVersion')){TRANSACTION_PAGE_CACHE.clearSource('barang_keluar');await loadTransactionTablePage('out',{page:TABLE_STATE.out.page,force:true,background:true});}
+else if(page==='dashboard'){await loadDashboardPayload();}
+else if(page==='detail'&&currentSku){await showDetail(currentSku,{background:true});}
+else if(page==='locations'&&changed.some(key=>['kartuStokVersion','rplVersion','bulkyVersion'].includes(key))){LOCATION_STATE.summary=null;LOCATION_STATE.pageCache.clear();LOCATION_STATE.detailCache.clear();await Promise.all([loadLocationSummary(),loadLocationPage(LOCATION_STATE.page),loadEmptyLocations(LOCATION_STATE.emptyPage)]);if(LOCATION_STATE.selected)await selectLocationDetail(encodeURIComponent(LOCATION_STATE.selected));}
+if(generation===INVENTORY_VERSION_STATE.generation)toast('Data diperbarui','success');
+}finally{if(generation===INVENTORY_VERSION_STATE.generation)setRefreshIndicator(false);}
+}
+async function checkInventoryVersion(){
+if(!user||document.hidden||navigator.onLine===false)return;
+if(INVENTORY_VERSION_STATE.inFlight)return INVENTORY_VERSION_STATE.inFlight;
+const controller=new AbortController();INVENTORY_VERSION_STATE.controller=controller;const generation=++INVENTORY_VERSION_STATE.generation;
+INVENTORY_VERSION_STATE.inFlight=(async()=>{try{const {res,data}=await fetchJsonSafe('/api/inventory-version',{signal:controller.signal});if(!res.ok||data?.success===false)throw new Error(data?.message||'Gagal memeriksa versi inventory');if(generation!==INVENTORY_VERSION_STATE.generation)return;const next=comparableInventoryVersions(data),previous=INVENTORY_VERSION_STATE.versions;INVENTORY_VERSION_STATE.versions=next;INVENTORY_VERSION_STATE.lastCheckAt=Date.now();if(previous){const changed=changedInventorySources(previous,next);if(changed.length)await refreshVisibleInventoryPage(changed,generation);}}catch(err){if(err?.name!=='AbortError')console.warn('[InventoryVersion]',err?.message||err);}finally{if(generation===INVENTORY_VERSION_STATE.generation){INVENTORY_VERSION_STATE.inFlight=null;INVENTORY_VERSION_STATE.controller=null;}}})();
+return INVENTORY_VERSION_STATE.inFlight;
+}
+function startInventoryVersionWatcher(){
+if(INVENTORY_VERSION_STATE.timer)return;
+INVENTORY_VERSION_STATE.timer=setInterval(checkInventoryVersion,INVENTORY_VERSION_CHECK_INTERVAL_MS);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)INVENTORY_VERSION_STATE.controller?.abort();else checkInventoryVersion();});
+window.addEventListener('focus',()=>{if(Date.now()-INVENTORY_VERSION_STATE.lastCheckAt>5000)checkInventoryVersion();});
+window.addEventListener('offline',()=>INVENTORY_VERSION_STATE.controller?.abort());
+window.addEventListener('online',checkInventoryVersion);
+checkInventoryVersion();
 }
 
 async function loadAllData(manual=true,silent=false){return syncData({force:!!manual,silent:!!silent});}
@@ -1859,11 +1893,11 @@ function selectQuickResult(sku){selectedQuickSku=sku||"";const picked=[...(lastR
 function changeSearchPage(delta){if(!delta)return;const totalPage=Math.max(1,Math.ceil(lastResults.length/SEARCH_STATE.pageSize));SEARCH_STATE.page=Math.max(1,Math.min(totalPage,SEARCH_STATE.page+delta));renderResults(lastResults,lastQuery);}
 function renderResults(items,query){if(!items.length){renderQuickResultCard(null,query,"empty");return renderState("results","Data tidak ditemukan.");}const total=items.length;const totalPage=Math.max(1,Math.ceil(total/SEARCH_STATE.pageSize));if(SEARCH_STATE.page>totalPage)SEARCH_STATE.page=totalPage;const startIdx=(SEARCH_STATE.page-1)*SEARCH_STATE.pageSize;const pageItems=items.slice(startIdx,startIdx+SEARCH_STATE.pageSize);const start=total?startIdx+1:0,end=Math.min(startIdx+SEARCH_STATE.pageSize,total);const resultsNode=document.getElementById("results");if(!resultsNode)return;resultsNode.innerHTML=`<div class='subtitle'>${total} hasil.</div><div class='result-list'></div><div class='mv-pagination'><span>Menampilkan ${start}–${end} dari ${total} data</span><div class='row'><button class='btn-ghost' data-search-page='-1'>Prev</button><button class='btn-ghost' data-search-page='1'>Next</button></div></div>`;const listNode=resultsNode.querySelector(".result-list");pageItems.forEach(r=>{const card=document.createElement("div");card.className="result-card";card.tabIndex=0;card.setAttribute("role","button");card.addEventListener("click",e=>{if(e.target.closest("button"))return;selectQuickResult(r.sku);});card.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();selectQuickResult(r.sku);}});const badgesHtml=r.sources.filter(s=>!['Barang Masuk','Barang Keluar'].includes(s)).map(s=>`<span class='badge ${badgeClass(s)}'>${esc(s)}</span>`).join(" ");card.innerHTML=`<div class='result-head'><div><strong data-highlight='nama'></strong><div>SKU: <span data-highlight='sku'></span></div></div><div>${badgesHtml}</div></div><div class='row'><button class='btn-ghost copy-mini-btn' data-copy-sku onclick="copySku(decodeURIComponent('${encAttr(r.sku)}'),this)"><span aria-hidden='true'>⧉</span><span>Copy SKU</span></button><button class='btn-primary' onclick="navigateTo('/sku/'+encodeURIComponent(decodeURIComponent('${encAttr(r.sku)}')))">Lihat Detail</button></div>`;const namaEl=card.querySelector("[data-highlight='nama']");const skuEl=card.querySelector("[data-highlight='sku']");highlightText(r.nama,query).forEach(node=>namaEl.append(node));highlightText(r.sku,query).forEach(node=>skuEl.append(node));listNode?.append(card);});}
 let skuDetailRequestId=0;
-async function showDetail(identifier){
+async function showDetail(identifier,{background=false}={}){
 const sku=String(identifier||"").trim();
 if(!sku)return renderState("detail","Detail tidak tersedia.");
 const requestId=++skuDetailRequestId;
-renderState("detail","Memuat detail SKU...");
+if(!background)renderState("detail","Memuat detail SKU...");
 try{
 const {res,data}=await fetchJsonSafe(`/api/inventory-sku-detail?sku=${encodeURIComponent(sku)}`);
 if(requestId!==skuDetailRequestId||currentSku!==sku)return;
@@ -2301,7 +2335,7 @@ function transactionSource(mode){return mode==='in'?'barang_masuk':'barang_kelua
 function transactionFilters(mode){return TABLE_STATE[mode]?.columnFilters||{};}
 function applyTransactionPayload(mode,payload,{page,limit}={}){const st=TABLE_STATE[mode],rows=normalizeBackendRows(payload);st.page=Number(payload.page)||page;st.pageSize=Number(payload.limit)||limit;st.total=Number(payload.total)||0;st.summary=payload.summary||st.summary||{totalRows:st.total,totalQty:0,totalSku:0};window.APP_STATE=window.APP_STATE||{};if(mode==='in'){window.APP_STATE.barangMasuk=rows;DATA['Barang Masuk']=rows;}else{window.APP_STATE.barangKeluar=rows;DATA['Barang Keluar']=rows;}return rows;}
 async function prefetchTransactionPage(mode,{page,limit,query,sort,filters,summaryKey}){const st=TABLE_STATE[mode];if(page<1||page>Math.ceil(st.total/limit))return;const source=transactionSource(mode),key=transactionPageKey({source,page,limit,query,filters,sort});if(TRANSACTION_PAGE_CACHE.get(source,key)||TRANSACTION_PREFETCH_IN_FLIGHT.has(key)||TRANSACTION_PREFETCH_FAILED.has(key))return;TRANSACTION_PREFETCH_IN_FLIGHT.add(key);const params=new URLSearchParams({page:String(page),limit:String(limit),sort,includeSummary:'0'});if(query)params.set('q',query);const endpoint=mode==='in'?'/api/barang-masuk':'/api/barang-keluar';try{const {res,data}=await fetchJsonSafe(`${endpoint}?${params}`);if(res.ok&&data?.success)TRANSACTION_PAGE_CACHE.set(source,key,{rows:normalizeBackendRows(data),total:Number(data.total)||0,summary:TRANSACTION_PAGE_CACHE.getSummary(summaryKey)?.summary||null,fetchedAt:Date.now()});else{TRANSACTION_PREFETCH_FAILED.add(key);console.debug(`[${source}] adjacent prefetch stopped`,{status:res.status,reason:data?.reason,code:data?.code});}}catch(err){TRANSACTION_PREFETCH_FAILED.add(key);console.debug(`[${source}] adjacent prefetch stopped`,err?.message||err);}finally{TRANSACTION_PREFETCH_IN_FLIGHT.delete(key);}}
-async function loadTransactionTablePage(mode,{page,limit,search,force=false}={}){
+async function loadTransactionTablePage(mode,{page,limit,search,force=false,background=false}={}){
 const st=TABLE_STATE[mode],requestId=++st.requestId;st.abortController?.abort();const controller=new AbortController();st.abortController=controller;st.error="";
 const nextPage=Math.max(1,Number(page)||st.page||1),nextLimit=[25,50].includes(Number(limit))?Number(limit):st.pageSize;
 st.page=nextPage;st.pageSize=nextLimit;
@@ -2309,14 +2343,14 @@ const q=normalizeSearch(search??(mode==='in'?inSearch?.value:outSearch?.value)??
 const sort=st.sort||'latest';
 const source=transactionSource(mode),filters=transactionFilters(mode);const key=transactionPageKey({source,page:nextPage,limit:nextLimit,query:q,filters,sort});const summaryKey=transactionSummaryKey({source,query:q,filters});const cached=!force&&TRANSACTION_PAGE_CACHE.get(source,key);const cachedSummary=TRANSACTION_PAGE_CACHE.getSummary(summaryKey);
 if(cached){applyTransactionPayload(mode,{...cached,summary:cached.summary||cachedSummary?.summary},{page:nextPage,limit:nextLimit});st.loading=false;renderDataTablePage(mode,mode==='in'?'Barang Masuk':'Barang Keluar',true);if(TRANSACTION_PAGE_CACHE.isFresh(cached)){st.abortController=null;queueMicrotask(()=>prefetchTransactionPage(mode,{page:nextPage+1,limit:nextLimit,query:q,sort,filters,summaryKey}));return cached.rows;}}
-st.loading=!cached;
+st.loading=!cached&&!background;
 const params=new URLSearchParams({page:String(nextPage),limit:String(nextLimit),sort,includeSummary:String(!cachedSummary)});if(q)params.set('q',q);
 const endpoint=mode==='in'?'/api/barang-masuk':'/api/barang-keluar';
-if(!cached)renderDataTablePage(mode,mode==='in'?'Barang Masuk':'Barang Keluar',true);
+if(!cached&&!background)renderDataTablePage(mode,mode==='in'?'Barang Masuk':'Barang Keluar',true);
 try{const {res,data}=await fetchJsonSafe(`${endpoint}?${params}`,{signal:controller.signal});if(!res.ok||!data?.success){console.error(`[${source}] page request failed`,{status:res.status,reason:data?.reason,code:data?.code,message:data?.message});throw new Error(data?.message||'Gagal memuat data');}if(requestId!==st.requestId||controller.signal.aborted)return;TRANSACTION_PREFETCH_FAILED.delete(key);
 if(data.summary)TRANSACTION_PAGE_CACHE.setSummary(summaryKey,data.summary);const summary=data.summary||cachedSummary?.summary||cached?.summary||{totalRows:Number(data.total)||0,totalQty:0,totalSku:0};const rows=applyTransactionPayload(mode,{...data,summary},{page:nextPage,limit:nextLimit});TRANSACTION_PAGE_CACHE.set(source,key,{rows,total:st.total,summary,fetchedAt:Date.now()});queueMicrotask(()=>prefetchTransactionPage(mode,{page:nextPage+1,limit:nextLimit,query:q,sort,filters,summaryKey}));return rows;
 }catch(err){if(requestId!==st.requestId||controller.signal.aborted||err?.name==='AbortError')return;st.error=err?.message||'Gagal memuat data';throw err;
-}finally{if(requestId===st.requestId){st.loading=false;st.abortController=null;renderDataTablePage(mode,mode==='in'?'Barang Masuk':'Barang Keluar',true);}}
+}finally{if(requestId===st.requestId){st.loading=false;st.abortController=null;if(background)rerenderTableWithScrollRestore(mode,true);else renderDataTablePage(mode,mode==='in'?'Barang Masuk':'Barang Keluar',true);}}
 }
 function invalidateInactiveTransactionRequests(page){for(const [mode,st] of Object.entries(TABLE_STATE)){const active=(page==='barang-masuk'&&mode==='in')||(page==='barang-keluar'&&mode==='out');if(active)continue;st.abortController?.abort();st.abortController=null;st.requestId++;st.loading=false;}}
 const TRANSACTION_PRESENTATION_COLUMNS=["tanggal","from","to","sku","namaBarang","qty","status","pic","keterangan"];
