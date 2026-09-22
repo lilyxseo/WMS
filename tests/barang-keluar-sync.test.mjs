@@ -33,6 +33,14 @@ test('Barang Keluar maps its existing sheet and required columns with shared nor
   assert.match(parsed.rows[0].source_hash, /^[a-f0-9]{64}$/);
 });
 
+test('Barang Keluar uses the leftmost STATUS column when the sheet has duplicate headers', async () => {
+  const duplicateStatusHeader = [...HEADER, 'STATUS'];
+  const duplicateStatusRow = [...row('SKU-DUPLICATE-STATUS'), 'Status dari kolom kedua'];
+  const parsed = await parseBarangKeluarValues([duplicateStatusHeader, duplicateStatusRow]);
+
+  assert.equal(parsed.rows[0].status, 'Sent');
+});
+
 test('Barang Keluar validates headers and preserves invalid source identities', async () => {
   await assert.rejects(() => parseBarangKeluarValues([HEADER.slice(0, -1)]), error => error.code === 'INVALID_HEADER');
   const parsed = await parseBarangKeluarValues([HEADER, row('', '#VALUE!')]);
