@@ -30,9 +30,8 @@ let devAutoRefreshLastError="";
 const scheduleManualRefreshRender=debounce((mode)=>{
 if(mode==='in'||mode==='out')rerenderTableWithScrollRestore(mode,true);
 },180);
-const BARCODE_STATE={barcodeToSku:new Map(),barcodeToName:new Map(),loaded:false,updatedAt:0};
 const SEARCH_STATE={inputValue:"",filterValue:"",page:1,pageSize:50,minChars:2,debounceMs:500,debounceTimer:null,idleTimer:null,abortController:null,runToken:0,lastRenderedHtml:""};
-const SCANNER_STATE={instance:null,isScannerRunning:false,isClosing:false,hasScanned:false,targetInputId:"searchInput",resultHandler:null};
+const SCANNER_STATE={instance:null,isScannerRunning:false,isClosing:false,hasScanned:false,targetInputId:"searchInput",resultHandler:null,lookupInFlight:false,lastLookupValue:"",lastLookupAt:0,pendingRetryValue:""};
 const BALIKAN_AUTO_CHECK_KEY="balikan_auto_check_on_scan";
 const BALIKAN_STATE={sheets:[],sheetCache:{},sheetChecksums:{},dynamicColumnCache:{},allTripLoading:false,lastRefreshAt:0,highlightRowNumber:null,highlightSheetName:"",sortBy:"default",autoCheckOnScan:true,exactScanSku:"",selectedSkuRowNumber:null,selectedSkuSheetName:"",selectedSkuValue:"",lastCheckedRowId:null,lastCheckedSheetName:"",lastCheckedSku:"",lastCheckedVersion:0,lastCheckedFadeTimer:null,pendingEdits:{},pendingEditMeta:{},saveStatus:{},saveTimer:null,saveInProgress:false,saveRequested:false,isRendering:false,isRefreshing:false,pendingRender:false,lastRenderedChecksum:"",lastDataChecksum:"",lastRenderedHeaderKey:"",renderTimer:null,searchDebounceTimer:null};
 const PDF_TRANSFER_STATE={header:{},items:[],warnings:[],debugRows:[],rawText:"",csvText:"",csvRows:[],detectedColumns:[],failedRows:[],logs:[],isParsing:false,isImporting:false,configLoaded:false,configAvailable:false,configError:"",importResult:null,duplicate:null,lastFileName:"",selectedFile:null};
@@ -686,6 +685,7 @@ renderDataTablePage(mode,sheetName,false);
 function bindEvents(){searchInput?.addEventListener("input",e=>scheduleSearchFilter(e.target?.value||""));statsFilter?.addEventListener("change",updateStats);darkBtnHeader?.addEventListener("click",toggleDark);refreshToggleHeader?.addEventListener("click",triggerManualRefresh);bindDevAutoRefreshControls();const din=debounce(()=>loadTransactionTablePage("in",{page:1,search:inSearch?.value}),400),dout=debounce(()=>loadTransactionTablePage("out",{page:1,search:outSearch?.value}),400);inSearch?.addEventListener("input",din);outSearch?.addEventListener("input",dout);window.addEventListener("resize",()=>{document.querySelectorAll("[data-col-filter-menu]:not([hidden])").forEach(menu=>positionColumnFilterMenu(menu));document.querySelectorAll(".mv-columns.open").forEach(panel=>positionColumnMenu(panel.id.replace("mv-cols-","")));});document.addEventListener("change",e=>{const t=e.target;if(t?.matches("[data-mv-filter]")){const m=t.dataset.mvMode,st=TABLE_STATE[m];if(t.id===`mv-sort-${m}`){st.sort=t.value||"latest";st.page=1;loadTransactionTablePage(m,{page:1});}else{st.pageSize=Number(t.value)||25;st.page=1;loadTransactionTablePage(m,{page:1,limit:st.pageSize});}}if(t?.closest("[data-col-filter-menu]")&&t?.matches('input[type="checkbox"]')){const menu=t.closest("[data-col-filter-menu]");const mode=menu.dataset.mode,col=menu.dataset.col;const selected=[...menu.querySelectorAll('input[type="checkbox"]:checked')].map(x=>x.value);const st=mode==='balikan'?ensureBalikanFilterState():(TABLE_STATE[mode]||{});ensureColumnFilterState(mode);if(!st.columnFilters)st.columnFilters={};st.columnFilters[col]=selected;st.openFilterCol=col;if(mode==='balikan')scheduleBalikanRender(false,250);else rerenderTableWithScrollRestore(mode,true);}});document.addEventListener("input",e=>{const t=e.target;if(!t?.matches("[data-col-filter-search]"))return;const q=clean(t.value);const menu=t.closest("[data-col-filter-menu]");menu?.querySelectorAll("[data-opt-item]").forEach(item=>{item.style.display=!q||clean(item.textContent).includes(q)?"":"none";});});document.addEventListener("click",e=>{const syncRetry=e.target.closest("[data-retry-sync-status]");if(syncRetry){loadInventorySyncStatus().catch(err=>console.error("Inventory sync status retry failed",err));return;}const dashboardRetry=e.target.closest("[data-retry-dashboard-summary]");if(dashboardRetry){loadDashboardSummary().catch(err=>console.error("Dashboard summary retry failed",err));return;}const btn=e.target.closest("[data-search-page]");if(!btn)return;changeSearchPage(Number(btn.dataset.searchPage)||0);});anomalySeverity?.addEventListener("change",()=>applyAnomalyFilters(true));
 searchInput?.addEventListener("focus",()=>{if(!searchModalOpen)openSearchModal();});
 document.getElementById("btnScanSku")?.addEventListener("click",()=>{logActivitySafe({action:"SCAN_BARCODE_SKU",module:"Search",detail:"User membuka scanner barcode SKU",status:"SUCCESS"});openBarcodeScanner("searchInput",handleSearchScanResult);});
+document.getElementById("barcodeLookupStatus")?.addEventListener("click",e=>{if(e.target.closest("[data-barcode-lookup-retry]"))handleSearchScanResult(SCANNER_STATE.pendingRetryValue,{force:true});});
 btnScanBalikan?.addEventListener("click",()=>openBalikanScanner());
 balikanSheetSelect?.addEventListener("change",async(e)=>{window.currentTripSheet=e.target.value||"";BALIKAN_STATE.highlightRowNumber=null;BALIKAN_STATE.highlightSheetName="";BALIKAN_STATE.selectedSkuRowNumber=null;BALIKAN_STATE.selectedSkuSheetName="";BALIKAN_STATE.selectedSkuValue="";await loadBalikanRows();});
 balikanSearchInput?.addEventListener("input",e=>{window.balikanSearchKeyword=e.target.value||"";BALIKAN_STATE.exactScanSku="";BALIKAN_STATE.selectedSkuRowNumber=null;BALIKAN_STATE.selectedSkuSheetName="";BALIKAN_STATE.selectedSkuValue="";syncBalikanSkuStepper();clearTimeout(BALIKAN_STATE.searchDebounceTimer);BALIKAN_STATE.searchDebounceTimer=setTimeout(()=>saveBalikanSearchHistory(window.balikanSearchKeyword),320);scheduleBalikanRender(false,300);});
@@ -1552,59 +1552,6 @@ const headers=values[h].map((v,i)=>normalizeHeader(v)||`col_${i+1}`);const rows=
 await runChunked(body,(row)=>{if(!row?.length||row.every(c=>!String(c||"").trim()))return;const obj={};headers.forEach((k,i)=>obj[k]=row[i]||"");rows.push(obj);},{chunkSize:600,timeout:120});
 return rows;
 }
-function splitBarcodeTokens(raw){
-return String(raw||"").split(/[\n,;|]+/).map(v=>cleanScannedSku(v)).filter(Boolean);
-}
-function parseBarcodeSheet(values){
-if(!Array.isArray(values)||values.length<2)return[];
-const rows=[];
-for(let r=1;r<values.length;r++){
-const row=Array.isArray(values[r])?values[r]:[];
-const sku=String(row[0]||"").trim();
-const nama=String(row[2]||"").trim();
-if(!sku)continue;
-const barcodeSet=new Set();
-for(let i=1;i<row.length;i++)splitBarcodeTokens(row[i]).forEach(code=>barcodeSet.add(code));
-const barcodes=[...barcodeSet];
-if(!barcodes.length)continue;
-rows.push({sku,nama,barcodes});
-}
-return rows;
-}
-function rebuildBarcodeMap(rows=[]){
-BARCODE_STATE.barcodeToSku=new Map();
-BARCODE_STATE.barcodeToName=new Map();
-for(const item of rows){
-const sku=String(item?.sku||"").trim();
-const nama=String(item?.nama||"").trim();
-const list=Array.isArray(item?.barcodes)?item.barcodes:splitBarcodeTokens(item?.barcode||"");
-for(const barcode of list){
-const key=cleanScannedSku(barcode);
-if(!sku||!key)continue;
-BARCODE_STATE.barcodeToSku.set(key,sku);
-if(nama)BARCODE_STATE.barcodeToName.set(key,nama);
-}
-}
-BARCODE_STATE.loaded=true;
-BARCODE_STATE.updatedAt=Date.now();
-}
-async function loadBarcodeMaster({force=false}={}){
-if(!force&&BARCODE_STATE.loaded&&BARCODE_STATE.barcodeToSku.size)return BARCODE_STATE;
-try{
-const raw=await fetchSheet("BARCODE");
-const rows=parseBarcodeSheet(raw);
-rebuildBarcodeMap(rows);
-console.log("BARCODE MASTER LOADED",rows.length);
-}catch(err){
-console.warn("Gagal load BARCODE master",err);
-if(!BARCODE_STATE.loaded){
-BARCODE_STATE.barcodeToSku=new Map();
-BARCODE_STATE.barcodeToName=new Map();
-BARCODE_STATE.loaded=true;
-}
-}
-return BARCODE_STATE;
-}
 function detectHeaderIndex(values){if(!Array.isArray(values))return-1;const req=["sku","nama","nama barang","item","description","qty","tanggal","from","to","lokasi"];let bi=-1,bs=0;for(let i=0;i<Math.min(values.length,25);i++){if(!Array.isArray(values[i]))continue;const t=values[i].map(clean).join("|");let s=0;req.forEach(k=>t.includes(clean(k))&&s++);if(s>bs){bs=s;bi=i;}}return bs>=1?bi:-1;}
 function withAlphaNumericSearchVariants(value){const base=normalizeSearch(value);const joined=base.replace(/(\d)\s+([a-z])/g,"$1$2").replace(/([a-z])\s+(\d)/g,"$1$2");return joined&&joined!==base?`${base} ${joined}`:base;}
 function getRowSearchText(row){return withAlphaNumericSearchVariants([
@@ -1677,18 +1624,6 @@ const raw=String(text||"").trim();
 const match=raw.match(/\d{8,20}/);
 return match?match[0]:raw;
 }
-function findSkuByBarcode(barcode){
-const key=cleanScannedSku(barcode);
-if(!key)return null;
-const sku=BARCODE_STATE.barcodeToSku.get(key);
-if(!sku)return null;
-return {barcode:key,sku:String(sku).trim()};
-}
-function resolveScannedSku(rawText){
-const cleaned=cleanScannedSku(rawText);
-const mapped=findSkuByBarcode(cleaned);
-return {scanned:cleaned,sku:String(mapped?.sku||cleaned).trim(),mapped:Boolean(mapped)};
-}
 function triggerSearchSku(sku){
 SEARCH_STATE.inputValue=sku;
 SEARCH_STATE.filterValue=sku;
@@ -1701,36 +1636,36 @@ if(!exact)return false;
 navigateTo('/sku/'+encodeURIComponent(exact.sku));
 return true;
 }
-async function handleSearchScanResult(decodedText){
-const {scanned,sku,mapped}=resolveScannedSku(decodedText);
-if(!scanned)return;
+async function lookupBarcodeExact(barcode){
+const headers=await getAuthHeaders();
+if(!headers.Authorization)throw new Error("Sesi belum siap");
+const {res,data}=await fetchJsonSafe(`/api/barcode-lookup?barcode=${encodeURIComponent(barcode)}`,{headers,cache:"no-store"});
+if(!res.ok)throw new Error(data?.message||`HTTP ${res.status}`);
+return data;
+}
+function normalizeScannedBarcode(text){return String(text??"").replace(/[\u0000-\u001f\u007f]/g,"").trim();}
+function renderBarcodeLookupStatus(message="",{error=false,retry=false}={}){
+const el=document.getElementById("barcodeLookupStatus");if(!el)return;
+el.hidden=!message;el.classList.toggle("is-error",error);
+el.innerHTML=message?`${esc(message)}${retry?'<button class="btn-ghost" type="button" data-barcode-lookup-retry>Coba Lagi</button>':''}`:"";
+}
+async function handleSearchScanResult(decodedText,{force=false}={}){
+const scanned=normalizeScannedBarcode(decodedText);
+if(!scanned||SCANNER_STATE.lookupInFlight)return;
+const now=Date.now();
+if(!force&&SCANNER_STATE.lastLookupValue===scanned&&now-SCANNER_STATE.lastLookupAt<800)return;
+SCANNER_STATE.lookupInFlight=true;SCANNER_STATE.lastLookupValue=scanned;SCANNER_STATE.lastLookupAt=now;SCANNER_STATE.pendingRetryValue=scanned;
+renderBarcodeLookupStatus("Mencari barcode...");
 try{
-await logActivity({
-...currentUserIdentity(),
-action:"SCAN_BARCODE_SKU",
-module:"Search",
-detail:`User scan barcode: ${scanned} -> SKU: ${sku}`,
-reference:scanned,
-status:"SUCCESS",
-metadata:{
-sku,
-barcode:scanned,
-source:"barcode_scanner"
-}
-});
-}catch(_){}
-const input=document.getElementById("searchInput");
-if(input)input.value=sku;
-triggerSearchSku(sku);
-const found=openSkuDetailIfFound(sku);
-if(!mapped){
-toast("Barcode tidak terdaftar","error");
-return;
-}
-toast(found?`Barcode berhasil: ${scanned} → SKU ${sku}`:`Barcode ditemukan, tetapi SKU ${sku} tidak ada di data inventory.`,"success");
+const lookup=await lookupBarcodeExact(scanned);
+if(!lookup?.found){const input=document.getElementById("searchInput");if(input)input.value=scanned;renderBarcodeLookupStatus("Barcode tidak ditemukan",{error:true});return;}
+const sku=String(lookup.sku||"").trim();if(!sku)throw new Error("Respons lookup tidak memiliki SKU");
+logActivity({...currentUserIdentity(),action:"SCAN_BARCODE_SKU",module:"Search",detail:`User scan barcode: ${scanned} -> SKU: ${sku}`,reference:scanned,status:"SUCCESS",metadata:{sku,barcode:scanned,source:"barcode_lookup"}}).catch(()=>{});
+renderBarcodeLookupStatus("");navigateToSku(sku);
+}catch(error){renderBarcodeLookupStatus("Gagal mencari barcode",{error:true,retry:true});console.error("Barcode lookup failed",error);}
+finally{SCANNER_STATE.lookupInFlight=false;}
 }
 async function openBarcodeScanner(targetInputId="searchInput",onResult=handleSearchScanResult){
-await loadBarcodeMaster().catch(err=>console.warn("BARCODE unavailable",err?.message||err));
 SCANNER_STATE.targetInputId=targetInputId;
 SCANNER_STATE.resultHandler=typeof onResult==="function"?onResult:handleSearchScanResult;
 return openScannerModal();
@@ -2713,16 +2648,10 @@ function renderMovementSessionTable(){const tbody=document.querySelector('#mvSes
 function renderMovementHistory(){const tbody=document.querySelector('#mvHistoryBody');if(!tbody)return;const info=document.getElementById('mvHistoryInfo');const prev=document.getElementById('mvHistoryPrev');const next=document.getElementById('mvHistoryNext');const sizeSel=document.getElementById('mvHistoryPageSize');const historySorted=[...buildMovementHistoryRows()].reverse();const total=historySorted.length;const totalPages=Math.max(1,Math.ceil(total/movementHistoryPageSize));if(movementHistoryPage>totalPages)movementHistoryPage=totalPages;const start=(movementHistoryPage-1)*movementHistoryPageSize;const end=start+movementHistoryPageSize;const pageRows=historySorted.slice(start,end);if(sizeSel)sizeSel.value=String(movementHistoryPageSize);if(info)info.textContent=`Menampilkan ${total?start+1:0}-${Math.min(end,total)} dari ${total} data`;if(prev)prev.disabled=movementHistoryPage<=1;if(next)next.disabled=movementHistoryPage>=totalPages;if(!total){tbody.innerHTML="<tr><td colspan='9'><div class='state'>Belum ada history movement.</div></td></tr>";return;}const frag=document.createDocumentFragment();pageRows.forEach(r=>{const edit=HISTORY_EDIT_STATE.movement[r.rowNumber];const tr=document.createElement('tr');if(edit){tr.innerHTML=`<td><input type='date' data-mvh-edit='tanggal' data-row='${r.rowNumber}' value='${esc(normalizeMovementDate(edit.tanggal))}' required></td><td><input data-mvh-edit='from' data-row='${r.rowNumber}' value='${esc(edit.from||"")}'></td><td><input data-mvh-edit='to' data-row='${r.rowNumber}' value='${esc(edit.to||"")}'></td><td><input data-mvh-edit='sku' data-row='${r.rowNumber}' value='${esc(edit.sku||"")}'></td><td><input data-mvh-edit='nama' data-row='${r.rowNumber}' value='${esc(edit.nama||"")}'></td><td><input type='number' data-mvh-edit='stok_lokasi_awal' data-row='${r.rowNumber}' value='${esc(edit.stok_lokasi_awal)}'></td><td><input type='number' data-mvh-edit='stok_aktual' data-row='${r.rowNumber}' value='${esc(edit.stok_aktual)}'></td><td>${esc(edit.keterangan||"-")}</td><td><button class='btn-ghost' data-mvh-action='save' data-row='${r.rowNumber}'>Simpan</button> <button class='btn-ghost' data-mvh-action='cancel' data-row='${r.rowNumber}'>Batal</button></td>`;}else{tr.innerHTML=`<td class='editable-cell' data-mvh-field='tanggal' data-row='${r.rowNumber}'>${esc(normalizeMovementDate(r.tanggal)||"-")}</td><td class='editable-cell' data-mvh-field='from' data-row='${r.rowNumber}'>${esc(r.from||"-")}</td><td class='editable-cell' data-mvh-field='to' data-row='${r.rowNumber}'>${esc(r.to||"-")}</td><td>${esc(r.sku||"-")}</td><td>${esc(r.nama||"-")}</td><td class='editable-cell' data-mvh-field='stok_lokasi_awal' data-row='${r.rowNumber}'>${esc(r.stok_lokasi_awal)}</td><td class='editable-cell' data-mvh-field='stok_aktual' data-row='${r.rowNumber}'>${esc(r.stok_aktual)}</td><td>${esc(r.keterangan||"-")}</td><td><button class='icon-btn danger' title='Hapus' aria-label='Hapus data' data-mvh-action='delete' data-row='${r.rowNumber}'><i data-lucide='trash-2'></i></button></td>`;}frag.appendChild(tr);});tbody.replaceChildren(frag);if(window.lucide&&typeof window.lucide.createIcons==='function')window.lucide.createIcons();}
 
 
-function handleMovementScanSearchResult(scannedSku){
-  const {scanned,sku,mapped}=resolveScannedSku(scannedSku);
-  if(!scanned){showToast('Barcode tidak ditemukan','error');return;}
-  MOVEMENT_STATE.searchInput=sku;
-  MOVEMENT_STATE.search=sku;
-  const input=document.getElementById('movementSearchInput');
-  if(input)input.value=sku;
-  renderMovementSearchResults();
-  if(!mapped){showToast('Barcode tidak ditemukan','error');return;}
-  showToast('SKU berhasil discan. Pilih lokasi awal yang benar.','success');
+async function handleMovementScanSearchResult(scannedValue){
+  const scanned=normalizeScannedBarcode(scannedValue);if(!scanned)return;
+  try{const lookup=await lookupBarcodeExact(scanned);if(!lookup?.found){showToast('Barcode tidak ditemukan','error');return;}const sku=String(lookup.sku||'').trim();MOVEMENT_STATE.searchInput=sku;MOVEMENT_STATE.search=sku;const input=document.getElementById('movementSearchInput');if(input)input.value=sku;renderMovementSearchResults();showToast('SKU berhasil discan. Pilih lokasi awal yang benar.','success');}
+  catch(_error){showToast('Gagal mencari barcode','error');}
 }
 
 function openMovementScanner(){
@@ -3226,7 +3155,12 @@ window.toggleBalikanCheck=async(sheetName,rowNumber,checked)=>{try{await updateB
 function openBalikanScanner(){openBarcodeScanner("balikanSearchInput",handleBalikanScanResult);}
 window.openBalikanScanner=openBalikanScanner;
 
-async function handleBalikanScanResult(decodedText){if(navigator.vibrate)navigator.vibrate(100);const {scanned,sku,mapped}=resolveScannedSku(decodedText);if(!scanned){toast("Barcode tidak ditemukan","error");return;}window.balikanSearchKeyword=sku;BALIKAN_STATE.exactScanSku=sku;const searchInput=document.querySelector("#balikanSearchInput");if(searchInput)searchInput.value=sku;saveBalikanSearchHistory(sku);const row=(window.BALIKAN_ROWS||[]).find(item=>String(item.sku||"").trim().toLowerCase()===String(sku||"").trim().toLowerCase());if(!mapped){BALIKAN_STATE.highlightRowNumber=null;toast("Barcode tidak ditemukan","error");renderBalikanTable(false);return;}if(!row){BALIKAN_STATE.highlightRowNumber=null;toast("SKU tidak ditemukan di Balikan Store: "+sku,"error");renderBalikanTable(false);return;}BALIKAN_STATE.highlightRowNumber=Number(row.rowNumber);BALIKAN_STATE.highlightSheetName=getBalikanActiveSheetName(row);renderBalikanTable(false);if(BALIKAN_STATE.autoCheckOnScan!==false){await toggleBalikanCheck(getBalikanActiveSheetName(row),Number(row.rowNumber),true);showToast('SKU berhasil discan dan dicentang: '+sku,'success');}else{showToast('SKU berhasil discan: '+sku,'success');}setTimeout(()=>{const el=document.getElementById(getBalikanDomRowId(row.rowNumber,getBalikanActiveSheetName(row)));if(el){el.scrollIntoView({behavior:"smooth",block:"center"});el.classList.add("row-highlight");}},300);}
+async function handleBalikanScanResult(decodedText){
+if(navigator.vibrate)navigator.vibrate(100);const scanned=normalizeScannedBarcode(decodedText);if(!scanned)return;
+let lookup;try{lookup=await lookupBarcodeExact(scanned);}catch(_error){toast("Gagal mencari barcode","error");return;}
+if(!lookup?.found){BALIKAN_STATE.highlightRowNumber=null;toast("Barcode tidak ditemukan","error");renderBalikanTable(false);return;}
+const sku=String(lookup.sku||"").trim();window.balikanSearchKeyword=sku;BALIKAN_STATE.exactScanSku=sku;const searchInput=document.querySelector("#balikanSearchInput");if(searchInput)searchInput.value=sku;saveBalikanSearchHistory(sku);const row=(window.BALIKAN_ROWS||[]).find(item=>String(item.sku||"").trim().toLowerCase()===sku.toLowerCase());if(!row){BALIKAN_STATE.highlightRowNumber=null;toast("SKU tidak ditemukan di Balikan Store: "+sku,"error");renderBalikanTable(false);return;}BALIKAN_STATE.highlightRowNumber=Number(row.rowNumber);BALIKAN_STATE.highlightSheetName=getBalikanActiveSheetName(row);renderBalikanTable(false);if(BALIKAN_STATE.autoCheckOnScan!==false){await toggleBalikanCheck(getBalikanActiveSheetName(row),Number(row.rowNumber),true);showToast('SKU berhasil discan dan dicentang: '+sku,'success');}else{showToast('SKU berhasil discan: '+sku,'success');}setTimeout(()=>{const el=document.getElementById(getBalikanDomRowId(row.rowNumber,getBalikanActiveSheetName(row)));if(el){el.scrollIntoView({behavior:"smooth",block:"center"});el.classList.add("row-highlight");}},300);
+}
 
 function bindSheetInputForm(){
 const form=document.getElementById("sheetInputForm");
