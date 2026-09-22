@@ -43,5 +43,24 @@ test('loading, empty, rendered, and export states share the canonical columns', 
 
 test('DOKUMEN renders only HTTP(S) values as safe links', () => {
   assert.match(source, /url\.protocol==="https:"\|\|url\.protocol==="http:"/);
-  assert.match(source, /target='_blank' rel='noopener noreferrer'>Lihat Dokumen<\/a>/);
+  assert.match(source, /target='_blank' rel='noopener noreferrer' aria-label='Lihat Dokumen'/);
+  assert.match(source, /document-empty[^`]+Dokumen tidak tersedia[^`]+Tidak Ada/);
+  assert.match(source, /if\(e\.target\.closest\("\.document-link-btn"\)\)return/);
+  assert.match(source, /c==="dokumen"\?`<td class='presentation-cell document-cell'>\${renderDocumentValue/);
+  assert.doesNotMatch(source, /<td class='editable-cell[^`]*data-field='\${c}'>\${c==="dokumen"/);
+});
+
+
+test('STOCKOUT uses labelled status badges instead of raw booleans', () => {
+  assert.match(source, /function renderStockoutValue\(value\)/);
+  assert.match(source, /stockout-badge \${isStockout\?"is-yes":"is-no"}/);
+  assert.match(source, /aria-label='\${label}' title='\${label}'/);
+  assert.match(source, /renderPresentationValue\(c,r\?\._rawCells\?\.\[c\]\)/);
+  const stockoutHelper = source.match(/function renderStockoutValue\([^\n]+/)?.[0];
+  const stockoutContext = {};
+  vm.runInNewContext(`${stockoutHelper};result=renderStockoutValue`, stockoutContext);
+  assert.match(stockoutContext.result('TRUE'), /is-yes[^>]+aria-label='Stock Out'[^>]*><span aria-hidden='true'>✓/);
+  assert.match(stockoutContext.result(false), /is-no[^>]+aria-label='Tidak Stock Out'[^>]*><span aria-hidden='true'>×/);
+  assert.doesNotMatch(stockoutContext.result('TRUE'), />TRUE</);
+  assert.match(stockoutContext.result(''), /stockout-empty[^>]+>—</);
 });
