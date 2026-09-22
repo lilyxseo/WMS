@@ -10,9 +10,21 @@ export function normalizeBulkyHeader(value) {
 const HEADER_LABELS = Object.freeze({
   lokasibulky: 'LOKASI BULKY', sku: 'SKU', namabarang: 'NAMA BARANG', stokawal: 'STOK AWAL',
   internalstocktransfer: 'INTERNAL STOCK TRANSFER', replenishment: 'REPLENISHMENT',
-  pengeluaran: 'PENGELUARAN', stokakhir: 'STOK AKHIR', netsuite: 'Netsuite',
+  pengeluaran: 'PENGELUARAN', stokakhir: 'STOK AKHIR', iseller: 'Iseller', netsuite: 'Netsuite',
+  selisih: 'Selisih', pendinganit: 'Pendingan IT',
 });
-export const REQUIRED_HEADERS = Object.freeze(Object.keys(HEADER_LABELS));
+export const REQUIRED_HEADERS = Object.freeze([
+  'lokasibulky', 'sku', 'namabarang', 'stokawal', 'internalstocktransfer', 'replenishment',
+  'pengeluaran', 'stokakhir',
+]);
+export const OPTIONAL_HEADERS = Object.freeze(['iseller', 'netsuite', 'selisih', 'pendinganit']);
+const OPTIONAL_FIELDS = Object.freeze([
+  ['iseller', 'iseller', normalizeText],
+  ['netsuite', 'netsuite', normalizeNumber],
+  ['selisih', 'selisih', normalizeNumber],
+  ['pendinganit', 'pendingan_it', normalizeNumber],
+]);
+const PRESENT_OPTIONAL_FIELDS = Symbol('presentOptionalFields');
 
 const NUMBER_FIELDS = Object.freeze([
   ['stokawal', 'stok_awal'],
@@ -20,7 +32,6 @@ const NUMBER_FIELDS = Object.freeze([
   ['replenishment', 'replenishment'],
   ['pengeluaran', 'pengeluaran'],
   ['stokakhir', 'stok_akhir'],
-  ['netsuite', 'netsuite'],
 ]);
 
 function detectHeaderRow(values) {
@@ -52,7 +63,7 @@ function headerDebug(values, detected) {
       characterCodes: [...raw].map(character => character.codePointAt(0)),
       normalized: normalizedHeaders[index],
     })),
-    expectedNetsuiteHeader: 'netsuite',
+    optionalHeaders: Object.fromEntries(OPTIONAL_HEADERS.map(header => [header, normalizedHeaders.includes(header)])),
   };
 }
 
@@ -62,7 +73,7 @@ async function parseValues(values, helpers) {
   const debug = headerDebug(values, detected);
   helpers.logger?.log?.(`[BulkyHeaderDebug] ${JSON.stringify(debug)}`);
   if (!detected) throw new SyncError('INVALID_HEADER', 'Header BULKY tidak ditemukan', {
-    missingHeader: 'Netsuite', headerRowNumber: null, detectedHeaders: [], normalizedHeaders: [],
+    headerRowNumber: null, detectedHeaders: [], normalizedHeaders: [],
   });
   const indexes = new Map(detected.normalized.map((header, index) => [header, index]));
   const missing = REQUIRED_HEADERS.filter(header => !indexes.has(header));
@@ -72,6 +83,11 @@ async function parseValues(values, helpers) {
     detectedHeaders: debug.rawHeaders,
     normalizedHeaders: debug.normalizedHeaders,
   });
+  const optionalHeaders = {
+    iseller: indexes.has('iseller'), netsuite: indexes.has('netsuite'), selisih: indexes.has('selisih'),
+    pendinganIt: indexes.has('pendinganit'),
+  };
+  const presentOptionalFields = new Set(OPTIONAL_FIELDS.filter(([header]) => indexes.has(header)).map(([, field]) => field));
 
   const rows = [], invalidRows = [], sourceKeys = new Set(); let sourceRowCount = 0;
   for (let index = detected.index + 1; index < values.length; index += 1) {
@@ -88,13 +104,22 @@ async function parseValues(values, helpers) {
       source_row_key,
       source_row_number: sourceRowNumber,
     };
+    for (const [header, field, normalize] of OPTIONAL_FIELDS) {
+      if (!indexes.has(header)) continue;
+      const normalized = normalize(read(header));
+      row[field] = normalize === normalizeNumber ? normalized.value : normalized;
+      if (normalize === normalizeNumber) numbers[field] = normalized;
+    }
+    Object.defineProperty(row, PRESENT_OPTIONAL_FIELDS, { value: presentOptionalFields });
     const errors = [];
     if (!row.sku) errors.push('SKU_REQUIRED');
-    for (const [header, field] of NUMBER_FIELDS) if (!numbers[field].valid) errors.push(`INVALID_NUMBER:${HEADER_LABELS[header].toUpperCase()}`);
+    for (const [header, field] of [...NUMBER_FIELDS, ...OPTIONAL_FIELDS.filter(([, , normalize]) => normalize === normalizeNumber)]) {
+      if (indexes.has(header) && !numbers[field].valid) errors.push(`INVALID_NUMBER:${HEADER_LABELS[header].toUpperCase()}`);
+    }
     if (errors.length) { invalidRows.push({ sourceRowNumber, sourceRowKey: source_row_key, errors }); continue; }
     row.source_hash = await helpers.buildSourceHash(row); rows.push(row);
   }
-  return { rows, invalidRows, sourceKeys, sourceRowCount };
+  return { rows, invalidRows, sourceKeys, sourceRowCount, optionalHeaders };
 }
 
 const service = createInventorySyncService({
@@ -104,14 +129,15 @@ const service = createInventorySyncService({
   parseValues,
   hashFields: [
     'lokasi_bulky', 'sku', 'nama_barang', 'stok_awal', 'internal_stock_transfer', 'replenishment',
-    'pengeluaran', 'stok_akhir', 'netsuite',
+    'pengeluaran', 'stok_akhir', 'iseller', 'netsuite', 'selisih', 'pendingan_it',
   ],
-  metadataFields: ['netsuite'],
-  needsUpdate: (existing, row) => existing.netsuite == null && row.netsuite != null,
+  metadataFields: ['iseller', 'netsuite', 'selisih', 'pendingan_it'],
+  needsUpdate: (existing, row) => [...row[PRESENT_OPTIONAL_FIELDS]].some(field => existing[field] !== row[field]),
   buildMetrics({ parsed, existing, diff }) {
     const existingByKey = new Map(existing.map(row => [row.source_row_key, row]));
     const isBackfill = row => existingByKey.get(row.source_row_key)?.netsuite == null && row.netsuite != null;
     return {
+      optionalHeaders: parsed.optionalHeaders,
       netsuiteSourceValues: parsed.rows.filter(row => row.netsuite != null).length,
       netsuiteBackfilledRows: diff.rowsToUpdate.filter(isBackfill).length,
       nullNetsuiteRows: parsed.rows.filter(row => row.netsuite == null).length,

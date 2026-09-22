@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BULKY_SHEET_NAME, buildSourceRowKey, normalizeBulkyHeader, parseBulkyValues, syncBulky } from '../functions/api/sync/inventory/_bulky-service.js';
+import { BULKY_SHEET_NAME, OPTIONAL_HEADERS, REQUIRED_HEADERS, buildSourceRowKey, normalizeBulkyHeader, parseBulkyValues, syncBulky } from '../functions/api/sync/inventory/_bulky-service.js';
 
 const HEADER = [
   'LOKASI BULKY', 'SKU', 'NAMA BARANG', 'STOK AWAL', 'INTERNAL STOCK TRANSFER', 'REPLENISHMENT',
@@ -11,13 +11,14 @@ const logger = { log() {}, error() {} };
 
 function statefulGateway() {
   const records = new Map();
+  const upsertedRows = [];
   const status = { status: null, locked_at: null, lock_id: null };
   return {
-    records, status,
+    records, status, upsertedRows,
     async acquireLock(source, lockId) { assert.equal(source, 'bulky'); status.status = 'syncing'; status.locked_at = new Date().toISOString(); status.lock_id = lockId; return true; },
     async insertHistory() { return 'history-1'; }, async updateHistory() {},
-    async existingMetadata() { return [...records.values()].map(({ source_row_key, source_hash, netsuite }) => ({ source_row_key, source_hash, netsuite })); },
-    async upsertRows(rows) { rows.forEach(item => records.set(item.source_row_key, item)); },
+    async existingMetadata() { return [...records.values()].map(({ source_row_key, source_hash, iseller, netsuite, selisih, pendingan_it }) => ({ source_row_key, source_hash, iseller, netsuite, selisih, pendingan_it })); },
+    async upsertRows(rows) { upsertedRows.push(...rows); rows.forEach(item => records.set(item.source_row_key, { ...records.get(item.source_row_key), ...item })); },
     async deleteKeys(keys) { keys.forEach(key => records.delete(key)); },
     async finishSuccess(args) { assert.equal(args.source, 'bulky'); status.status = 'success'; status.locked_at = null; status.lock_id = null; },
     async finishError() {},
@@ -47,27 +48,51 @@ test('BULKY validates and maps every supported spelling of the Netsuite header t
   }
 });
 
-test('BULKY detects a header below title and empty rows and reports safe header-only diagnostics', async () => {
+test('BULKY detects a header below title and synchronizes without optional Netsuite', async () => {
   const messages = [];
   const values = [['LAPORAN STOK BULKY'], [], [HEADER[0], HEADER[1], HEADER[2], ...HEADER.slice(3, -1)], row('SKU-1')];
-  await assert.rejects(
-    () => syncBulky({}, { gateway: statefulGateway(), fetchValues: async () => values, logger: { log(message) { messages.push(message); }, error() {} } }),
-    error => {
-      assert.equal(error.code, 'INVALID_HEADER');
-      assert.equal(error.missingHeader, 'Netsuite');
-      assert.equal(error.headerRowNumber, 3);
-      assert.deepEqual(error.detectedHeaders, values[2]);
-      assert.deepEqual(error.normalizedHeaders.slice(0, 3), ['lokasibulky', 'sku', 'namabarang']);
-      return true;
-    },
-  );
+  const result = await syncBulky({}, { gateway: statefulGateway(), fetchValues: async () => values, logger: { log(message) { messages.push(message); }, error() {} } });
+  assert.equal(result.success, true);
+  assert.deepEqual(result.optionalHeaders, { iseller: false, netsuite: false, selisih: false, pendinganIt: false });
   const debug = JSON.parse(messages.find(message => message.startsWith('[BulkyHeaderDebug] ')).slice('[BulkyHeaderDebug] '.length));
   assert.equal(debug.sheetName, 'stok bulky');
   assert.equal(debug.range, "'stok bulky'!A:ZZ");
   assert.equal(debug.headerRow, 3);
-  assert.equal(debug.expectedNetsuiteHeader, 'netsuite');
+  assert.equal(debug.optionalHeaders.netsuite, false);
   assert.deepEqual(debug.headerIndexes[0].characterCodes, [...HEADER[0]].map(character => character.codePointAt(0)));
   assert.doesNotMatch(JSON.stringify(debug), /SKU-1/);
+});
+
+test('BULKY keeps only core headers required and does not wipe optional database values when headers are absent', async () => {
+  assert.deepEqual(REQUIRED_HEADERS, ['lokasibulky', 'sku', 'namabarang', 'stokawal', 'internalstocktransfer', 'replenishment', 'pengeluaran', 'stokakhir']);
+  assert.deepEqual(OPTIONAL_HEADERS, ['iseller', 'netsuite', 'selisih', 'pendinganit']);
+  const gateway = statefulGateway();
+  const complete = await parseBulkyValues([HEADER, row('SKU-1', '12', '10075')]);
+  gateway.records.set('bulky:2', { ...complete.rows[0], iseller: 'IS-1', selisih: 4, pendingan_it: 2 });
+
+  const coreHeader = HEADER.slice(0, -1);
+  const coreRow = row('SKU-1', '13').slice(0, -1);
+  const result = await syncBulky({}, { gateway, fetchValues: async () => [coreHeader, coreRow], logger });
+
+  assert.equal(result.success, true);
+  assert.equal(gateway.records.get('bulky:2').stok_akhir, 13);
+  assert.equal(['iseller', 'netsuite', 'selisih', 'pendingan_it'].some(field => Object.hasOwn(gateway.upsertedRows[0], field)), false);
+  assert.deepEqual(
+    Object.fromEntries(['iseller', 'netsuite', 'selisih', 'pendingan_it'].map(field => [field, gateway.records.get('bulky:2')[field]])),
+    { iseller: 'IS-1', netsuite: 10075, selisih: 4, pendingan_it: 2 },
+  );
+});
+
+test('BULKY parses and synchronizes every optional header when present', async () => {
+  const optionalHeader = [...HEADER.slice(0, -1), 'ISELLER', 'netsuite', 'Selisih', 'Pendingan IT'];
+  const optionalRow = [...row('SKU-OPTIONAL').slice(0, -1), 'IS-9', '42', '-3', '7'];
+  const gateway = statefulGateway();
+  const result = await syncBulky({}, { gateway, fetchValues: async () => [optionalHeader, optionalRow], logger });
+  assert.deepEqual(result.optionalHeaders, { iseller: true, netsuite: true, selisih: true, pendinganIt: true });
+  assert.deepEqual(
+    Object.fromEntries(['iseller', 'netsuite', 'selisih', 'pendingan_it'].map(field => [field, gateway.records.get('bulky:2')[field]])),
+    { iseller: 'IS-9', netsuite: 42, selisih: -3, pendingan_it: 7 },
+  );
 });
 
 test('BULKY validates headers and reports invalid numeric cells without coercing them to zero', async () => {
