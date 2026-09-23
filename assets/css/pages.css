@@ -1651,7 +1651,7 @@ body.dark #page-balikan-store .balikan-row-highlight-fading{
 #page-cycle-count .icon-btn.danger:hover,
 #page-movement .icon-btn.danger:hover{background:rgba(239,68,68,.12)}
 
-#page-movement .movement-scan-bar{border:1px solid var(--line);border-radius:14px;padding:4px;background:var(--panel)}
+#page-movement .movement-scan-bar{width:100%;border:1px solid var(--line);border-radius:14px;padding:4px;background:var(--panel)}
 
 /* Barang Masuk / Barang KeIuar bulk + checkbox UI */
 #inResults .mv-bulkbar,

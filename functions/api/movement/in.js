@@ -1,4 +1,5 @@
 import { requirePicRole } from '../_authz.js';
+import { businessDateKey } from '../_inventory-analytics.js';
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 const INVENTORY_MOVEMENT_RANGE = "Movement!A:I";
@@ -46,21 +47,10 @@ function toNonNegativeNumber(value) {
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
-function formatDateMDYYYY(date = new Date()) {
-  const m = date.getMonth() + 1;
-  const d = date.getDate();
-  const y = date.getFullYear();
-  return `${m}/${d}/${y}`;
-}
-
-export function isValidMovementDate(value) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
-  if (!match) return false;
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const parsed = new Date(Date.UTC(year, month - 1, day));
-  return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day;
+export function movementBusinessDates(now = new Date(), timeZone = 'Asia/Jakarta') {
+  const date = businessDateKey(now, timeZone);
+  const [year, month, day] = date.split('-');
+  return { date, sheetDate: `${Number(month)}/${Number(day)}/${year}` };
 }
 
 function isPermissionError(data) {
@@ -190,17 +180,18 @@ export async function onRequestPost({ request, env }) {
     const requestItems = Array.isArray(body?.items) ? body.items : [body];
     if (!requestItems.length) return json({ success: false, message: "items wajib diisi" }, 400);
 
+    // The server owns the transaction date. Client-provided dates are deliberately
+    // ignored so every item in this request uses one consistent business day.
+    const { date: tanggal, sheetDate: tanggalBarangMasuk } = movementBusinessDates(
+      new Date(),
+      sanitize(env.BUSINESS_TIME_ZONE) || 'Asia/Jakarta'
+    );
     const movementItems = requestItems.map((item) => {
       const sku = sanitize(item?.sku);
       const namaBarang = sanitize(item?.namaBarang);
       const qty = toPositiveNumber(item?.qty);
       const stokDiLokasiAwal = toNonNegativeNumber(item?.stokDiLokasiAwal);
       const stokAktual = toNonNegativeNumber(item?.stokAktual);
-      const tanggal = sanitize(item?.tanggal);
-      const [year, month, day] = tanggal.split("-").map(Number);
-      const tanggalBarangMasuk = isValidMovementDate(tanggal)
-        ? formatDateMDYYYY(new Date(year, month - 1, day))
-        : "";
       const from = sanitize(item?.from);
       const to = sanitize(item?.to);
       const pic = sanitize(item?.pic) || "ABI";
@@ -208,7 +199,6 @@ export async function onRequestPost({ request, env }) {
     });
 
     for (const item of movementItems) {
-      if (!isValidMovementDate(item.tanggal)) return json({ success: false, message: "tanggal harus berformat YYYY-MM-DD dan valid" }, 400);
       if (!item.from) return json({ success: false, message: "from wajib diisi" }, 400);
       if (!item.to) return json({ success: false, message: "to wajib diisi" }, 400);
       if (!item.sku) return json({ success: false, message: "sku wajib diisi" }, 400);
@@ -246,7 +236,7 @@ export async function onRequestPost({ request, env }) {
       return json({ success: false, message: "Service account belum punya akses Editor ke Spreadsheet 2026" }, 403);
     }
     if (!res.ok) return json({ success: false, message: data?.error?.message || "Gagal update Google Sheet", detail: data }, res.status);
-    return json({ success: true, processed: movementItems.length });
+    return json({ success: true, processed: movementItems.length, businessDate: tanggal });
   } catch (err) {
     return json({ success: false, message: err?.message || "Internal server error" }, 500);
   }
