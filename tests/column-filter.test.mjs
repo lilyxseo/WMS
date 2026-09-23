@@ -33,13 +33,13 @@ test('Balikan table derives filters from the complete table schema', () => {
   assert.match(source, /dynamic\.filter/);
 });
 
-test('column filters combine with AND and full reset clears global search and sort', () => {
+test('column filters combine with AND and search reset preserves column filters and sort', () => {
   assert.match(source, /getBalikanTableColumns\(\)\.some/);
-  const resetStart = source.indexOf('function resetBalikanFilter()');
+  const resetStart = source.indexOf('function resetBalikanSearch()');
   const reset = source.slice(resetStart, source.indexOf('function exportBalikanFilteredCsv', resetStart));
-  assert.match(reset, /columnFilters:\{\}/);
   assert.match(reset, /balikanSearchKeyword=''/);
-  assert.match(reset, /sortBy:'default'/);
+  assert.doesNotMatch(reset, /columnFilters:\{\}/);
+  assert.doesNotMatch(reset, /sortBy:'default'/);
 });
 
 test('inline edits invalidate filter options and re-evaluate active filters', () => {
