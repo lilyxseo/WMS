@@ -18,13 +18,6 @@ function decodeJwtPayload(token) {
   }
 }
 
-function parseCookie(header = '') {
-  return Object.fromEntries(String(header || '').split(';').map(part => {
-    const [key, ...rest] = part.trim().split('=');
-    return [key, decodeURIComponent(rest.join('=') || '')];
-  }).filter(([key]) => key));
-}
-
 function isTruthy(value) {
   const normalized = String(value ?? '').trim().toLowerCase();
   return value === true || normalized === 'true' || normalized === '1' || normalized === 'yes';
@@ -35,14 +28,30 @@ function getBearerToken(request) {
   return auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : '';
 }
 
-function isDeveloperRequest(request, env) {
+function toBase64Url(value) {
+  return btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+async function isDeveloperRequest(request, env) {
   const token = getBearerToken(request);
   const payload = decodeJwtPayload(token);
-  if (payload?.isDeveloper === true && Number(payload.exp || 0) > Math.floor(Date.now() / 1000)) return true;
-  const cookies = parseCookie(request.headers.get('cookie') || '');
-  if (isTruthy(cookies.developer) || isTruthy(request.headers.get('x-developer-user'))) return true;
+  const [encodedPayload, suppliedSignature] = token.split('.');
+  const sessionSecret = String(env?.DEV_SESSION_SECRET || '');
+  if (payload?.isDeveloper === true && payload?.sub === 'developer' && Number(payload.exp || 0) > Math.floor(Date.now() / 1000) && encodedPayload && suppliedSignature && sessionSecret) {
+    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(sessionSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const signed = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(encodedPayload));
+    const expectedSignature = toBase64Url(String.fromCharCode(...new Uint8Array(signed)));
+    if (safeEquals(suppliedSignature, expectedSignature)) return true;
+  }
   const previewEnabled = isTruthy(env?.PREVIEW_BYPASS_LOGIN ?? env?.NEXT_PUBLIC_PREVIEW_BYPASS_LOGIN ?? env?.VITE_PREVIEW_BYPASS_LOGIN);
   return previewEnabled && request.headers.get('x-preview-bypass-login') === 'true';
+}
+
+function safeEquals(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
+  let result = 0;
+  for (let index = 0; index < a.length; index += 1) result |= a.charCodeAt(index) ^ b.charCodeAt(index);
+  return result === 0;
 }
 
 async function getSupabaseAuthUser(request, env) {
@@ -71,7 +80,7 @@ async function getUserProfileRole(userId, email, env) {
 }
 
 export async function getRequestRole(request, env) {
-  if (isDeveloperRequest(request, env)) return 'Developer';
+  if (await isDeveloperRequest(request, env)) return 'Developer';
   const authUser = await getSupabaseAuthUser(request, env);
   const role = await getUserProfileRole(authUser?.id, authUser?.email, env);
   return role || String(authUser?.user_metadata?.role || authUser?.role || '');
@@ -101,7 +110,7 @@ async function auditDeniedCrud({ request, env, role, action = 'CRUD' }) {
 
 export async function requirePicRole({ request, env, action = 'CRUD' }) {
   const role = await getRequestRole(request, env);
-  const canCrud = String(role || '').toLowerCase().includes('pic') || isDeveloperRequest(request, env);
+  const canCrud = String(role || '').toLowerCase().includes('pic') || await isDeveloperRequest(request, env);
   if (canCrud) return { ok: true, role };
   await auditDeniedCrud({ request, env, role, action });
   return { ok: false, role, response: json({ success: false, message: 'Akses read-only. Hanya PIC atau Developer yang bisa mengubah data.', reason: READ_ONLY_REASON }, 403) };

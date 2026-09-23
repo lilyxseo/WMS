@@ -12,7 +12,7 @@ test("startup session restoration has a finite timeout and logs failures", () =>
 });
 
 test("startup always exits auth checking and renders login after a restore failure", () => {
-  assert.match(mainSource, /session=await restoreSession\(\{allowDeveloperSession:isTrustedDevelopmentEnvironment\(\)\}\)/);
+  assert.match(mainSource, /session=await restoreSession\(\{allowDeveloperSession:true\}\)/);
   assert.match(mainSource, /catch\(err\)\{\s*console\.error\("Auth session check failed",err\);\s*user=null;\s*\}finally\{[\s\S]*?authChecking=false;\s*isAuthStateReady=true;\s*renderAuthState\(\);/s);
 });
 
@@ -30,7 +30,8 @@ test("startup still runs when module evaluation finishes after DOMContentLoaded"
 
 test("preview bypass is decided before session restoration", () => {
   const boot = mainSource.slice(mainSource.indexOf("async function bootApplication"), mainSource.indexOf('window.addEventListener("auth:logout"'));
-  assert.match(boot, /if\(isPreviewBypassLoginEnabled\(\)\)[\s\S]*?else\{\s*session=await restoreSession\(\{allowDeveloperSession:isTrustedDevelopmentEnvironment\(\)\}\)/);
+  assert.match(boot, /if\(isPreviewBypassLoginEnabled\(\)\)[\s\S]*?else\{[\s\S]*?session=await restoreSession\(\{allowDeveloperSession:true\}\)/);
+  assert.doesNotMatch(boot, /user=\{id:["']developer["']\}[\s\S]*?restoreSession/);
 });
 
 test("startup never schedules inventory preload before session restoration", () => {
