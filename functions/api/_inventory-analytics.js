@@ -3,8 +3,10 @@ import { getSecretSupabaseConfig } from './_supabase-config.js';
 const BATCH_SIZE = 1000;
 const SOURCES = {
   kartuStok: { table: 'inventory_kartu_stok', select: 'sku,nama_barang,lokasi_bulky,stok_akhir,pengeluaran' },
-  rpl: { table: 'inventory_rpl', select: 'sku,nama_barang,lokasi_bulky,stok_akhir' },
-  bulky: { table: 'inventory_bulky', select: 'sku,nama_barang,lokasi_bulky,stok_akhir' },
+  // RPL has no reconciliation columns. Keeping this select aligned with the
+  // deployed schema avoids an expensive `select=*` compatibility retry.
+  rpl: { table: 'inventory_rpl', select: 'sku,nama_barang,lokasi_bulky,stok_akhir,source_row_number' },
+  bulky: { table: 'inventory_bulky', select: 'sku,nama_barang,lokasi_bulky,stok_akhir,netsuite,selisih,source_row_number' },
   barangMasuk: { table: 'inventory_barang_masuk', select: 'sku,nama_barang,qty,status,tanggal,to_location' },
   barangKeluar: { table: 'inventory_barang_keluar', select: 'sku,nama_barang,qty,status,tanggal,from_location,keterangan' },
 };
