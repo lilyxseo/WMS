@@ -3,8 +3,10 @@ import { getSecretSupabaseConfig } from './_supabase-config.js';
 const BATCH_SIZE = 1000;
 const SOURCES = {
   kartuStok: { table: 'inventory_kartu_stok', select: 'sku,nama_barang,lokasi_bulky,stok_akhir,pengeluaran' },
-  rpl: { table: 'inventory_rpl', select: 'sku,nama_barang,lokasi_bulky,stok_akhir' },
-  bulky: { table: 'inventory_bulky', select: 'sku,nama_barang,lokasi_bulky,stok_akhir' },
+  // RPL has no reconciliation columns. Keeping this select aligned with the
+  // deployed schema avoids an expensive `select=*` compatibility retry.
+  rpl: { table: 'inventory_rpl', select: 'sku,nama_barang,lokasi_bulky,stok_akhir,source_row_number' },
+  bulky: { table: 'inventory_bulky', select: 'sku,nama_barang,lokasi_bulky,stok_akhir,netsuite,selisih,source_row_number' },
   barangMasuk: { table: 'inventory_barang_masuk', select: 'sku,nama_barang,qty,status,tanggal,to_location' },
   barangKeluar: { table: 'inventory_barang_keluar', select: 'sku,nama_barang,qty,status,tanggal,from_location,keterangan' },
 };
@@ -115,20 +117,21 @@ async function readAll(config, source) {
   }
 }
 
-export async function loadInventoryAnalyticsRows(env) {
+export async function loadInventoryAnalyticsRows(env, { sourceNames = Object.keys(SOURCES) } = {}) {
   const config = getSecretSupabaseConfig(env);
-  const results = await Promise.allSettled(Object.values(SOURCES).map(source => readAll(config, source)));
+  const requested = sourceNames.filter(name => SOURCES[name]);
+  const results = await Promise.allSettled(requested.map(name => readAll(config, SOURCES[name])));
   const failures = [];
-  const rows = Object.fromEntries(Object.keys(SOURCES).map((name, index) => {
+  const rows = Object.fromEntries(Object.keys(SOURCES).map(name => [name, []]));
+  requested.forEach((name, index) => {
     const result = results[index];
-    if (result.status === 'fulfilled') return [name, result.value];
+    if (result.status === 'fulfilled') { rows[name] = result.value; return; }
     failures.push({ source: result.reason?.source || SOURCES[name].table, status: result.reason?.status || 0, code: result.reason?.code || '' });
     console.error('[InventoryAnalytics] source unavailable', failures.at(-1));
-    return [name, []];
-  }));
+  });
   // A partial summary is safer than a blank dashboard, but returning all zeroes
   // when Supabase itself is unavailable would be misleading.
-  if (failures.length === Object.keys(SOURCES).length) {
+  if (requested.length && failures.length === requested.length) {
     const error = new Error('All inventory analytics sources are unavailable');
     error.failures = failures;
     throw error;
