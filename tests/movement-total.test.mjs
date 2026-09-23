@@ -29,7 +29,8 @@ test('Movement page renders and refreshes the global aggregate independently of 
   const aggregate = source.slice(source.indexOf('async function refreshMovementTotal'), source.indexOf('function renderMovementTotal'));
   assert.match(aggregate, /fetchJsonSafe\('\/api\/movement\/summary'/);
   assert.doesNotMatch(aggregate, /mode=full|\.length/);
-  assert.match(source, /if\(activePage==='movement'\)return refreshMovementTotal\(\)/);
+  assert.match(source, /movement:refreshMovement/);
+  assert.match(source, /async function refreshMovement\(\).*refreshMovementTotal\(\)/s);
   assert.match(source, /await syncData\(\{silent:true,force:true\}\);await refreshMovementTotal\(\)/);
   assert.match(source, /id='movementTotalValue'/);
 });
