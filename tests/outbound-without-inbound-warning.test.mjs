@@ -68,12 +68,11 @@ test('diagnostic is targeted, safe, and reports both sides from the production t
   assert.match(sql, /'warningShouldExist'/);
 });
 
-test('warning page replaces the former browser-array rule with no-store backend results', async () => {
+test('warning page uses the complete paginated backend with no browser-array rule', async () => {
   const source = await readFile(new URL('../assets/js/main.js', import.meta.url), 'utf8');
-  const report = source.slice(source.indexOf('function buildAnomalyReport()'), source.indexOf('function sevClass'));
-  assert.doesNotMatch(report, /type:'OUTBOUND_WITHOUT_INBOUND'/);
-  const refresh = source.slice(source.indexOf('async function refreshAnomalyInBackground()'), source.indexOf('function changeAnomalyPage'));
-  assert.match(refresh, /fetch\('\/api\/inventory-outbound-without-inbound'/);
+  assert.doesNotMatch(source, /function buildAnomalyReport\(\)/);
+  const refresh = source.slice(source.indexOf('async function loadWarningPage'), source.indexOf('function scheduleAnomalySearch'));
+  assert.match(refresh, /fetch\(`\/api\/inventory-warnings\?/);
   assert.match(refresh, /cache:'no-store'/);
   assert.match(refresh, /payload\.rows/);
 });
