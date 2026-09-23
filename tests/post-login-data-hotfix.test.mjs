@@ -20,9 +20,9 @@ test('login persists and verifies the session before protected startup requests'
 test('dashboard prefetch and sync-status reads are non-blocking and use current auth headers', () => {
   assert.match(main, /void startInitialPrefetch\(\);\s*void loadInventorySyncStatus\(\)/);
   for (const endpoint of ['/api/dashboard-summary', '/api/inventory-sync-status']) {
-    const call = main.slice(main.indexOf(`fetchJsonSafe('${endpoint}'`) - 100, main.indexOf(`fetchJsonSafe('${endpoint}'`) + 100);
+    const call = main.slice(main.indexOf(`fetchJsonSafe('${endpoint}'`) - 100, main.indexOf(`fetchJsonSafe('${endpoint}'`) + 180);
     assert.match(call, /await getAuthHeaders\(\)/);
-    assert.match(call, /\{headers\}/);
+    assert.match(call, /\{headers(?:,cache:'no-store')?\}/);
   }
   assert.match(main, /AUTHENTICATED_INVENTORY_PATHS=new Set\(\[[^\]]*'\/api\/dashboard-summary'[^\]]*'\/api\/inventory-sync-status'/);
 });

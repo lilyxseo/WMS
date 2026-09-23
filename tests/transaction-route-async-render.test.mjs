@@ -24,7 +24,7 @@ test('transaction reads render locally while pending and protect against stale r
   assert.ok(loader.indexOf('st.loading=true') < loader.indexOf('await fetchJsonSafe'));
   assert.ok(loader.indexOf('renderDataTablePage') < loader.indexOf('await fetchJsonSafe'));
   assert.match(loader, /new AbortController\(\)/);
-  assert.match(loader, /\{signal:controller\.signal\}/);
+  assert.match(loader, /\{signal:controller\.signal,cache:force\?'no-store':'default'\}/);
   assert.match(loader, /requestId!==st\.requestId\|\|controller\.signal\.aborted/);
   assert.doesNotMatch(loader, /mode=full/);
 });

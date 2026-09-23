@@ -27,10 +27,10 @@ test('dashboard initialization starts its lightweight prioritized prefetch', () 
 });
 
 test('dashboard refresh only refetches dashboard summary', () => {
-  const refresh = bodyBetween('async function triggerManualRefresh()', 'function syncRefreshButton()');
-  const dashboardBranch = refresh.slice(refresh.indexOf("activePage==='dashboard'"), refresh.indexOf("activePage==='balikan-store'"));
-  assert.match(dashboardBranch, /loadDashboardPayload\(\)/);
-  assert.doesNotMatch(dashboardBranch, /loadAllData|hydrateAllDataOnInit|loadBarcodeMaster|mode=.?full|syncData/);
+  const dashboardRefresh = bodyBetween('async function refreshDashboard()', 'async function refreshTransactionPage');
+  assert.match(dashboardRefresh, /loadDashboardPayload\(\)/);
+  assert.doesNotMatch(dashboardRefresh, /loadAllData|hydrateAllDataOnInit|loadBarcodeMaster|mode=.?full|syncData/);
+  assert.match(source, /SOFT_REFRESH_ROUTES=\{dashboard:refreshDashboard/);
 });
 
 test('movement detail routes lazy-load independently', () => {
