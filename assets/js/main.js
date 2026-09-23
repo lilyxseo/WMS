@@ -742,8 +742,7 @@ syncBalikanSkuStepper();
 renderBalikanSearchHistory();
 balikanSearchHistory?.addEventListener("click",e=>{const removeBtn=e.target.closest("[data-balikan-history-remove]");if(removeBtn){e.stopPropagation();removeBalikanSearchHistory(decodeURIComponent(removeBtn.dataset.balikanHistoryRemove||""));return;}const chip=e.target.closest("[data-balikan-history]");if(chip){applyBalikanSearchHistory(decodeURIComponent(chip.dataset.balikanHistory||""));return;}if(e.target.closest("[data-balikan-history-clear]"))clearBalikanSearchHistory();});
 balikanSortSelect?.addEventListener("change",e=>{BALIKAN_STATE.sortBy=e.target.value||"default";scheduleBalikanRender(false,250);});
-btnResetBalikanFilter?.addEventListener("click",resetBalikanFilter);
-document.addEventListener("click",e=>{if(e.target.closest("[data-balikan-reset-retry]"))resetBalikanFilter();});
+btnResetBalikanFilter?.addEventListener("click",resetBalikanSearch);
 btnExportBalikanCsv?.addEventListener("click",()=>exportBalikanFilteredCsv());
 balikanSummary?.addEventListener("click",e=>{const btn=e.target.closest('[data-balikan-location-select]');if(btn)handleBalikanLocationSelect(btn);});
 balikanAutoCheckToggle?.addEventListener("change",e=>toggleBalikanAutoCheck(e.target?.checked===true));
@@ -3293,41 +3292,14 @@ function syncBalikanAutoCheckToggle(){if(!balikanAutoCheckToggle)return;const pe
 function initBalikanAutoCheckPreference(){try{const saved=localStorage.getItem(BALIKAN_AUTO_CHECK_KEY);if(saved===null)return;BALIKAN_STATE.autoCheckOnScan=saved!=="0";}catch(_err){}}
 function toggleBalikanAutoCheck(isOn){const next=typeof isOn==="boolean"?isOn:!(BALIKAN_STATE.autoCheckOnScan!==false);BALIKAN_STATE.autoCheckOnScan=next;try{localStorage.setItem(BALIKAN_AUTO_CHECK_KEY,next?"1":"0");}catch(_err){}syncBalikanAutoCheckToggle();}
 function sortBalikanRows(rows,sortBy='default'){const list=[...rows];const map={default:(a,b)=>(Number(a.rowNumber)||0)-(Number(b.rowNumber)||0),skuAsc:(a,b)=>String(a.sku||'').localeCompare(String(b.sku||'')),skuDesc:(a,b)=>String(b.sku||'').localeCompare(String(a.sku||'')),namaAsc:(a,b)=>String(a.namaBarang||'').localeCompare(String(b.namaBarang||'')),namaDesc:(a,b)=>String(b.namaBarang||'').localeCompare(String(a.namaBarang||'')),qtyDesc:(a,b)=>parseNumber(b.qty)-parseNumber(a.qty),qtyAsc:(a,b)=>parseNumber(a.qty)-parseNumber(b.qty),checkedFirst:(a,b)=>Number(isCheckedValue(b.checked))-Number(isCheckedValue(a.checked)),uncheckedFirst:(a,b)=>Number(isCheckedValue(a.checked))-Number(isCheckedValue(b.checked))};return list.sort(map[sortBy]||map.default);}
-function resetBalikanFilter(){
-  if(BALIKAN_STATE.resetPromise)return BALIKAN_STATE.resetPromise;
-  const resetTask=(async()=>{
-    BALIKAN_STATE.resetInProgress=true;
-    if(btnResetBalikanFilter)btnResetBalikanFilter.disabled=true;
-    clearTimeout(BALIKAN_STATE.searchDebounceTimer);
-    clearTimeout(BALIKAN_STATE.renderTimer);
-    if(INLINE_EDIT_STATE.pendingSave)clearTimeout(INLINE_EDIT_STATE.pendingSave);
-    Object.assign(INLINE_EDIT_STATE,{isEditing:false,editingRow:null,editingField:"",pendingSave:null,lastInputAt:0});
-    window.balikanSearchKeyword='';
-    window.currentTripSheet='';
-    Object.assign(BALIKAN_STATE,{sortBy:'default',exactScanSku:'',highlightRowNumber:null,highlightSheetName:'',selectedSkuRowNumber:null,selectedSkuSheetName:'',selectedSkuValue:'',lastCheckedRowId:null,lastCheckedSheetName:'',lastCheckedSku:'',lastRenderedChecksum:'',lastRenderedHeaderKey:'',pendingRender:false});
-    if(BALIKAN_STATE.lastCheckedFadeTimer){clearTimeout(BALIKAN_STATE.lastCheckedFadeTimer);BALIKAN_STATE.lastCheckedFadeTimer=null;}
-    const st=ensureBalikanFilterState();
-    Object.assign(st,{page:1,pageSize:50,openFilterCol:'',columnFilters:{},rows:[],filtered:[]});
-    if(balikanSearchInput)balikanSearchInput.value='';
-    if(balikanSheetSelect)balikanSheetSelect.value='';
-    if(balikanSortSelect)balikanSortSelect.value='default';
-    document.querySelectorAll('#toast .toast-item').forEach(item=>item.remove());
-    syncBalikanSkuStepper();
-    if(balikanTable)balikanTable.innerHTML='<div class="state"><span class="spinner" aria-hidden="true"></span><p>Memuat data Balikan Store...</p></div>';
-    try{
-      await loadAllBalikanTripRows({background:true,force:true,throwOnError:true});
-      const tableScroller=balikanTable?.querySelector('.balikan-table-wrapper');
-      if(tableScroller){tableScroller.scrollTop=0;tableScroller.scrollLeft=0;}
-    }catch(err){
-      if(balikanSummary)balikanSummary.textContent='';
-      if(balikanTable)balikanTable.innerHTML=`<div class="state error"><strong>Gagal memuat data Balikan Store.</strong><p>${esc(err?.message||'Silakan coba lagi.')}</p><button class="btn-ghost" type="button" data-balikan-reset-retry>Coba lagi</button></div>`;
-    }finally{
-      BALIKAN_STATE.resetInProgress=false;
-      if(btnResetBalikanFilter)btnResetBalikanFilter.disabled=false;
-    }
-  })();
-  BALIKAN_STATE.resetPromise=resetTask.finally(()=>{BALIKAN_STATE.resetPromise=null;});
-  return BALIKAN_STATE.resetPromise;
+function resetBalikanSearch(){
+  clearTimeout(BALIKAN_STATE.searchDebounceTimer);
+  window.balikanSearchKeyword='';
+  Object.assign(BALIKAN_STATE,{exactScanSku:'',highlightRowNumber:null,highlightSheetName:'',selectedSkuRowNumber:null,selectedSkuSheetName:'',selectedSkuValue:''});
+  ensureBalikanFilterState().page=1;
+  if(balikanSearchInput)balikanSearchInput.value='';
+  syncBalikanSkuStepper();
+  renderBalikanTable(false);
 }
 function exportBalikanFilteredCsv(){const st=ensureBalikanFilterState();const baseRows=(window.BALIKAN_ROWS||[]).map(r=>({...r}));const filtered=sortBalikanRows(applyBalikanTableFilters(baseRows),BALIKAN_STATE.sortBy||'default');const dynamicCols=Array.isArray(window.BALIKAN_DYNAMIC_COLUMNS)?window.BALIKAN_DYNAMIC_COLUMNS:[];const cols=['no','sku','namaBarang','qty','rakTujuan','lokasi','stokBulky','stokRetail','status','keterangan',...dynamicCols.map(c=>c.key),'checked'];const header=['No','SKU','Nama Barang','Qty','Rak Tujuan','Lokasi','Stok Bulky','Stok Retail','Status','Keterangan',...dynamicCols.map(c=>c.header),'Centang'];const lines=[header.join(','),...filtered.map(row=>cols.map(c=>`"${String(row[c]??'').replaceAll('"','""')}"`).join(','))];const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);const sheet=String(window.currentTripSheet||'balikan-store').replace(/[^a-z0-9-_]+/gi,'-');a.download=`${sheet}-filtered.csv`;a.click();URL.revokeObjectURL(a.href);toast('Export CSV berhasil','success');logActivitySafe({action:'EXPORT_CSV_BALIKAN',module:'Balikan Store',detail:`Export CSV ${filtered.length} baris`,status:'SUCCESS'});}
 function getBalikanEditKey(rowNumber,field,sheetName=""){return `${String(sheetName||window.currentTripSheet||'')}:${Number(rowNumber)}:${String(field||"")}`;}

@@ -3,33 +3,32 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../assets/js/main.js', import.meta.url), 'utf8');
-const start = source.indexOf('function resetBalikanFilter()');
+const start = source.indexOf('function resetBalikanSearch()');
 const end = source.indexOf('\nfunction exportBalikanFilteredCsv', start);
 const reset = source.slice(start, end);
 
-test('Balikan Reset synchronizes every filter, selection, and input with defaults', () => {
+test('Balikan Reset clears only search-related state and starts search results at page one', () => {
   assert.match(reset, /balikanSearchKeyword=''/);
-  assert.match(reset, /currentTripSheet=''/);
-  assert.match(reset, /sortBy:'default'/);
   assert.match(reset, /exactScanSku:''/);
-  assert.match(reset, /selectedSkuRowNumber:null/);
   assert.match(reset, /highlightRowNumber:null/);
-  assert.match(reset, /page:1,pageSize:50,openFilterCol:'',columnFilters:\{\}/);
+  assert.match(reset, /highlightSheetName:''/);
+  assert.match(reset, /selectedSkuRowNumber:null/);
+  assert.match(reset, /ensureBalikanFilterState\(\)\.page=1/);
   assert.match(reset, /balikanSearchInput\.value=''/);
-  assert.match(reset, /balikanSheetSelect\.value=''/);
-  assert.match(reset, /balikanSortSelect\.value='default'/);
 });
 
-test('Balikan Reset performs one forced default reload without browser navigation', () => {
-  assert.match(reset, /if\(BALIKAN_STATE\.resetPromise\)return BALIKAN_STATE\.resetPromise/);
-  assert.match(reset, /loadAllBalikanTripRows\(\{background:true,force:true,throwOnError:true\}\)/);
+test('Balikan Reset renders unfiltered cached rows without navigation or a data reload', () => {
+  assert.match(reset, /renderBalikanTable\(false\)/);
   assert.doesNotMatch(reset, /location\.(reload|replace|assign)/);
-  assert.match(reset, /scrollTop=0/);
-  assert.match(reset, /scrollLeft=0/);
+  assert.doesNotMatch(reset, /load(?:All)?Balikan/);
+  assert.doesNotMatch(reset, /fetch\(/);
 });
 
-test('Balikan Reset keeps the shell visible and restores controls after reload errors', () => {
-  assert.match(reset, /balikanTable\.innerHTML='<div class="state">/);
-  assert.match(reset, /data-balikan-reset-retry/);
-  assert.match(reset, /btnResetBalikanFilter\.disabled=false/);
+test('Balikan Reset preserves the active sheet, sort, column filters, and selector values', () => {
+  assert.doesNotMatch(reset, /currentTripSheet\s*=/);
+  assert.doesNotMatch(reset, /sortBy\s*:/);
+  assert.doesNotMatch(reset, /columnFilters\s*:/);
+  assert.doesNotMatch(reset, /balikanSheetSelect\.value\s*=/);
+  assert.doesNotMatch(reset, /balikanSortSelect\.value\s*=/);
+  assert.match(source, /btnResetBalikanFilter\?\.addEventListener\("click",resetBalikanSearch\)/);
 });
