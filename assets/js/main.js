@@ -36,7 +36,7 @@ const SEARCH_STATE={inputValue:"",filterValue:"",page:1,pageSize:50,minChars:2,d
 const SCANNER_STATE={instance:null,isScannerRunning:false,isClosing:false,hasScanned:false,targetInputId:"searchInput",resultHandler:null,lastSearchSku:"",lastSearchNavigationAt:0};
 const SEARCH_SCAN_NAVIGATION_LOCK_MS=750;
 const BALIKAN_AUTO_CHECK_KEY="balikan_auto_check_on_scan";
-const BALIKAN_STATE={sheets:[],sheetCache:{},sheetChecksums:{},dynamicColumnCache:{},allTripLoading:false,resetInProgress:false,resetPromise:null,lastRefreshAt:0,highlightRowNumber:null,highlightSheetName:"",sortBy:"default",autoCheckOnScan:true,exactScanSku:"",selectedSkuRowNumber:null,selectedSkuSheetName:"",selectedSkuValue:"",lastCheckedRowId:null,lastCheckedSheetName:"",lastCheckedSku:"",lastCheckedVersion:0,lastCheckedFadeTimer:null,pendingEdits:{},pendingEditMeta:{},saveStatus:{},saveTimer:null,saveInProgress:false,saveRequested:false,isRendering:false,isRefreshing:false,pendingRender:false,lastRenderedChecksum:"",lastDataChecksum:"",lastRenderedHeaderKey:"",renderTimer:null,searchDebounceTimer:null};
+const BALIKAN_STATE={sheets:[],sheetCache:{},sheetChecksums:{},dynamicColumnCache:{},allTripLoading:false,resetInProgress:false,resetPromise:null,lastRefreshAt:0,highlightRowNumber:null,highlightSheetName:"",sortBy:"default",autoCheckOnScan:true,exactScanSku:"",selectedSkuRowNumber:null,selectedSkuSheetName:"",selectedSkuValue:"",lastCheckedRowId:null,lastCheckedSheetName:"",lastCheckedSku:"",lastCheckedVersion:0,lastCheckedFadeTimer:null,pendingEdits:{},pendingEditMeta:{},saveStatus:{},saveTimer:null,saveInProgress:false,saveRequested:false,isRendering:false,isRefreshing:false,pendingRender:false,lastRenderedChecksum:"",lastDataChecksum:"",lastRenderedHeaderKey:"",renderTimer:null,searchDebounceTimer:null,locationStockCache:new Map(),locationStockPending:new Map()};
 const PDF_TRANSFER_STATE={header:{},items:[],warnings:[],debugRows:[],rawText:"",csvText:"",csvRows:[],detectedColumns:[],failedRows:[],logs:[],isParsing:false,isImporting:false,configLoaded:false,configAvailable:false,configError:"",importResult:null,duplicate:null,lastFileName:"",selectedFile:null};
 const ACTIVITY_LOG_STATE={page:1,pageSize:25,filters:{module:"",action:"",user:"",status:"",search:"",from:"",to:""}};
 const BARANG_REJECT_CACHE_KEY="barangRejectCacheV1";
@@ -2965,8 +2965,9 @@ function applyBalikanTableFilters(rows,mode='balikan',omitCol=''){const st=ensur
 
 
 function toNumberSafe(value){
-  const parsed=Number(String(value??'').replace(/[^0-9.-]/g,''));
-  return Number.isFinite(parsed)?parsed:0;
+  if(value===null||value===undefined||String(value).trim()==='')return null;
+  const parsed=typeof value==='number'?value:Number(String(value).trim());
+  return Number.isFinite(parsed)?parsed:null;
 }
 function decodeBalikanLocationValue(locationValue){
   const raw=String(locationValue??'').trim();
@@ -2984,61 +2985,50 @@ function splitBalikanLocationNames(lokasiValue){
     .map(part=>decodeBalikanLocationValue(part))
     .filter(Boolean);
 }
-function buildBalikanLocationStockIndex(){
-  const stockIndex=new Map();
-  (DATA["Kartu Stock"]||[]).forEach(row=>{
-    const skuKey=clean(getVal(row,["sku"]));
-    if(!skuKey)return;
-    const qty=toNumberSafe(getVal(row,["stok akhir","closing stock","ending stock","saldo akhir","qty","stok","quantity"]));
-    splitBalikanLocationNames(getVal(row,["lokasi","location","rak","bin","area"])).forEach(lokasi=>{
-      const key=`${skuKey}|${normalizeBalikanLocation(lokasi)}`;
-      stockIndex.set(key,(stockIndex.get(key)||0)+qty);
-    });
-  });
-  return stockIndex;
-}
-function getBalikanLocationSummary(rows=[]){
-  const totals=new Map();
-  const countedSkuLocations=new Set();
-  const stockIndex=buildBalikanLocationStockIndex();
-  (rows||[]).forEach(row=>{
-    const sku=String(row?.sku??'').trim();
-    const skuKey=clean(sku);
-    if(!skuKey)return;
-    splitBalikanLocationNames(row?.lokasi).forEach(lokasi=>{
-      const lokasiKey=normalizeBalikanLocation(lokasi);
-      const countedKey=`${skuKey}|${lokasiKey}`;
-      if(!lokasiKey||countedSkuLocations.has(countedKey))return;
-      countedSkuLocations.add(countedKey);
-      totals.set(lokasi,(totals.get(lokasi)||0)+(stockIndex.get(countedKey)||0));
-    });
-  });
-  return [...totals.entries()].map(([lokasi,qty])=>({lokasi,qty})).sort((a,b)=>b.qty-a.qty||a.lokasi.localeCompare(b.lokasi,'id'));
+async function ensureBalikanLocationStock(sku){
+  const key=clean(sku);
+  if(!key||BALIKAN_STATE.locationStockCache.has(key))return;
+  if(BALIKAN_STATE.locationStockPending.has(key))return BALIKAN_STATE.locationStockPending.get(key);
+  const pending=(async()=>{
+    try{
+      const headers=await getAuthHeaders();
+      const {res,data}=await fetchJsonSafe(`/api/balikan-store/locations?sku=${encodeURIComponent(String(sku).trim())}`,{headers,cache:'no-store'});
+      if(!res.ok||!data?.success||!Array.isArray(data.locations))throw new Error(data?.message||'Gagal memuat qty lokasi');
+      BALIKAN_STATE.locationStockCache.set(key,data.locations.map(item=>({lokasi:decodeBalikanLocationValue(item?.lokasi),qty:toNumberSafe(item?.qty)})));
+    }catch(error){
+      console.error('[BalikanLocationQty]',error?.message||error);
+      BALIKAN_STATE.locationStockCache.set(key,[]);
+    }finally{
+      BALIKAN_STATE.locationStockPending.delete(key);
+      const target=getBalikanVisibleLocationTargetRow();
+      if(clean(target?.sku)===key)updateBalikanLocationCardFromCurrentRows();
+    }
+  })();
+  BALIKAN_STATE.locationStockPending.set(key,pending);
+  return pending;
 }
 function getBalikanSkuLocationOptions(row){
   const skuKey=clean(row?.sku);
+  const authoritative=BALIKAN_STATE.locationStockCache.get(skuKey);
   const locations=new Map();
-  const addLocation=(lokasi,qty=0)=>{
+  const addLocation=(lokasi,qty)=>{
     const rawLocation=decodeBalikanLocationValue(lokasi);
-    const displayLabel=rawLocation;
     const key=normalizeBalikanLocation(rawLocation);
     if(!key)return;
+    const parsedQty=toNumberSafe(qty);
     const existing=locations.get(key);
     if(existing){
-      existing.qty+=toNumberSafe(qty);
+      if(parsedQty!==null)existing.qty=(existing.qty??0)+parsedQty;
       return;
     }
-    locations.set(key,{lokasi:displayLabel,rawLocation,displayLabel,qty:toNumberSafe(qty)});
+    locations.set(key,{lokasi:rawLocation,rawLocation,displayLabel:rawLocation,qty:parsedQty});
   };
-  if(skuKey){
-    (DATA["Kartu Stock"]||[]).forEach(stockRow=>{
-      if(clean(getVal(stockRow,["sku"]))!==skuKey)return;
-      const qty=toNumberSafe(getVal(stockRow,["stok akhir","closing stock","ending stock","saldo akhir","qty","stok","quantity"]));
-      splitBalikanLocationNames(getVal(stockRow,["lokasi","location","rak","bin","area"])).forEach(lokasi=>addLocation(lokasi,qty));
-    });
-  }
-  splitBalikanLocationNames(row?.lokasi).forEach(lokasi=>addLocation(lokasi,0));
-  return [...locations.values()].sort((a,b)=>b.qty-a.qty||a.lokasi.localeCompare(b.lokasi,'id'));
+  if(Array.isArray(authoritative))authoritative.forEach(item=>addLocation(item?.lokasi,item?.qty));
+  splitBalikanLocationNames(row?.lokasi).forEach(lokasi=>{
+    const key=normalizeBalikanLocation(lokasi);
+    if(!locations.has(key))addLocation(lokasi,null);
+  });
+  return [...locations.values()].sort((a,b)=>(b.qty??-Infinity)-(a.qty??-Infinity)||a.lokasi.localeCompare(b.lokasi,'id'));
 }
 function getBalikanLocationCardRow(rows=[]){
   const list=Array.isArray(rows)?rows:[];
@@ -3085,6 +3075,7 @@ function renderBalikanLocationCardContent(rows=[]){
     const sheetHtml=[...bySheet.entries()].map(([sheet,total])=>`<div class='balikan-location-sheet-row'><span class='balikan-sheet-badge'>${esc(sheet)}</span><strong>${total} lokasi</strong></div>`).join('');
     return `<div class='k'>Lokasi</div><div class='v'>${count?`${count} lokasi ditemukan`:'Pilih 1 SKU dulu'}</div><div class='subtitle'>${count?'Seluruh hasil tampil dihitung lintas sheet. Tap SKU di tabel untuk memilih row sebelum update lokasi.':'Tidak ada baris hasil pencarian.'}</div>${sheetHtml?`<div class='balikan-location-sheet-list'>${sheetHtml}</div>`:''}`;
   }
+  if(!BALIKAN_STATE.locationStockCache.has(clean(row.sku)))queueMicrotask(()=>ensureBalikanLocationStock(row.sku));
   const locations=getBalikanSkuLocationOptions(row);
   if(!locations.length)return `<div class='k'>Lokasi</div><div class='v'>Tidak ada lokasi</div><div class='subtitle'>Lokasi kosong tidak bisa dipilih.</div>`;
   const activeKey=normalizeBalikanLocation(row?.lokasi);
@@ -3099,7 +3090,7 @@ function renderBalikanLocationCardContent(rows=[]){
     const itemKey=normalizeBalikanLocation(rawLocation);
     const active=hasActive&&itemKey===activeKey;
     const inactive=hasActive&&!active;
-    return `<button type='button' class='balikan-location-item ${active?'is-active':''} ${inactive?'is-inactive':''}' data-balikan-location-select='1' data-row-number='${Number(row.rowNumber)||0}' data-location='${esc(rawLocation)}' ${!itemKey||!canUpdate?'disabled':''} aria-pressed='${active?'true':'false'}'><span class='balikan-location-name'>${esc(displayLabel)} :</span><strong>${item.qty} pcs</strong></button>`;
+    return `<button type='button' class='balikan-location-item ${active?'is-active':''} ${inactive?'is-inactive':''}' data-balikan-location-select='1' data-row-number='${Number(row.rowNumber)||0}' data-location='${esc(rawLocation)}' ${!itemKey||!canUpdate?'disabled':''} aria-pressed='${active?'true':'false'}'><span class='balikan-location-name'>${esc(displayLabel)} :</span><strong>${item.qty===null?'—':`${item.qty} pcs`}</strong></button>`;
   }).join('')}</div>`;
 }
 function getBalikanInventFieldKey(){
