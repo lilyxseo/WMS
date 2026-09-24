@@ -44,6 +44,29 @@
 }
 .movement-results{display:grid;gap:10px;min-width:0}
 .movement-results .table-wrap{position:relative;min-height:245px}
+.transaction-page{display:grid;gap:12px;min-width:0}
+.transaction-page.hidden{display:none}
+.transaction-page-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.transaction-page-heading .page-title{margin:0}
+.transaction-page-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.transaction-page-actions .btn-ghost{display:inline-flex;align-items:center;gap:7px}
+.transaction-page-actions svg{width:15px;height:15px}
+.transaction-search{margin:0}
+.transaction-page .table-wrap-full{overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+.transaction-page .table-wrap-full table{min-width:1900px}
+.transaction-page .table-wrap-full thead th{position:sticky;top:0;z-index:2;background:var(--panel-soft);color:var(--primary);white-space:nowrap}
+.transaction-page .table-wrap-full tbody tr{height:40px}
+.transaction-page .table-wrap-full tbody td{height:40px;white-space:nowrap;vertical-align:middle}
+.transaction-page .movement-results>.mv-toolbar{grid-template-columns:repeat(3,minmax(120px,180px));justify-content:start}
+@media(max-width:699px){
+  .transaction-page{gap:10px}
+  .transaction-page-heading{align-items:flex-start}
+  .transaction-page-actions .btn-ghost{min-height:38px;padding-inline:10px}
+  .transaction-page .movement-results>.mv-toolbar{grid-template-columns:1fr 1fr}
+  .transaction-page .movement-results>.mv-toolbar .btn-ghost{grid-column:1/-1}
+  .transaction-page .table-wrap-full{width:100%;max-width:100%;overflow-x:auto;overflow-y:auto}
+  .transaction-page .table-wrap-full table,.transaction-page .table-wrap-full thead,.transaction-page .table-wrap-full tbody,.transaction-page .table-wrap-full tr,.transaction-page .table-wrap-full th,.transaction-page .table-wrap-full td{display:revert}
+}
 .transaction-loading-label{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:13px;font-weight:700;pointer-events:none}
 .transaction-loading-table{width:100%;height:243px;table-layout:fixed}
 .transaction-loading-table tbody tr{height:calc((100% - 29px)/8)}
