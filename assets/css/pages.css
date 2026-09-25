@@ -1496,6 +1496,9 @@ body.dark #page-balikan-store .balikan-row-highlight-fading .col-check{
 #page-balikan-store .balikan-controls select{min-width:170px}
 #page-balikan-store .balikan-search-row{display:flex;gap:8px;align-items:center;width:100%;flex-wrap:wrap}
 #page-balikan-store .balikan-search-row input{flex:1 1 280px;min-width:220px}
+#page-balikan-store .balikan-shortcut-hint{color:var(--muted);font-size:12px;white-space:nowrap}
+#page-balikan-store .balikan-shortcut-hint kbd{border:1px solid color-mix(in srgb,var(--muted) 45%,transparent);border-radius:4px;background:color-mix(in srgb,var(--card) 85%,var(--muted));padding:1px 5px;font:inherit}
+#page-balikan-store .balikan-table tbody tr:focus{outline:2px solid var(--primary);outline-offset:-2px}
 #page-balikan-store .balikan-sku-stepper{display:flex;gap:4px;align-items:center;flex:0 0 auto}
 #page-balikan-store .balikan-sku-stepper button{height:42px;min-width:42px;padding:0 8px;border:1px solid var(--line);border-radius:8px;background:color-mix(in srgb,var(--panel) 92%,var(--muted) 8%);color:var(--text);font-size:12px;font-weight:700;line-height:1;cursor:pointer}
 #page-balikan-store .balikan-sku-stepper button:hover:not(:disabled),#page-balikan-store .balikan-sku-stepper button:focus-visible{border-color:color-mix(in srgb,var(--muted) 60%,var(--line));background:color-mix(in srgb,var(--panel) 82%,var(--muted) 18%);outline:none}
