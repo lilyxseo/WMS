@@ -1,4 +1,5 @@
 import { json, getAccessToken, escSheet, buildHeaderInfo } from './_utils';
+import { fetchLocationInventory, LOCATION_INVENTORY_QTY_FIELD, LOCATION_INVENTORY_TABLE } from './_location-inventory.js';
 
 export async function onRequestGet({ request, env }) {
   try {
@@ -59,6 +60,29 @@ export async function onRequestGet({ request, env }) {
       });
       out.push(rowData);
     }
-    return json({ sheetName, rows: out, dynamicColumns: dynamicColumns.map(({ key, header }) => ({ key, header })) });
+    let locationInventory = {};
+    let locationInventoryError = null;
+    try {
+      locationInventory = await fetchLocationInventory(env, out.map(row => row.sku));
+    } catch (error) {
+      locationInventoryError = error?.message || 'Gagal membaca inventory lokasi';
+      console.error('[BalikanStore] Location inventory lookup failed', locationInventoryError);
+    }
+    out.forEach(row => {
+      row.locations = locationInventory[String(row.sku || '').trim().toLowerCase()] || [];
+    });
+    return json({
+      sheetName,
+      rows: out,
+      dynamicColumns: dynamicColumns.map(({ key, header }) => ({ key, header })),
+      locationInventory,
+      locationInventorySource: {
+        table: `public.${LOCATION_INVENTORY_TABLE}`,
+        locationField: 'lokasi_bulky',
+        qtyField: LOCATION_INVENTORY_QTY_FIELD,
+        aggregatedBy: ['sku', 'lokasi_bulky'],
+      },
+      locationInventoryError,
+    });
   } catch (err) { return json({ message: err?.message || 'Internal server error' }, 500); }
 }
