@@ -9,10 +9,13 @@ const SOURCES = [
 function json(body, status = 200) { return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } }); }
 
 export async function onRequestGet({ request, env }) {
+  const startedAt = Date.now(), authStartedAt = Date.now();
   if (!(await getRequestRole(request, env))) return json({ success: false, message: 'Sesi tidak valid' }, 401);
+  const authMs = Date.now() - authStartedAt;
   const url = new URL(request.url), q = normalizeSearchQuery(url.searchParams.get('q')), selected = String(url.searchParams.get('source') || '');
   if (q.length < 2) return json({ success: false, message: 'Pencarian minimal 2 karakter' }, 400);
   try {
+    const dbStartedAt = Date.now();
     const config = getSecretSupabaseConfig(env);
     const active = SOURCES.filter(([name]) => !selected || name === selected);
     const batches = await Promise.all(active.map(async ([source, table]) => {
@@ -27,7 +30,10 @@ export async function onRequestGet({ request, env }) {
     }));
     const grouped = new Map();
     for (const row of batches.flat()) { const sku = row.sku.trim().toUpperCase(); if (!sku) continue; const item = grouped.get(sku) || { sku: row.sku, nama: row.nama, sources: [] }; if (!item.sources.includes(row.source)) item.sources.push(row.source); grouped.set(sku, item); }
-    return json({ success: true, source: 'supabase', rows: [...grouped.values()].slice(0, 100), total: grouped.size });
+    const rows = [...grouped.values()].slice(0, 100), dbMs = Date.now() - dbStartedAt, serializationStartedAt = Date.now();
+    const metrics = { authMs, dbMs, serializationMs: Date.now() - serializationStartedAt, totalMs: Date.now() - startedAt, returnedRows: rows.length };
+    console.info('[CariData] requestMetrics', metrics);
+    return json({ success: true, source: 'supabase', rows, total: grouped.size, metrics });
   } catch (error) {
     console.error('[InventorySearch]', error?.message || error);
     return json({ success: false, source: 'supabase', message: 'Pencarian inventory gagal.' }, 502);
