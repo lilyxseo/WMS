@@ -1,5 +1,5 @@
 import { getRequestRole } from './_authz.js';
-import { computeInventorySummary, loadInventoryAnalyticsRows, loadInventoryCounts } from './_inventory-analytics.js';
+import { loadInventoryCounts } from './_inventory-analytics.js';
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -9,24 +9,29 @@ function json(body, status = 200) {
 }
 
 export async function handleDashboardSummaryRequest({ request, env }) {
+  const totalStartedAt = Date.now(), authStartedAt = Date.now();
   if (!(await getRequestRole(request, env))) return json({ success: false, message: 'Sesi tidak valid' }, 401);
+  const authMs = Date.now() - authStartedAt;
   try {
     const startedAt = Date.now();
-    const [{ rows, failures }, counts] = await Promise.all([loadInventoryAnalyticsRows(env), loadInventoryCounts(env)]);
-    const summary = { ...computeInventorySummary(rows), ...counts };
+    // Dashboard startup is counts-only. Detailed warning/accuracy analytics have
+    // their own endpoints and must never force this route to materialize tables.
+    const counts = await loadInventoryCounts(env);
+    const summary = { ...counts, totalSku: counts.kartuStok, minusStock: counts.minusStock };
     return json({
       success: true,
       source: 'supabase',
-      partial: failures.length > 0,
-      unavailableSources: failures.map(item => item.source),
+      partial: false,
+      unavailableSources: [],
       today: counts.today,
       barangMasukToday: counts.barangMasukHariIni,
       barangKeluarToday: counts.barangKeluarHariIni,
       summary,
       durationMs: Date.now() - startedAt,
+      metrics: { authMs, dbMs: Date.now() - startedAt, serializationMs: 0, totalMs: Date.now() - totalStartedAt, returnedRows: 1 },
     });
   } catch (error) {
-    console.error('[DashboardSummary]', error?.message || error, error?.failures || '');
+    console.error('[DashboardSummary]', error?.message || error);
     return json({ success: false, source: 'supabase', message: 'Gagal menghitung ringkasan inventory.' }, 502);
   }
 }
