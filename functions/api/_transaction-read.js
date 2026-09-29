@@ -103,8 +103,13 @@ export function transactionSort(sort) {
 // normalize before range filtering, and only then apply page boundaries.
 export async function transactionPage(config, table, {
   columns = '*', filterQuery = '', startDate = '', endDate = '', page = 1,
-  limit = 50, sort = 'latest', direction, full = false, bounded = false,
+  limit = 50, sort = 'latest', direction, full = false, bounded = false, recentOnly = false,
 } = {}) {
+  if (recentOnly && !filterQuery && !startDate && !endDate && sort === 'latest' && !full) {
+    const offset = (page - 1) * limit;
+    const result = await supabaseRows(config, `${table}?select=${columns}&order=source_row_number.desc&offset=${offset}&limit=${limit}`, { count: true });
+    return { rows: result.payload, total: exactTotal(result.response, result.payload.length), summary: null };
+  }
   // PostgREST applies the search/status filters first. All matching rows are
   // then read in bounded batches so normalization and sorting happen server-side
   // across the complete result set before this function slices the requested page.
