@@ -20,7 +20,9 @@ async function readPeriod(config, table, select, start) {
 }
 
 export async function handleDashboardMonthlyInsightRequest({ request, env }) {
+  const startedAt = Date.now(), authStartedAt = Date.now();
   if (!(await getRequestRole(request, env))) return json({ success: false, message: 'Sesi tidak valid' }, 401);
+  const authMs = Date.now() - authStartedAt;
   try {
     const config = getSecretSupabaseConfig(env);
     const now = new Date();
@@ -46,7 +48,9 @@ export async function handleDashboardMonthlyInsightRequest({ request, env }) {
       topInSku && { key: 'rankIn', priority: 38, icon: '🏆', tone: 'info', text: `Top SKU masuk: <strong>${safe(topInSku)}</strong> <strong>${fmt(topInQty)} pcs</strong>.` },
     ].filter(Boolean);
     const important = insights.slice().sort((a, b) => b.priority - a.priority)[0] || null;
-    return json({ success: true, aggregates: { current, previous, inbound: { qty: inQty, rows: curIn.length, previousQty: prevInQty }, outbound: { qty: outQty, rows: curOut.length, previousQty: prevOutQty } }, insight: { empty: !insights.length, title: '💡 Auto Insight Bulanan', subtitle: 'Insight otomatis berdasarkan aktivitas gudang bulan ini.', monthLabel: now.toLocaleDateString('id-ID', { month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' }), important, insights } });
+    const metrics = { authMs, dbMs: Date.now() - startedAt - authMs, serializationMs: 0, totalMs: Date.now() - startedAt, returnedRows: masukResult.length + keluarResult.length };
+    console.info('[DashboardMonthlyInsight] requestMetrics', metrics);
+    return json({ success: true, aggregates: { current, previous, inbound: { qty: inQty, rows: curIn.length, previousQty: prevInQty }, outbound: { qty: outQty, rows: curOut.length, previousQty: prevOutQty } }, insight: { empty: !insights.length, title: '💡 Auto Insight Bulanan', subtitle: 'Insight otomatis berdasarkan aktivitas gudang bulan ini.', monthLabel: now.toLocaleDateString('id-ID', { month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' }), important, insights }, metrics });
   } catch (error) {
     console.error('[DashboardMonthlyInsight]', error?.message || error);
     return json({ success: false, message: 'Gagal menghitung insight bulanan.' }, 502);

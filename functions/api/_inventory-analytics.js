@@ -57,10 +57,11 @@ export async function loadInventoryCounts(env, now = new Date()) {
     exactBusinessDateCount(config, SOURCES.barangMasuk.table, businessDate, '&status=ilike.Barang%20Masuk'),
     exactBusinessDateCount(config, SOURCES.barangKeluar.table, businessDate, '&keterangan=ilike.Pengeluaran'),
     exactBusinessDateCount(config, SOURCES.barangMasuk.table, businessDate, '&status=ilike.Movement'),
+    exactCount(config, SOURCES.kartuStok.table, '&stok_akhir=lt.0'),
   ]);
   return {
     kartuStok: entries[0], rpl: entries[1], bulky: entries[2], barangMasuk: entries[3], barangKeluar: entries[4], totalMovement: entries[5],
-    barangMasukHariIni: entries[6], barangKeluarHariIni: entries[7], totalMovementHariIni: entries[8], businessDate, today: businessDate,
+    barangMasukHariIni: entries[6], barangKeluarHariIni: entries[7], totalMovementHariIni: entries[8], minusStock: entries[9], businessDate, today: businessDate,
   };
 }
 
