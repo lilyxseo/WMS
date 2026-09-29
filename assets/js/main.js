@@ -3350,6 +3350,7 @@ function resetBalikanSearch(){
   if(balikanSearchInput)balikanSearchInput.value='';
   syncBalikanSkuStepper();
   renderBalikanTable(false);
+  focusBalikanSearch();
 }
 function exportBalikanFilteredCsv(){const st=ensureBalikanFilterState();const baseRows=(window.BALIKAN_ROWS||[]).map(r=>({...r}));const filtered=sortBalikanRows(applyBalikanTableFilters(baseRows),BALIKAN_STATE.sortBy||'default');const dynamicCols=Array.isArray(window.BALIKAN_DYNAMIC_COLUMNS)?window.BALIKAN_DYNAMIC_COLUMNS:[];const cols=['no','sku','namaBarang','qty','rakTujuan','lokasi','stokBulky','stokRetail','status','keterangan',...dynamicCols.map(c=>c.key),'checked'];const header=['No','SKU','Nama Barang','Qty','Rak Tujuan','Lokasi','Stok Bulky','Stok Retail','Status','Keterangan',...dynamicCols.map(c=>c.header),'Centang'];const lines=[header.join(','),...filtered.map(row=>cols.map(c=>`"${String(row[c]??'').replaceAll('"','""')}"`).join(','))];const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);const sheet=String(window.currentTripSheet||'balikan-store').replace(/[^a-z0-9-_]+/gi,'-');a.download=`${sheet}-filtered.csv`;a.click();URL.revokeObjectURL(a.href);toast('Export CSV berhasil','success');logActivitySafe({action:'EXPORT_CSV_BALIKAN',module:'Balikan Store',detail:`Export CSV ${filtered.length} baris`,status:'SUCCESS'});}
 function getBalikanEditKey(rowNumber,field,sheetName=""){return `${String(sheetName||window.currentTripSheet||'')}:${Number(rowNumber)}:${String(field||"")}`;}

@@ -15,6 +15,7 @@ test('Balikan Reset clears only search-related state and starts search results a
   assert.match(reset, /selectedSkuRowNumber:null/);
   assert.match(reset, /ensureBalikanFilterState\(\)\.page=1/);
   assert.match(reset, /balikanSearchInput\.value=''/);
+  assert.match(reset, /renderBalikanTable\(false\);\s*focusBalikanSearch\(\)/);
 });
 
 test('Balikan Reset renders unfiltered cached rows without navigation or a data reload', () => {
