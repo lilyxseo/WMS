@@ -156,7 +156,7 @@ return isActivityLogAllowed();
 }
 window.currentUser=getCurrentUser();
 const nativeFetch=window.fetch.bind(window);
-const AUTHENTICATED_INVENTORY_PATHS=new Set(['/api/dashboard-summary','/api/dashboard-recent-transactions','/api/dashboard-monthly-insight','/api/movement/summary','/api/inventory-sync-status','/api/inventory-version','/api/sync/inventory/all','/api/kartu-stok','/api/barang-masuk','/api/barang-keluar','/api/rpl','/api/bulky','/api/inventory-sku-detail','/api/barcode-lookup']);
+const AUTHENTICATED_INVENTORY_PATHS=new Set(['/api/dashboard-summary','/api/dashboard-recent-transactions','/api/dashboard-monthly-insight','/api/movement/summary','/api/inventory-sync-status','/api/inventory-version','/api/sync/inventory/all','/api/sync/inventory/kartu-stok','/api/sync/inventory/barang-masuk','/api/sync/inventory/barang-keluar','/api/sync/inventory/rpl','/api/sync/inventory/bulky','/api/kartu-stok','/api/barang-masuk','/api/barang-keluar','/api/rpl','/api/bulky','/api/inventory-sku-detail','/api/barcode-lookup']);
 window.fetch=async(input,init={})=>{
   const url=typeof input==='string'?input:String(input?.url||'');
   if(url.startsWith('/api/')){
@@ -376,10 +376,11 @@ async function fetchJsonSafe(url,options={}){
 const res=await fetch(url,options);
 const text=await res.text();
 const shouldLogInvalidJson=options?.silentInvalidJson!==true;
-const data=safeJsonParse(text,null,shouldLogInvalidJson);
+const contentType=String(res.headers.get('content-type')||'').toLowerCase();
+const data=contentType.includes('json')?safeJsonParse(text,null,shouldLogInvalidJson):null;
 if(data===null){
-if(shouldLogInvalidJson)console.error("API returned non JSON:",url,text);
-return {res,data:{success:false,data:[],message:"Response API bukan JSON"}};
+if(shouldLogInvalidJson)console.error("API returned non JSON:",url,`HTTP ${res.status}`,contentType||'unknown content-type');
+return {res,data:{success:false,data:[],message:res.status>=500?`Layanan sementara tidak tersedia (HTTP ${res.status})`:"Response API bukan JSON"}};
 }
 return {res,data};
 }
@@ -2295,6 +2296,30 @@ localStorage.removeItem(STOK_MINUS_CACHE_KEY);localStorage.removeItem(BARANG_REJ
 INVENTORY_VERSION_STATE.versions=null;INVENTORY_VERSION_STATE.lastCheckAt=0;
 }
 
+const MANUAL_SYNC_SOURCES=Object.freeze([
+['kartuStok','/api/sync/inventory/kartu-stok'],
+['barangMasuk','/api/sync/inventory/barang-masuk'],
+['barangKeluar','/api/sync/inventory/barang-keluar'],
+['rpl','/api/sync/inventory/rpl'],
+['bulky','/api/sync/inventory/bulky']
+]);
+async function syncInventorySourcesForRefresh(){
+const startedAt=Date.now(),sources={};
+// Do not combine these jobs in one Worker: every source performs multiple
+// upstream requests and the combined invocation can exceed Cloudflare limits.
+for(const [name,url] of MANUAL_SYNC_SOURCES){
+const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),120000);
+try{
+const {res,data}=await fetchJsonSafe(url,{method:'POST',cache:'no-store',signal:controller.signal,silentInvalidJson:true});
+sources[name]={...(data||{}),success:res.ok&&data?.success===true};
+if(!sources[name].success&&!sources[name].reason)sources[name].reason=data?.message||`HTTP_${res.status}`;
+}catch(error){sources[name]={success:false,reason:error?.name==='AbortError'?'TIMEOUT':(error?.message||'SYNC_FAILED')};}
+finally{clearTimeout(timeout);}
+}
+const outcomes=Object.values(sources),succeeded=outcomes.filter(result=>result.success).length;
+return {success:succeeded===outcomes.length,partialSuccess:succeeded>0&&succeeded<outcomes.length,sources,durationMs:Date.now()-startedAt};
+}
+
 async function triggerManualRefresh(){
 if(REFRESH_STATE.refreshPromise)return REFRESH_STATE.refreshPromise;
 const activePage=getActivePage?.()||'dashboard',scrollState=captureActivePageScroll(activePage);
@@ -2303,13 +2328,7 @@ logActivitySafe({action:'MANUAL_REFRESH',module:activePage,detail:'Soft refresh 
 REFRESH_STATE.refreshPromise=(async()=>{
 setRefreshIndicator(true,'Memperbarui database...');
 try{
-const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),120000);
-let syncResult;
-try{
-const {res,data}=await fetchJsonSafe('/api/sync/inventory/all',{method:'POST',cache:'no-store',signal:controller.signal});
-if(!res.ok||!data||typeof data.sources!=='object')throw new Error(data?.message||'Sinkronisasi database gagal');
-syncResult=data;
-}finally{clearTimeout(timeout);}
+const syncResult=await syncInventorySourcesForRefresh();
 invalidateInventoryDerivedCaches();
 await refresh();
 await checkInventoryVersion();
