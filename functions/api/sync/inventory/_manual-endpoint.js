@@ -1,4 +1,5 @@
 import { SyncError } from './_sync-engine.js';
+import { getRequestRole } from '../../_authz.js';
 
 export function inventorySyncJson(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } });
@@ -15,8 +16,22 @@ export function isInventorySyncAuthorized(request, env) {
   const expectedSecret = String(env?.INVENTORY_SYNC_SECRET || '');
   return Boolean(expectedSecret) && constantTimeEqual(suppliedSecret, expectedSecret);
 }
+async function hasApplicationSession(request, env) {
+  try {
+    return Boolean(await getRequestRole(request, env));
+  } catch (_error) {
+    // A missing/misconfigured auth backend must fail closed, not turn an
+    // unauthenticated sync attempt into an unhandled Worker exception.
+    return false;
+  }
+}
 export async function handleManualInventorySync({ request, env }, { source, sync }) {
-  if (!isInventorySyncAuthorized(request, env)) return inventorySyncJson({ success: false, reason: 'UNAUTHORIZED' }, 401);
+  // Cron uses the dedicated bearer secret, while an explicit refresh in the
+  // application uses the user's regular authenticated session. Keeping each
+  // source in a separate request prevents a single Worker invocation from
+  // exhausting Cloudflare's subrequest/resource limits.
+  const authorized = isInventorySyncAuthorized(request, env) || await hasApplicationSession(request, env);
+  if (!authorized) return inventorySyncJson({ success: false, reason: 'UNAUTHORIZED' }, 401);
   try {
     const result = await sync(env);
     return inventorySyncJson(result, result.skipped ? 409 : 200);

@@ -30,6 +30,19 @@ test('valid inventory sync bearer secret starts sync', async () => {
   assert.equal(result.syncCalls, 1);
 });
 
+test('authenticated application session can start an isolated source sync', async () => {
+  let syncCalls = 0;
+  const response = await handleManualKartuStokSync({
+    request: new Request('https://example.test/api/sync/inventory/kartu-stok', {
+      method: 'POST', headers: { 'x-preview-bypass-login': 'true' },
+    }),
+    env: { PREVIEW_BYPASS_LOGIN: 'true' },
+  }, { sync: async () => { syncCalls += 1; return syncResult; } });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).success, true);
+  assert.equal(syncCalls, 1);
+});
+
 test('missing Authorization header returns simple 401 response', async () => {
   const result = await invoke();
   assert.equal(result.response.status, 401);

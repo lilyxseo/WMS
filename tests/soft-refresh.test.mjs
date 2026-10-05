@@ -16,7 +16,9 @@ test('soft refresh is locked, reports progress, and gives success and failure fe
   const coordinator = source.slice(source.indexOf('async function triggerManualRefresh()'), source.indexOf('function syncRefreshButton()'));
   assert.match(coordinator, /if\(REFRESH_STATE\.refreshPromise\)return REFRESH_STATE\.refreshPromise/);
   assert.match(coordinator, /setRefreshIndicator\(true,'Memperbarui database\.\.\.'\)/);
-  assert.match(coordinator, /fetchJsonSafe\('\/api\/sync\/inventory\/all',\{method:'POST'/);
+  assert.match(source, /const MANUAL_SYNC_SOURCES=Object\.freeze\(\[[\s\S]*\/api\/sync\/inventory\/kartu-stok[\s\S]*\/api\/sync\/inventory\/bulky/);
+  assert.match(coordinator, /syncInventorySourcesForRefresh\(\)/);
+  assert.doesNotMatch(coordinator, /\/api\/sync\/inventory\/all/);
   assert.match(coordinator, /invalidateInventoryDerivedCaches\(\).*await refresh\(\)/s);
   assert.match(coordinator, /Semua data berhasil diperbarui/);
   assert.match(coordinator, /Sebagian data gagal diperbarui/);
