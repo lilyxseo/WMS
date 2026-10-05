@@ -615,10 +615,20 @@ if(session?.isDeveloper){
 user={id:"developer"};
 devProfile=session.user||null;
 }else{
+// `getSession()` has already restored (and, when necessary, refreshed) the
+// persisted Supabase session.  A temporary failure of the additional remote
+// user validation must not throw that valid local session away on reload.
+// API endpoints still validate the bearer token before returning protected data.
+try{
 const {data:userData,error:userErr}=await getAuthenticatedUser();
 if(requestGeneration!==authRequestGeneration)return;
 if(userErr)throw userErr;
-user=userData?.user||null;
+user=userData?.user||session?.user||null;
+}catch(userValidationError){
+console.warn("Auth user validation failed; using restored session user",userValidationError);
+user=session?.user||null;
+if(!user)throw userValidationError;
+}
 }
 }else{
 user=null;

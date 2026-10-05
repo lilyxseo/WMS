@@ -12,7 +12,15 @@ async function loadPublicSupabaseConfig() {
 }
 
 const publicSupabaseConfig = await loadPublicSupabaseConfig();
-export const supabase = createClient(publicSupabaseConfig.url, publicSupabaseConfig.key);
+export const supabase = createClient(publicSupabaseConfig.url, publicSupabaseConfig.key, {
+  auth: {
+    // Keep the refresh token in localStorage so a full page reload can restore
+    // the login instead of treating it as a new browser session.
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+});
 
 const AUTH_STARTUP_TIMEOUT_MS = 8000;
 
