@@ -22,6 +22,13 @@ test("authenticated user lookup cannot hold the startup splash indefinitely", ()
   assert.doesNotMatch(boot, /await supabase\.auth\.getUser\(\)/);
 });
 
+test("refresh keeps a restored session when remote user validation is temporarily unavailable", () => {
+  assert.match(supabaseSource, /persistSession:\s*true/);
+  assert.match(supabaseSource, /autoRefreshToken:\s*true/);
+  const boot = mainSource.slice(mainSource.indexOf("async function bootApplication"), mainSource.indexOf('window.addEventListener("auth:logout"'));
+  assert.match(boot, /catch\(userValidationError\)[\s\S]*?user=session\?\.user\|\|null;[\s\S]*?if\(!user\)throw userValidationError;/);
+});
+
 test("startup still runs when module evaluation finishes after DOMContentLoaded", () => {
   assert.match(mainSource, /if\(document\.readyState==="loading"\)/);
   assert.match(mainSource, /window\.addEventListener\("DOMContentLoaded",bootApplication,\{once:true\}\)/);
