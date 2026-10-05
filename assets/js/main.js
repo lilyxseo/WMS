@@ -1947,7 +1947,8 @@ function buildQuickResultSummary(item){
 if(!item)return null;
 const sku=item.sku||"-",nama=item.nama||"-";
 const distribution={"Kartu Stock":0,RPL:0,BULKY:0};
-const lokasiSet=new Set();
+const lokasiSet=new Set(Array.isArray(item.summary?.locations)?item.summary.locations:[]);
+for(const sheet of Object.keys(distribution))distribution[sheet]=parseNumber(item.summary?.distribution?.[sheet]);
 (item.rows||[]).forEach(({sheet,row})=>{
 const loc=getVal(row,["lokasi","location","rak","bin","area","from","to"]);
 if(loc)lokasiSet.add(String(loc));
