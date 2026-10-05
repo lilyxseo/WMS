@@ -33,7 +33,7 @@ if(mode==='in'||mode==='out')rerenderTableWithScrollRestore(mode,true);
 },180);
 const BARCODE_STATE={barcodeToSku:new Map(),barcodeToName:new Map(),loaded:false,updatedAt:0};
 const SEARCH_STATE={inputValue:"",filterValue:"",page:1,pageSize:50,minChars:2,debounceMs:500,debounceTimer:null,idleTimer:null,abortController:null,runToken:0,lastRenderedHtml:""};
-const SCANNER_STATE={instance:null,isScannerRunning:false,isClosing:false,hasScanned:false,targetInputId:"searchInput",resultHandler:null,lastSearchSku:"",lastSearchNavigationAt:0};
+const SCANNER_STATE={instance:null,isScannerRunning:false,isClosing:false,hasScanned:false,targetInputId:"searchInput",resultHandler:null,lastSearchSku:"",lastSearchNavigationAt:0,libraryPromise:null};
 const SEARCH_SCAN_NAVIGATION_LOCK_MS=750;
 const PAGE_REQUEST_TIMEOUT_MS=12000;
 function pageLog(page,event,detail){const suffix=detail===undefined?'':` ${typeof detail==='object'?JSON.stringify(detail):detail}`;console.info(`[${page}] ${event}${suffix}`);}
@@ -1757,9 +1757,28 @@ SEARCH_STATE.idleTimer=setTimeout(run,0);
 }
 async function runSearch(){const qRaw=SEARCH_STATE.filterValue||"",q=normalizeSearch(qRaw),prevQuery=lastQuery;lastQuery=qRaw;const minChars=SEARCH_STATE.minChars||2;if(q.length<minChars){lastResults=[];SEARCH_STATE.page=1;renderQuickResultCard(null,qRaw,"hint");return renderState("results",`Ketik minimal ${minChars} huruf untuk mencari.`);}saveRecentSearch(qRaw);if(SEARCH_STATE.abortController)SEARCH_STATE.abortController.abort();SEARCH_STATE.abortController=new AbortController();const signal=SEARCH_STATE.abortController.signal;const token=++SEARCH_STATE.runToken;renderState("results","Mencari di database...");try{const headers=await awaitPageAuth('CariData');const filter=currentFilter==="Semua"?"":`&source=${encodeURIComponent(currentFilter)}`;const {res,data}=await fetchPageJson('CariData',`/api/inventory-search?q=${encodeURIComponent(qRaw)}${filter}`,{headers,signal,cache:'no-store'});if(signal.aborted||token!==SEARCH_STATE.runToken)return;if(!res.ok||!data?.success)throw new Error(data?.message||"Pencarian gagal");const nextResults=Array.isArray(data.rows)?data.rows:[];if(nextResults.length!==lastResults.length||normalizeSearch(prevQuery)!==q)SEARCH_STATE.page=1;lastResults=nextResults;renderQuickResultCard(pickQuickResult(lastResults,qRaw),qRaw,nextResults.length?"result":"empty");renderResults(lastResults,qRaw);pageLog('CariData','renderMs',Math.round(performance.now()-startupMark));}catch(err){if(err?.name!=="AbortError"&&token===SEARCH_STATE.runToken){pageLog('CariData','error',err?.message||err);const node=document.getElementById('results');if(node)node.innerHTML=`<div class='state error'>Gagal memuat data. <button type='button' class='btn-ghost' data-retry-search>Coba Lagi</button></div>`;}}}
 
+const SCANNER_LIBRARY_URLS=[
+"https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js",
+"https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"
+];
+async function ensureScannerLibrary(){
+if(typeof window.Html5Qrcode==="function")return;
+if(SCANNER_STATE.libraryPromise)return SCANNER_STATE.libraryPromise;
+SCANNER_STATE.libraryPromise=(async()=>{
+for(const src of SCANNER_LIBRARY_URLS){
+try{
+await new Promise((resolve,reject)=>{const script=document.createElement("script");script.src=src;script.async=true;script.onload=resolve;script.onerror=()=>{script.remove();reject(new Error("LOAD_FAILED"));};document.head.appendChild(script);});
+if(typeof window.Html5Qrcode==="function")return;
+}catch(_){}
+}
+throw new Error("Library scanner gagal dimuat. Periksa koneksi internet lalu coba lagi.");
+})().catch(err=>{SCANNER_STATE.libraryPromise=null;throw err;});
+return SCANNER_STATE.libraryPromise;
+}
 function getScannerConfig(){
-return {
-fps:20,
+const supported=window.Html5QrcodeSupportedFormats;
+const config={
+fps:15,
 qrbox:(viewfinderWidth,viewfinderHeight)=>{
 const minEdge=Math.min(viewfinderWidth,viewfinderHeight);
 const size=Math.floor(minEdge*0.7);
@@ -1767,16 +1786,10 @@ return {width:size,height:size};
 },
 aspectRatio:1,
 disableFlip:false,
-useBarCodeDetectorIfSupported:true,
-formatsToSupport:[
-window.Html5QrcodeSupportedFormats.QR_CODE,
-window.Html5QrcodeSupportedFormats.CODE_128,
-window.Html5QrcodeSupportedFormats.EAN_13,
-window.Html5QrcodeSupportedFormats.EAN_8,
-window.Html5QrcodeSupportedFormats.UPC_A,
-window.Html5QrcodeSupportedFormats.UPC_E
-]
+useBarCodeDetectorIfSupported:true
 };
+if(supported)config.formatsToSupport=[supported.QR_CODE,supported.CODE_128,supported.EAN_13,supported.EAN_8,supported.UPC_A,supported.UPC_E].filter(Number.isInteger);
+return config;
 }
 
 function playScanSuccessFeedback(){
@@ -1856,8 +1869,8 @@ SCANNER_STATE.resultHandler=typeof onResult==="function"?onResult:handleSearchSc
 return openScannerModal();
 }
 async function openScannerModal(){
-if(!["/search","/balikan-store","/movement"].includes(location.pathname)&&!location.pathname.startsWith("/barang-reject"))return;
-if(typeof window.Html5Qrcode!=="function")return toast("Scanner belum tersedia.","error");
+try{await ensureScannerLibrary();}catch(err){toast(err?.message||"Scanner belum tersedia.","error");return;}
+if(!navigator.mediaDevices?.getUserMedia){toast("Kamera tidak didukung browser ini. Gunakan browser terbaru melalui HTTPS.","error");return;}
 const modal=document.getElementById("scannerModal"),readerId="barcode-reader";
 if(!modal||SCANNER_STATE.isScannerRunning)return;
 modal.hidden=false;
