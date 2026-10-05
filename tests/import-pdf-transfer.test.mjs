@@ -43,6 +43,7 @@ test('frontend derives destination from editable transfer number without destina
   assert.match(source, /transferNumber:transferCheck\.name/);
   assert.match(source, /if\(PDF_TRANSFER_STATE\.isImporting\)return/);
   assert.match(source, /Sheet akan dibuat sebagai:/);
+  assert.match(source, /id='pdfTransferFile' type='file' accept='\.pdf,application\/pdf'/);
   assert.match(source, /TRANSFER_ALREADY_EXISTS/);
 });
 
