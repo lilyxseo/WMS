@@ -156,7 +156,7 @@ return isActivityLogAllowed();
 }
 window.currentUser=getCurrentUser();
 const nativeFetch=window.fetch.bind(window);
-const AUTHENTICATED_INVENTORY_PATHS=new Set(['/api/dashboard-summary','/api/dashboard-recent-transactions','/api/dashboard-monthly-insight','/api/movement/summary','/api/inventory-sync-status','/api/inventory-version','/api/kartu-stok','/api/barang-masuk','/api/barang-keluar','/api/rpl','/api/bulky','/api/inventory-sku-detail','/api/barcode-lookup']);
+const AUTHENTICATED_INVENTORY_PATHS=new Set(['/api/dashboard-summary','/api/dashboard-recent-transactions','/api/dashboard-monthly-insight','/api/movement/summary','/api/inventory-sync-status','/api/inventory-version','/api/sync/inventory/all','/api/kartu-stok','/api/barang-masuk','/api/barang-keluar','/api/rpl','/api/bulky','/api/inventory-sku-detail','/api/barcode-lookup']);
 window.fetch=async(input,init={})=>{
   const url=typeof input==='string'?input:String(input?.url||'');
   if(url.startsWith('/api/')){
@@ -951,7 +951,7 @@ if(changed||fromCache)REFRESH_STATE.lastRefreshAt=now;
 }
 function setRefreshIndicator(active,msg="Refreshing..."){
 REFRESH_STATE.isRefreshing=!!active;
-if(active){setStatus("loading",msg);refreshToggleHeader?.classList.add("is-syncing");refreshToggleHeader?.setAttribute("aria-label",msg);}
+if(active){setStatus("loading",msg);refreshToggleHeader?.classList.add("is-syncing");refreshToggleHeader?.setAttribute("aria-label",msg);if(refreshToggleHeader)refreshToggleHeader.title=msg;}
 else{refreshToggleHeader?.classList.remove("is-syncing");syncRefreshButton();}
 updateSyncUI();
 }
@@ -2269,25 +2269,48 @@ async function refreshSearch(){if((SEARCH_STATE.inputValue||searchInput?.value||
 async function softRefreshArchive(){ARCHIVE_STATE.controller?.abort();ARCHIVE_STATE.requestId++;return refreshArchive();}
 async function softRefreshAsset(){ASSET_STORE_STATE.controller?.abort();ASSET_STORE_STATE.requestId++;return refreshAssetStore();}
 async function refreshBarangReject(){const result=await loadBarangRejectData({force:true,background:true});if(!result)throw new Error('Gagal memuat Barang Reject');}
-const SOFT_REFRESH_ROUTES={dashboard:refreshDashboard,'barang-masuk':refreshBarangMasuk,'barang-keluar':refreshBarangKeluar,locations:refreshLokasi,anomaly:refreshWarning,'cycle-count':refreshCycleCount,movement:refreshMovement,'balikan-store':refreshBalikanStore,detail:()=>refreshSkuDetail(currentSku),search:refreshSearch,arsip:softRefreshArchive,'asset-store':softRefreshAsset,'barang-reject':refreshBarangReject,'activity-log':renderActivityLogPage};
+async function refreshAccuracy(){await refreshInventoryGroupFull();updateStats();}
+async function refreshStokMinus(){await Promise.all([refreshInventoryGroupFull(),refreshTransaksiFull({render:false})]);localStorage.removeItem(STOK_MINUS_CACHE_KEY);refreshStokMinusInBackground();}
+async function refreshAbc(){await Promise.all([refreshInventoryGroupFull(),refreshTransaksiFull({render:false})]);return renderAbcAnalisisPage(true);}
+const SOFT_REFRESH_ROUTES={dashboard:refreshDashboard,'barang-masuk':refreshBarangMasuk,'barang-keluar':refreshBarangKeluar,locations:refreshLokasi,anomaly:refreshWarning,stats:refreshAccuracy,'stok-minus':refreshStokMinus,'abc-analisis':refreshAbc,'cycle-count':refreshCycleCount,movement:refreshMovement,'balikan-store':refreshBalikanStore,detail:()=>refreshSkuDetail(currentSku),search:refreshSearch,arsip:softRefreshArchive,'asset-store':softRefreshAsset,'barang-reject':refreshBarangReject,'activity-log':renderActivityLogPage};
 window.SOFT_REFRESH_ROUTES=SOFT_REFRESH_ROUTES;
+
+function invalidateInventoryDerivedCaches(){
+DASHBOARD_SUMMARY=null;DASHBOARD_RECENT={barangMasuk:[],barangKeluar:[]};DASHBOARD_MONTHLY_INSIGHT=null;
+TRANSACTION_PAGE_CACHE.clearSource('barang_masuk');TRANSACTION_PAGE_CACHE.clearSource('barang_keluar');TRANSACTION_PREFETCH_FAILED.clear();
+LOCATION_STATE.summary=null;LOCATION_STATE.pageCache.clear();LOCATION_STATE.detailCache.clear();STARTUP_PREFETCH.warningSummary=null;
+MOVEMENT_STATE.suggestionCache={key:'',rows:[],count:0};MOVEMENT_HISTORY_REMOTE.loaded=false;
+for(const key of Object.values(MODULE_CACHE_KEYS))delete MODULE_CACHE_MEMORY[key];
+localStorage.removeItem(STOK_MINUS_CACHE_KEY);localStorage.removeItem(BARANG_REJECT_CACHE_KEY);
+INVENTORY_VERSION_STATE.versions=null;INVENTORY_VERSION_STATE.lastCheckAt=0;
+}
 
 async function triggerManualRefresh(){
 if(REFRESH_STATE.refreshPromise)return REFRESH_STATE.refreshPromise;
 const activePage=getActivePage?.()||'dashboard',scrollState=captureActivePageScroll(activePage);
-const refresh=SOFT_REFRESH_ROUTES[activePage];
-if(!refresh){toast('Refresh belum tersedia untuk halaman ini.','warning');return false;}
+const refresh=SOFT_REFRESH_ROUTES[activePage]||(()=>rerenderCurrentPage({fromCache:false}));
 logActivitySafe({action:'MANUAL_REFRESH',module:activePage,detail:'Soft refresh dimulai',status:'SUCCESS'});
 REFRESH_STATE.refreshPromise=(async()=>{
-setRefreshIndicator(true,'Refreshing...');
+setRefreshIndicator(true,'Memperbarui database...');
 try{
+const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),120000);
+let syncResult;
+try{
+const {res,data}=await fetchJsonSafe('/api/sync/inventory/all',{method:'POST',cache:'no-store',signal:controller.signal});
+if(!res.ok||!data||typeof data.sources!=='object')throw new Error(data?.message||'Sinkronisasi database gagal');
+syncResult=data;
+}finally{clearTimeout(timeout);}
+invalidateInventoryDerivedCaches();
 await refresh();
+await checkInventoryVersion();
 await restoreActivePageScroll(activePage,scrollState);
-setStatus('ok','Data berhasil diperbarui');
-toast('Data berhasil diperbarui','success');
+const failed=Object.entries(syncResult.sources).filter(([,result])=>!result?.success).map(([name])=>name);
+if(syncResult.success){setStatus('ok','Data berhasil diperbarui');toast('Semua data berhasil diperbarui','success');}
+else if(syncResult.partialSuccess){setStatus('error','Sebagian data gagal diperbarui');toast(`Gagal memperbarui: ${failed.join(', ')}`,'warning');}
+else{setStatus('error','Gagal memperbarui data');toast('Gagal memperbarui data','error');}
 if(manualRefreshNoticeTimer)clearTimeout(manualRefreshNoticeTimer);
 manualRefreshNoticeTimer=setTimeout(()=>setStatus('ok',''),1800);
-return true;
+return syncResult.success;
 }catch(error){
 console.error(`[SoftRefresh:${activePage}]`,error);
 await restoreActivePageScroll(activePage,scrollState);

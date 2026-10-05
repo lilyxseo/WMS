@@ -15,8 +15,11 @@ test('soft refresh dispatches only the active route and never reloads the browse
 test('soft refresh is locked, reports progress, and gives success and failure feedback', () => {
   const coordinator = source.slice(source.indexOf('async function triggerManualRefresh()'), source.indexOf('function syncRefreshButton()'));
   assert.match(coordinator, /if\(REFRESH_STATE\.refreshPromise\)return REFRESH_STATE\.refreshPromise/);
-  assert.match(coordinator, /setRefreshIndicator\(true,'Refreshing\.\.\.'\)/);
-  assert.match(coordinator, /Data berhasil diperbarui/);
+  assert.match(coordinator, /setRefreshIndicator\(true,'Memperbarui database\.\.\.'\)/);
+  assert.match(coordinator, /fetchJsonSafe\('\/api\/sync\/inventory\/all',\{method:'POST'/);
+  assert.match(coordinator, /invalidateInventoryDerivedCaches\(\).*await refresh\(\)/s);
+  assert.match(coordinator, /Semua data berhasil diperbarui/);
+  assert.match(coordinator, /Sebagian data gagal diperbarui/);
   assert.match(coordinator, /Gagal memperbarui data\./);
   assert.match(coordinator, /REFRESH_STATE\.refreshPromise=null/);
 });

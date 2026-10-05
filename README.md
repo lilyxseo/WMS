@@ -60,6 +60,21 @@ repository.
 It executes all five sources in a single Worker invocation and can exceed
 Cloudflare's subrequest limit. **Never use it as a production scheduler target.**
 
+The authenticated application UI uses `POST /api/sync/inventory/all` only when
+the user explicitly presses the global Refresh button. This endpoint validates
+the normal application session and invokes the same five services sequentially:
+Kartu Stok, Barang Masuk, Barang Keluar, RPL, and BULKY. Sequential execution is
+intentional to limit Google Sheets/Supabase pressure and mirrors the proven cron
+strategy. Its response reports every settled source and total `durationMs`, with
+`partialSuccess: true` when only some services succeed. The browser never sends
+or receives `INVENTORY_SYNC_SECRET`.
+
+Balikan Store, Asset, Arsip metadata, and Barang Reject were audited but are not
+part of the database sync list: they are direct source-backed read APIs and have
+no independent database sync service to orchestrate. Their active UI route is
+still re-fetched after the five database syncs settle. Existing cron schedules
+above are unchanged.
+
 ### Deployment and scheduler cutover
 
 1. Deploy this repository as the existing Cloudflare Pages project. Do not
