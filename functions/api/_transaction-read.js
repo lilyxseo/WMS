@@ -51,6 +51,21 @@ function naturalText(value) {
   return String(value ?? '').trim();
 }
 
+function normalizeSearchText(value) {
+  return String(value ?? '').normalize('NFKC').toLocaleLowerCase('id').replace(/\s+/g, ' ').trim();
+}
+
+/** Match every visible business value, including dates, quantities, URLs and booleans. */
+export function transactionRowMatchesSearch(row, search = '', fields = []) {
+  const tokens = normalizeSearchText(search).split(' ').filter(Boolean);
+  if (!tokens.length) return true;
+  const values = fields.length ? fields.map(field => row?.[field]) : Object.entries(row || {})
+    .filter(([field]) => field !== 'source_row_number' && !field.startsWith('sync_'))
+    .map(([, value]) => value);
+  const haystack = normalizeSearchText(values.join(' '));
+  return tokens.every(token => haystack.includes(token));
+}
+
 function stableRowOrder(a, b, direction = 'asc') {
   const difference = (Number(a.source_row_number) || 0) - (Number(b.source_row_number) || 0);
   return direction === 'desc' ? -difference : difference;
@@ -104,6 +119,7 @@ export function transactionSort(sort) {
 export async function transactionPage(config, table, {
   columns = '*', filterQuery = '', startDate = '', endDate = '', page = 1,
   limit = 50, sort = 'latest', direction, full = false, bounded = false, recentOnly = false,
+  search = '', searchFields = [],
 } = {}) {
   if (recentOnly && !filterQuery && !startDate && !endDate && sort === 'latest' && !full) {
     const offset = (page - 1) * limit;
@@ -123,8 +139,8 @@ export async function transactionPage(config, table, {
     if (result.payload.length < TRANSACTION_READ_BATCH_SIZE || rows.length >= sourceTotal) break;
   }
   const ordered = orderTransactionRows(rows, selectedSort);
-  const filtered = ordered.filter(({ parsedDate }) => !startDate && !endDate
-    || parsedDate.valid && (!startDate || parsedDate.value >= startDate) && (!endDate || parsedDate.value <= endDate));
+  const filtered = ordered.filter(({ row, parsedDate }) => transactionRowMatchesSearch(row, search, searchFields)
+    && (!startDate && !endDate || parsedDate.valid && (!startDate || parsedDate.value >= startDate) && (!endDate || parsedDate.value <= endDate)));
   const validDates = filtered.filter(item => item.parsedDate.valid).map(item => item.parsedDate.value);
   const summary = {
     totalRows: filtered.length,

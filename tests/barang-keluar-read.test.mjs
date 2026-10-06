@@ -32,7 +32,7 @@ test('endpoint normalizes dates before pagination and applies non-date filters i
     const dataUrl = calls[0].url;
     assert.match(dataUrl, /offset=0&limit=1000/);
     assert.match(dataUrl, /sku=ilike/);
-    assert.match(dataUrl, /or=\(sku\.ilike.*nama_barang\.ilike/);
+    assert.equal(new URL(dataUrl).searchParams.has('or'), false);
     assert.match(dataUrl, /status=eq\.OK/);
     assert.doesNotMatch(dataUrl, /tanggal=(?:gte|lte)/);
     assert.equal(calls.some(call => call.url.includes('googleapis.com')), false);
