@@ -48,5 +48,5 @@ export async function commitStock(env, state, fetchFn) {
   if (!empty(current[0] || [])) return 'Baris tujuan sudah diisi oleh transaksi lain. Transaksi tidak disimpan. Mulai ulang setelah memeriksa WMS.';
   const response = await fetchFn(`${base}/values/${encodeURIComponent(range)}?valueInputOption=RAW`, { method: 'PUT', headers, body: JSON.stringify({ values: [values] }), signal: AbortSignal.timeout(15000) });
   if (!response.ok) throw await googleResponseError(response, true);
-  return { saved: true, rowNumber, from, to, keterangan, reply: `✅ *${inbound ? 'Inbound' : 'Outbount'} tersimpan*\nSKU: ${displayText(state.row.sku)}\nBarang: ${displayText(state.row.nama_barang)}\nFrom: ${displayText(from)}${inbound ? `\nTo: ${displayText(to)}` : ''}\nQty: ${state.qty}\nPIC: ${displayText(state.pic)}\nTanggal: ${dates.date}\n\nSinkronkan WMS untuk memperbarui pencarian Supabase.\nReferensi: ${state.nonce}` };
+  return { saved: true, rowNumber, from, to, keterangan, reply: `✅ *${inbound ? 'Inbound' : 'Outbount'} tersimpan*\nSKU: ${displayText(state.row.sku)}\nBarang: ${displayText(state.row.nama_barang)}\nFrom: ${displayText(from)}${inbound ? `\nTo: ${displayText(to)}` : ''}\nQty: ${state.qty}\nPIC: ${displayText(state.pic)}\nTanggal: ${dates.date}` };
 }

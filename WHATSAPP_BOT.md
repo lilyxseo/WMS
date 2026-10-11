@@ -262,10 +262,12 @@ sinkronisasi sebelum membuat perpindahan berikutnya pada stok yang sama.
 
 Menu `6` (Inbound) dan `7` (Outbount). Kirim `inbound`, `outbount`, atau pencarian langsung
 `inbound merlyn`. Alias `outbound`, `stock in/out`, `stok in/out`, dan `stock-in/out` tetap berlaku.
-Inbound: cari SKU/nama → pilih barang → isi **From** → isi **To** → qty → konfirmasi `simpan`.
+Inbound: cari SKU/nama → pilih SKU → From **IWT E-COM** (y/n) → To **MASIH DI INBOUND** (y/n) → qty → konfirmasi `simpan`.
+Balas `y` untuk menggunakan default atau `n` lalu kirim nilai pengganti.
 Outbount: cari SKU/nama → pilih barang → lokasi From → qty → konfirmasi `simpan`.
 Balas `sama` pada To/lokasi untuk memakai lokasi hasil. `ubah` memulai ulang; `batal`/`menu`
-membatalkan. Navigasi pencarian `lanjut`/`sebelumnya`, 10 hasil per halaman. Inbound boleh memilih
+membatalkan. Pilihan barang menampilkan satu data per SKU, 10 SKU per halaman, dengan
+navigasi `lanjut`/`sebelumnya`; lokasi berbeda tidak membuat SKU tampil berulang. Inbound boleh memilih
 barang stok 0 dan tujuan baru; outbount hanya memilih stok positif dan memeriksa stok lokasi asal.
 Barang harus tersedia dalam katalog Kartu Stok; pembuatan SKU baru belum didukung.
 
@@ -294,7 +296,8 @@ Bot memeriksa ulang A:I baris terpilih sebelum PUT RAW pada range baris tersebut
 atau menyisipkan baris baru. RAW menjaga SKU nol di depan dan mencegah teks dianggap formula.
 Jika baris terlanjur diisi proses lain, transaksi ditolak. Pemeriksaan dan PUT bukan transaksi atomik
 Google Sheets lintas aplikasi, sehingga proses lain masih bisa menulis setelah pemeriksaan terakhir.
-Konfirmasi nonce session tetap mencegah pengulangan draft yang sama. Sinkronkan WMS setelah simpan.
+Konfirmasi nonce session tetap mencegah pengulangan draft yang sama. Balasan bot tidak lagi
+menampilkan instruksi sinkronisasi atau referensi draft; referensi tetap disimpan pada log internal.
 
 Setelah penulisan berhasil, bot mencatat activity_logs WMS dengan ID/email profil pengirim,
 role, referensi draft, nomor baris sheet, SKU, qty, From, To, PIC dan Keterangan. Nama profil hanya

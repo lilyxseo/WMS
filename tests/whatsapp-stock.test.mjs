@@ -8,7 +8,7 @@ const pair = await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulu
 const privateKey = '-----BEGIN PRIVATE KEY-----\n' + Buffer.from(await crypto.subtle.exportKey('pkcs8', pair.privateKey)).toString('base64') + '\n-----END PRIVATE KEY-----';
 const item = { sku: '00123', nama_barang: 'Merlyn Green Gold', lokasi_bulky: 'A20-1', stok_akhir: 12, source_row_number: 2 };
 const user = { id: 'user-id', full_name: 'Andi', username: 'andi', email: 'andi@test.invalid', role: 'PIC Inventory', phone_number: '6281234567890' };
-function fixture({ profiles = [{ ...user }], allowlisted = true, claimFail = false, liveStock = 12, headerFail = false, writeFail = false, many = false, profileReadFail = false, auditFail = false, occupiedBeforeWrite = false, targetRow = [], sheetRows } = {}) {
+function fixture({ profiles = [{ ...user }], allowlisted = true, claimFail = false, liveStock = 12, headerFail = false, writeFail = false, many = false, profileReadFail = false, auditFail = false, occupiedBeforeWrite = false, targetRow = [], stockRows, sheetRows } = {}) {
  const env = { SUPABASE_URL: 'https://test.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'test-role', FONNTE_TOKEN: 'test', FONNTE_WEBHOOK_SECRET: 'secret', WHATSAPP_ALLOWED_NUMBERS: allowlisted ? '6281234567890' : '', GOOGLE_CLIENT_EMAIL: 'test@example.com', GOOGLE_PRIVATE_KEY: privateKey, SHEET_ID_2026: 'transactions' };
  let session; const replies = [], writes = [], queries = [], audits = [];
  const fetchFn = async (url, options = {}) => {
@@ -29,8 +29,8 @@ function fixture({ profiles = [{ ...user }], allowlisted = true, claimFail = fal
   if (url.includes('inventory_kartu_stok')) {
    queries.push(url);
    if (q.has('lokasi_bulky')) return Response.json(q.get('lokasi_bulky') === 'eq.A20-1' ? [{ stok_akhir: 12 }] : []);
-   if (many && q.get('offset') === '0') return Response.json(Array.from({ length: 11 }, (_, i) => ({ ...item, sku: `SKU${i}` })));
-   return Response.json([item]);
+   if (many) return Response.json(Array.from({ length: 11 }, (_, i) => ({ ...item, sku: `SKU${i}` })).slice(Number(q.get('offset') || 0), Number(q.get('offset') || 0) + Number(q.get('limit'))));
+   return Response.json(stockRows || [item]);
   }
   if (url === 'https://oauth2.googleapis.com/token') return Response.json({ access_token: 'test' });
   if (url.includes('sheets.googleapis.com')) {
@@ -50,7 +50,7 @@ function fixture({ profiles = [{ ...user }], allowlisted = true, claimFail = fal
 async function preview(f, direction = 'out', location = 'sama', command = `stock ${direction}`) {
  assert.match(await f.send(`${command} merlyn a20-1`), /Pilih barang/);
  assert.match(await f.send('1'), direction === 'in' ? /From/ : /Lokasi/);
- if (direction === 'in') assert.match(await f.send('iwt e-com'), /To/);
+ if (direction === 'in') { assert.match(await f.send('y'), /To/); await f.send('n'); }
  assert.match(await f.send(location), /Qty (Inbound|Outbount)/);
  assert.match(await f.send('5'), /Tinjau (Inbound|Outbount)/);
  assert.equal(f.session.phase, 'confirm'); assert.equal(f.writes.length, 0);
@@ -182,4 +182,32 @@ test('transaction-row selection and recheck read displayed values rather than bl
 test('a SKU added to a template row before saving aborts without overwriting it', async () => {
  const f = fixture({ sheetRows: [[]], targetRow: ['', '', '', 'ANOTHER-SKU'] });
  await preview(f, 'in'); assert.match(await f.send('simpan'), /Baris tujuan sudah diisi/); assert.equal(f.writes.length, 0);
+});
+
+test('inbound accepts y/y defaults and success responses omit sync instructions and references', async () => {
+ const f = fixture(); await f.send('inbound merlyn');
+ assert.match(await f.send('1'), /IWT E-COM/); assert.equal(f.session.phase, 'from_default');
+ assert.match(await f.send('maybe'), /Balas y/); assert.equal(f.session.phase, 'from_default');
+ assert.match(await f.send('y'), /MASIH DI INBOUND/); assert.equal(f.session.phase, 'to_default');
+ assert.match(await f.send('y'), /Qty/); await f.send('5');
+ const reply = await f.send('simpan');
+ assert.deepEqual(f.writes[0].body.values[0].slice(1, 3), ['IWT E-COM', 'MASIH DI INBOUND']);
+ assert.doesNotMatch(reply, /Sinkron|Referensi|undefined/);
+ const out = fixture(); await preview(out); assert.doesNotMatch(await out.send('simpan'), /Sinkron|Referensi/);
+});
+test('inbound n/n asks for custom From and To before quantity', async () => {
+ const f = fixture(); await f.send('inbound merlyn'); await f.send('1');
+ assert.match(await f.send('n'), /Kirim From/); assert.equal(f.session.phase, 'from');
+ assert.match(await f.send('supplier xyz'), /MASIH DI INBOUND/);
+ assert.match(await f.send('n'), /Kirim To/); assert.equal(f.session.phase, 'to');
+ assert.match(await f.send('b01'), /Qty/); await f.send('5'); await f.send('simpan');
+ assert.deepEqual(f.writes[0].body.values[0].slice(1, 3), ['SUPPLIER XYZ', 'B01']);
+});
+test('stock selection displays one item per SKU and omits location-specific duplicate entries', async () => {
+ for (const command of ['inbound', 'outbount']) {
+  const f = fixture({ stockRows: [item, { ...item, lokasi_bulky: 'B01' }, { ...item, sku: '00234' }] });
+  const reply = await f.send(`${command} merlyn`);
+  assert.equal(f.session.rows.length, 2); assert.equal((reply.match(/SKU: 00123/g) || []).length, 1);
+  assert.doesNotMatch(reply, /Lokasi:|Stok:/);
+ }
 });

@@ -22,5 +22,5 @@ export function formatGoogleFailure(error, reference, sheet) {
   const known = error instanceof GoogleAccessError;
   const noWrite = known && !error.writeAttempted;
   const certainty = noWrite ? 'Tidak ada transaksi ditulis ke Google Sheets.' : `Status penulisan belum terkonfirmasi. Jangan mengulang sebelum memeriksa ${sheet} di WMS.`;
-  return `${known ? error.userMessage : 'Penyimpanan gagal atau belum terkonfirmasi.'}\n${certainty}\n${known ? `Kode: ${error.code}\n` : ''}Referensi: ${reference}`;
+  return `${known ? error.userMessage : 'Penyimpanan gagal atau belum terkonfirmasi.'}\n${certainty}\n${known ? `Kode: ${error.code}` : ''}${reference ? `\nReferensi: ${reference}` : ''}`;
 }

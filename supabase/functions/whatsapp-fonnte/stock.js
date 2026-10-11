@@ -4,7 +4,7 @@ import { formatGoogleFailure } from './google-errors.js';
 import { hasGoogleCredentials } from './sheet-edit.js';
 import { loadSearch, saveSearch } from './sessions.js';
 import { displayText } from './menu.js';
-import { buildInventorySearchQuery } from './inventory-search.js';
+import { searchStockItems } from './stock-search.js';
 import { normalizeLocation, normalizeText } from './sheet-normalization.js';
 import { requireStockProfile, ProfileError } from './profiles.js';
 import { commitStock } from './sheet-stock.js';
@@ -13,6 +13,11 @@ const headers = config => ({ apikey: config.key, Authorization: `Bearer ${config
 const label = state => state.direction === 'in' ? 'Inbound' : 'Outbount';
 const review = state => `📦 *Tinjau ${label(state)}*\nBarang: ${displayText(state.row.nama_barang)}\nSKU: ${displayText(state.row.sku)}${state.direction === 'in' ? `\nFrom: ${displayText(state.from)}\nTo: ${displayText(state.to)}` : `\nFrom: ${displayText(state.location)}`}\nQty: ${state.qty}\nPIC: ${displayText(state.pic)}\n\nTanggal dan status diisi otomatis saat disimpan.\nBalas simpan, ubah untuk mulai ulang, atau batal.`;
 const prompt = state => `*${label(state)}*\nKirim SKU atau nama barang. Bisa digabung lokasi.\nContoh: merlyn a20-1\n\nKetik batal untuk keluar.`;
+
+const defaultFrom = 'IWT E-COM';
+const defaultTo = 'MASIH DI INBOUND';
+const fromPrompt = state => `*From • Inbound*\nBarang: ${displayText(state.row.nama_barang)}\nSKU: ${displayText(state.row.sku)}\n\nGunakan From: *${defaultFrom}*?\nBalas y untuk pakai, n untuk isi sendiri.`;
+const toPrompt = state => `*To • Inbound*\nFrom: ${displayText(state.from)}\n\nGunakan To: *${defaultTo}*?\nBalas y untuk pakai, n untuk isi sendiri.`;
 
 export async function handleStock(message, sender, env, config, fetchFn) {
   const input = message.trim(), lower = input.toLowerCase();
@@ -46,9 +51,9 @@ export async function handleStock(message, sender, env, config, fetchFn) {
     if (state.phase === 'select' && /^\d+$/.test(input)) {
       const row = state.rows[Number(input) - 1];
       if (!row) return 'Nomor barang tidak tersedia. Pilih nomor hasil atau kirim pencarian baru.';
-      state = { ...state, row, rows: undefined, phase: state.direction === 'in' ? 'from' : 'location' };
+      state = { ...state, row, rows: undefined, phase: state.direction === 'in' ? 'from_default' : 'location' };
       await saveSearch(config, sender, state, fetchFn);
-      if (state.direction === 'in') return `*From • Inbound*\nBarang: ${displayText(row.nama_barang)}\nSKU: ${displayText(row.sku)}\n\nKirim From (asal), misalnya IWT E-COM.`;
+      if (state.direction === 'in') return fromPrompt(state);
       return `*Lokasi ${state.direction === 'in' ? 'tujuan' : 'asal'}*\nBarang: ${displayText(row.nama_barang)}\nSKU: ${displayText(row.sku)}\nLokasi hasil: ${displayText(row.lokasi_bulky)}\n\nKirim lokasi atau balas sama untuk memakai lokasi hasil.`;
     }
     if (state.phase === 'select' && /^(lanjut|berikutnya|sebelumnya)$/.test(lower)) {
@@ -59,20 +64,35 @@ export async function handleStock(message, sender, env, config, fetchFn) {
       state.query = start?.[2] || input; state.page = 1;
       if (state.query.length < 2 || state.query.length > 200) return 'Pencarian harus 2–200 karakter. Kirim SKU atau nama barang.';
     }
-    const filter = buildInventorySearchQuery(state.query, ['sku', 'nama_barang', 'lokasi_bulky']);
-    const response = await fetchFn(`${config.url}/rest/v1/inventory_kartu_stok?select=sku,nama_barang,lokasi_bulky,stok_akhir,source_row_number${state.direction === 'out' ? '&stok_akhir=gt.0' : ''}${filter}&order=sku.asc,lokasi_bulky.asc,source_row_number.asc&limit=11&offset=${(state.page - 1) * 10}`, { headers: headers(config), signal: AbortSignal.timeout(10000) });
-    if (!response.ok) throw new Error('Stock search failed');
-    const rows = await response.json();
-    state.rows = rows.slice(0, 10); state.hasMore = rows.length > 10; state.phase = rows.length ? 'select' : 'query';
+    const result = await searchStockItems(config, state, fetchFn);
+    const rows = result.rows;
+    state.rows = rows; state.hasMore = result.hasMore; state.phase = rows.length ? 'select' : 'query';
     await saveSearch(config, sender, state, fetchFn);
     if (!rows.length) return `Barang${state.direction === 'out' ? ' dengan stok tersedia' : ''} tidak ditemukan. Kirim pencarian lain.`;
-    return `*${label(state)} • Pilih barang*\n\n` + state.rows.map((row, i) => `*${i + 1}. ${displayText(row.nama_barang)}*\nSKU: ${displayText(row.sku)}\nLokasi: ${displayText(row.lokasi_bulky)} • Stok: ${displayText(row.stok_akhir)}`).join('\n\n') + `\n\nHalaman ${state.page}. Balas nomor barang.` + (state.hasMore ? '\nBalas lanjut untuk hasil lainnya.' : '') + (state.page > 1 ? '\nBalas sebelumnya untuk kembali.' : '');
+    return `*${label(state)} • Pilih barang*\n\n` + state.rows.map((row, i) => `*${i + 1}. ${displayText(row.nama_barang)}*\nSKU: ${displayText(row.sku)}`).join('\n\n') + `\n\nHalaman ${state.page}. Balas nomor barang.` + (state.hasMore ? '\nBalas lanjut untuk hasil lainnya.' : '') + (state.page > 1 ? '\nBalas sebelumnya untuk kembali.' : '');
+  }
+  if (state.phase === 'from_default' || state.phase === 'to_default') {
+    const fromStep = state.phase === 'from_default';
+    if (!['y', 'n'].includes(lower)) return fromStep ? fromPrompt(state) : toPrompt(state);
+    if (lower === 'n') {
+      state.phase = fromStep ? 'from' : 'to';
+      await saveSearch(config, sender, state, fetchFn);
+      return fromStep ? '*From • Inbound*\nKirim From yang ingin digunakan.' : '*To • Inbound*\nKirim To yang ingin digunakan.';
+    }
+    if (fromStep) {
+      state.from = defaultFrom; state.phase = 'to_default';
+      await saveSearch(config, sender, state, fetchFn);
+      return toPrompt(state);
+    }
+    state.to = defaultTo; state.location = defaultTo; state.phase = 'quantity';
+    await saveSearch(config, sender, state, fetchFn);
+    return '*Qty Inbound*\nKirim jumlah lebih dari 0.';
   }
   if (state.phase === 'from') {
     const from = normalizeLocation(input);
     if (!from || from.length > 100 || /[\r\n\u0000-\u001f]/.test(input)) return 'Kirim From yang valid, maksimal 100 karakter.';
-    state.from = from; state.phase = 'to'; await saveSearch(config, sender, state, fetchFn);
-    return `*To • Inbound*\nFrom: ${displayText(from)}\nKirim To (tujuan), misalnya MASIH DI INBOUND. Balas sama untuk lokasi hasil.`;
+    state.from = from; state.phase = 'to_default'; await saveSearch(config, sender, state, fetchFn);
+    return toPrompt(state);
   }
   if (state.phase === 'location' || state.phase === 'to') {
     const location = normalizeLocation(lower === 'sama' ? state.row.lokasi_bulky : input);
@@ -114,7 +134,7 @@ export async function handleStock(message, sender, env, config, fetchFn) {
   }
   catch (error) {
     console.error('[WHATSAPP_STOCK_GOOGLE_FAILED]', JSON.stringify({ reference: state.nonce, code: error.code || 'UNKNOWN', writeAttempted: error.writeAttempted ?? true }));
-    reply = formatGoogleFailure(error, state.nonce, `Barang ${state.direction === 'in' ? 'Masuk' : 'Keluar'}`);
+    reply = formatGoogleFailure(error, undefined, `Barang ${state.direction === 'in' ? 'Masuk' : 'Keluar'}`);
   }
   await saveSearch(config, sender, { kind: 'stock', phase: 'done', nonce: state.nonce, direction: state.direction }, fetchFn);
   return reply;
