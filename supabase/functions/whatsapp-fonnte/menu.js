@@ -1,31 +1,30 @@
 // Register every new search command here: menus and command guidance use this list.
 export const SEARCH_MENU = Object.freeze([
-  { id: '1', command: 'sku', title: 'Cari SKU', description: 'Cari sebagian kode SKU, termasuk nol di depan.', example: 'sku ABC123' },
-  { id: '2', command: 'barang', title: 'Cari nama barang', description: 'Cari satu atau beberapa kata pada nama barang.', example: 'barang kabel usb' },
-  { id: '3', command: 'lokasi', title: 'Cari lokasi', description: 'Lihat stok yang tercatat pada lokasi tertentu.', example: 'lokasi A-01' },
-  { id: '4', command: 'detail', title: 'Detail SKU', description: 'Cari kode SKU persis, tanpa membedakan kapitalisasi.', example: 'detail ABC123' },
-  { id: '5', command: 'cari', title: 'Pencarian gabungan', description: 'Gabungkan kata bebas atau filter beberapa kolom.', example: 'cari nama=kabel; lokasi=A-01', extra: 'cari kabel A-01' },
+  { id: '1', command: 'cari', title: 'Pencarian global', description: 'Kirim SKU, nama, lokasi, atau kata lain. Bot mencari stok dan transaksi WMS.', example: 'cari kabel A-01', extra: 'ABC123' },
+  { id: '2', command: 'masuk', title: 'Barang masuk', description: 'Cari data penerimaan berdasarkan barang, lokasi, tanggal, PIC, dokumen, atau jumlah.', example: 'masuk kabel', extra: 'masuk' },
+  { id: '3', command: 'keluar', title: 'Barang keluar', description: 'Cari data pengeluaran berdasarkan barang, lokasi, tanggal, PIC, dokumen, atau jumlah.', example: 'keluar ABC123', extra: 'keluar' },
 ]);
 
 export function renderMenu(entries = SEARCH_MENU) {
   return [
-    '📦 *WMS • Pusat Pencarian Stok*',
-    'Temukan barang berdasarkan SKU, nama, atau lokasi.',
+    '📦 *WMS • Pencarian & Transaksi*',
+    'Langsung kirim kata pencarian; tidak perlu memilih jenis SKU/nama/lokasi.',
     '',
     '*Pilih cara pencarian*',
     ...entries.flatMap(item => [`*${item.id}. ${item.title}*`, item.description, `Contoh: ${item.example}`, '']),
     '*Persempit hasil*',
     'Tambahkan filter setelah titik koma:',
-    '• sumber=Kartu Stock / RPL / BULKY',
+    '• sumber=Kartu Stock / RPL / BULKY / Barang Masuk / Barang Keluar',
     '• stok=ada / kosong / semua',
     '• halaman=2 untuk melanjutkan hasil',
-    'Contoh: barang kabel; sumber=RPL; stok=ada',
+    '• transaksi: tanggal=, status=, pic=, dokumen=, jumlah=',
+    'Contoh: cari kabel; sumber=RPL; stok=ada',
     '',
     '*Cara menggunakan menu*',
     `Kirim nomor ${entries.map(item => item.id).join(', ')} untuk petunjuk, atau langsung kirim contoh perintah.`,
     'Ketik menu kapan saja untuk kembali.',
     '',
-    'ℹ️ Data mengikuti sinkronisasi terakhir WMS. Stok setiap sumber ditampilkan terpisah.',
+    'ℹ️ Data mengikuti sinkronisasi WMS. Filter stok hanya mencari sumber stok. Transaksi dibaca dari baris terbaru, maksimal 5.000 baris per sumber.',
   ].join('\n');
 }
 
@@ -33,14 +32,16 @@ export function resolveMenu(message) {
   const text = String(message ?? '').trim().toLowerCase();
   if (!text || /^(menu|help|bantuan|mulai|start|halo|hai)$/i.test(text)) return renderMenu();
   const topic = text.replace(/^(menu|help|bantuan)\s+/, '');
-  const entry = SEARCH_MENU.find(item => item.id === topic || item.command === topic);
+  const alias = { sku: 'cari', barang: 'cari', lokasi: 'cari', detail: 'cari' };
+  const entry = SEARCH_MENU.find(item => item.id === topic || item.command === (alias[topic] || topic));
+  if (/^(masuk|keluar)$/.test(text)) return undefined;
   if (!entry) return undefined;
   return [
     `🔎 *${entry.title}*`, entry.description, '',
     '*Kirim perintah berikut, ganti nilainya:*', entry.example,
     ...(entry.extra ? [entry.extra] : []), '',
-    '*Filter opsional*', `${entry.example}; sumber=RPL; stok=ada`, '',
-    'Hasil berisi SKU, nama barang, lokasi, stok, dan sumber.',
+    '*Filter opsional*', entry.command === 'cari' ? `${entry.example}; sumber=RPL; stok=ada` : `${entry.example}; halaman=2`, '',
+    'Hasil stok memuat lokasi dan stok; transaksi memuat tanggal, asal/tujuan, jumlah, status, dan PIC.',
     'Salin perintah navigasi dari balasan untuk pindah halaman.',
     'Ketik menu untuk melihat semua pilihan.',
   ].join('\n');

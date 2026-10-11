@@ -2,7 +2,8 @@
 
 Webhook Supabase Edge Function: `POST /functions/v1/whatsapp-fonnte`.
 Bot mencari data Supabase pada `inventory_kartu_stok`, `inventory_rpl`, dan
-`inventory_bulky`, lalu mengirim balasan lewat `https://api.fonnte.com/send`.
+`inventory_bulky`, serta transaksi `inventory_barang_masuk` dan
+`inventory_barang_keluar`, lalu mengirim balasan lewat `https://api.fonnte.com/send`.
 Tidak ada penulisan database atau sinkronisasi inventory dari webhook ini.
 
 ## Konfigurasi
@@ -61,8 +62,8 @@ dan hostname proyek Supabase untuk pengembangan di lingkungan cloud.
 
 ## Pesan yang didukung
 
-Ketik `menu`, `bantuan`, atau `halo` untuk menu pencarian dengan judul tebal,
-penjelasan tiap pilihan, dan contoh perintah. Kirim nomor menu 1–5 untuk panduan
+Ketik `menu`, `bantuan`, atau `halo` untuk menu dengan tiga fitur: pencarian
+global, barang masuk, dan barang keluar. Kirim nomor menu 1–3 untuk panduan
 pilihan tersebut; nomor membuka panduan, bukan memilih baris hasil pencarian.
 Perintah tanpa nilai (`sku`, `barang`, `lokasi`, `detail`, `cari`) juga membuka
 panduan. `menu sku` atau `bantuan lokasi` membuka panduan langsung.
@@ -83,6 +84,15 @@ menu. Jumlah baris yang tampil bukan total seluruh hasil database.
 - `barang kabel` atau `nama barang kabel`: cari nama barang.
 - `lokasi A-01`: cari lokasi.
 - `cari kabel A-01` atau teks tanpa awalan: pencarian gabungan.
+- `ABC123`, `kabel A-01`, atau `cari kabel`: pencarian global di stok dan transaksi.
+  Pencarian stok memakai SKU, nama, dan lokasi; pencarian transaksi memakai semua
+  nilai bisnis yang dibaca, termasuk tanggal, status, PIC, dokumen, dan jumlah.
+- `masuk kabel` atau `barang masuk kabel`: cari penerimaan barang.
+- `keluar ABC123` atau `barang keluar ABC123`: cari pengeluaran barang.
+- `masuk` / `keluar`: tampilkan transaksi dari baris sumber terbaru.
+- `masuk nama=kabel; lokasi=A-01; pic=andi`: filter gabungan transaksi.
+- `keluar dokumen=DO-88; jumlah=12`: filter dokumen dan jumlah. Filter jumlah
+  memakai kecocokan teks, bukan perbandingan angka (12 dapat cocok dengan 120).
 - `cari sku=ABC123; nama=kabel; lokasi=A-01; sumber=RPL; stok=ada`:
   pencarian terstruktur. Setiap filter harus terpenuhi pada baris yang sama.
 - `barang kabel; halaman=2`: hasil berikutnya. Bot menyertakan perintah lengkap
@@ -94,7 +104,7 @@ menu. Jumlah baris yang tampil bukan total seluruh hasil database.
 
 Pencarian tidak peka huruf besar/kecil. Semua kata harus cocok dalam field
 pencarian yang dipilih. Balasan memuat SKU, nama, lokasi, stok akhir, dan sumber,
-maksimal 3 baris per sumber per halaman (9 baris bila semua sumber dipilih).
+maksimal 3 baris per sumber per halaman (15 baris bila semua sumber dipilih).
 Halaman 1–100 tersedia; perjelas pencarian untuk hasil yang lebih banyak.
 Stok per sumber ditampilkan terpisah dan tidak dijumlahkan
 lintas sumber. Hasil mencerminkan snapshot sinkronisasi WMS, bukan pembacaan
@@ -103,6 +113,20 @@ baris hasil dalam WIB, atau menyebutkan waktu tidak tersedia. Waktu tersebut
 bukan jaminan bahwa seluruh sumber baru disinkron. Navigasi menjalankan query
 baru; hasil dapat bergeser jika database berubah di antara dua pesan.
 Perintah `lanjut`/pemilihan nomor tanpa konteks belum didukung.
+
+Transaksi ditampilkan terpisah dari saldo stok: tanggal, asal, tujuan, jumlah
+transaksi, status, PIC, keterangan, dokumen, dan sumber. Urutan mengikuti
+`source_row_number` terbaru, bukan pengurutan tanggal teks campuran. Pencarian
+transaksi memeriksa maksimal 5.000 baris terbaru per sumber per request; jika
+ada baris lebih lama yang belum diperiksa, balasan menampilkan peringatan.
+Tidak ada penjumlahan qty transaksi sebagai stok tersedia. Filter `stok=ada`
+atau `stok=kosong` mengecualikan transaksi pada pencarian global; pada perintah
+masuk/keluar filter ini ditolak. Waktu sinkronisasi transaksi tidak diasumsikan
+ada karena kolom `synced_at` tidak tersedia pada semua schema WMS.
+
+Tahap ini menyediakan pembacaan/pencarian barang masuk dan keluar. Operasi
+CRUD movement dan cycle count akan diimplementasikan pada tahap berikutnya;
+menu belum menawarkan operasi yang belum tersedia.
 
 ## Validasi
 

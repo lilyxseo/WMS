@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { handleFonnteWebhook, parseInventoryMessage, formatInventoryReply } from '../supabase/functions/whatsapp-fonnte/handler.js';
 import { parseAdvancedCommand } from '../supabase/functions/whatsapp-fonnte/commands.js';
 import { SEARCH_MENU, renderMenu, resolveMenu } from '../supabase/functions/whatsapp-fonnte/menu.js';
+import { transactionMatches, searchTransactions } from '../supabase/functions/whatsapp-fonnte/transactions.js';
 
 const env = {
   FONNTE_TOKEN: 'test-token', FONNTE_WEBHOOK_SECRET: 'test-secret',
@@ -34,13 +35,13 @@ test('webhook queries all stock tables and sends only inventory results to autho
   const fetchFn = async (url, options) => {
     calls.push({ url, options });
     if (url === 'https://api.fonnte.com/send') return Response.json({ status: true });
-    assert.match(url, /or=\(sku\.ilike/);
+    if (!url.includes('inventory_barang_')) assert.match(url, /or=\(sku\.ilike/);
     assert.doesNotMatch(url, /nama_barang\.ilike/);
     return Response.json([{ sku: '00123', nama_barang: 'Kabel', lokasi_bulky: 'A-01', stok_akhir: 7 }]);
   };
   const response = await handleFonnteWebhook({ request: request({ sender: '6281234567890', message: 'sku 00123' }), env }, fetchFn);
   assert.equal(response.status, 200);
-  assert.equal(calls.length, 4);
+  assert.equal(calls.length, 6);
   const send = calls.find(call => call.url.endsWith('/send'));
   assert.equal(send.options.headers.Authorization, 'test-token');
   assert.equal(send.options.body.get('target'), '6281234567890');
@@ -70,7 +71,7 @@ test('form-encoded webhook payload is supported', async () => {
   });
   const fetchFn = async (url, options) => {
     assert.equal(url, 'https://api.fonnte.com/send');
-    assert.match(options.body.get('message'), /sku ABC123/);
+    assert.match(options.body.get('message'), /cari kabel A-01/);
     return Response.json({ status: true });
   };
   assert.equal((await handleFonnteWebhook({ request: req, env }, fetchFn)).status, 200);
@@ -137,7 +138,7 @@ test('detail lookup matches a complete SKU and escapes wildcard characters', asy
       return Response.json({ status: true });
     }
     const query = new URL(url).searchParams;
-    assert.equal(query.get('sku'), 'ilike.00\\%\\_\\*');
+    if (!url.includes('inventory_barang_')) assert.equal(query.get('sku'), 'ilike.00\\%\\_\\*');
     assert.equal(query.has('or'), false);
     return Response.json([]);
   };
@@ -186,7 +187,7 @@ test('menu registry automatically includes every command and its guidance', () =
   const generated = renderMenu([...SEARCH_MENU, extra]);
   assert.ok(generated.includes(extra.title));
   assert.ok(generated.includes(extra.example));
-  assert.ok(generated.includes('1, 2, 3, 4, 5, 6'));
+  assert.ok(generated.includes('1, 2, 3, 6'));
 });
 
 test('menu, greetings, bare commands and numbered guidance never query inventory', async () => {
@@ -218,4 +219,83 @@ test('empty later page offers usable previous-page command and help', async () =
     return Response.json({ status: true });
   };
   assert.equal((await handleFonnteWebhook({ request: request({ sender: '6281234567890', message: 'barang kabel; halaman=2' }), env }, fetchFn)).status, 200);
+});
+
+test('global search matches different transaction business columns including numeric quantities', () => {
+  const row = { sku: '00123', nama_barang: 'Kabel', qty: 12, pic: 'Andi', dokumen: 'DO-88', tanggal: '10/11/2026', from_location: 'A-01', to_location: 'B-02', source_row_number: 999 };
+  const fields = ['sku', 'nama_barang', 'lokasi_bulky'];
+  assert.equal(transactionMatches(row, [{ query: 'kabel andi 12 do-88', fields }]), true);
+  assert.equal(transactionMatches(row, [{ query: '999', fields }]), false);
+  assert.equal(transactionMatches(row, [{ query: 'b-02', fields: ['lokasi_bulky'] }]), true);
+  assert.equal(transactionMatches(row, [{ query: '001', fields: ['sku'], exact: true }]), false);
+});
+
+test('inbound and outbound search display transaction quantities and preserve pagination', async () => {
+  for (const command of ['masuk', 'keluar', 'barang masuk', 'barang keluar']) {
+    const calls = [];
+    const fetchFn = async (url, options) => {
+      calls.push(url);
+      if (url.endsWith('/send')) {
+        const reply = options.body.get('message');
+        assert.match(reply, /Jumlah transaksi: 12/);
+        assert.match(reply, /Tanggal: 10\/11\/2026/);
+        assert.match(reply, /Asal: A-01/);
+        assert.match(reply, /PIC: Andi/);
+        assert.match(reply, new RegExp(`${command}; halaman=2`));
+        assert.doesNotMatch(reply, /\nStok:/);
+        return Response.json({ status: true });
+      }
+      assert.ok(url.includes(command.includes('masuk') ? 'inventory_barang_masuk' : 'inventory_barang_keluar'));
+      assert.doesNotMatch(url, /synced_at/);
+      return Response.json(Array.from({ length: 4 }, () => ({ sku: '00123', nama_barang: 'Kabel', qty: 12, tanggal: '10/11/2026', from_location: 'A-01', to_location: 'B-02', pic: 'Andi' })));
+    };
+    assert.equal((await handleFonnteWebhook({ request: request({ sender: '6281234567890', message: command }), env }, fetchFn)).status, 200);
+    assert.equal(calls.length, 2);
+  }
+});
+
+test('transaction parser prevents contradictory sources and stock filters', () => {
+  assert.equal(parseAdvancedCommand('masuk kabel; halaman=2').source, 'Barang Masuk');
+  assert.equal(parseAdvancedCommand('keluar').filters.length, 0);
+  assert.throws(() => parseAdvancedCommand('masuk kabel; sumber=BULKY'), /tidak sesuai/);
+  assert.throws(() => parseAdvancedCommand('keluar kabel; stok=ada'), /hanya untuk/);
+});
+
+test('transaction scan reports incomplete results rather than claiming all history was searched', async () => {
+  let calls = 0;
+  const fetchFn = async () => { calls++; return Response.json(Array.from({ length: calls === 6 ? 1 : 1000 }, () => ({ sku: 'OTHER' }))); };
+  const result = await searchTransactions({ url: 'https://test.supabase.co', key: 'test' }, 'inventory_barang_masuk', 'Barang Masuk', { page: 1, filters: [{ query: 'missing', fields: ['sku'] }] }, fetchFn);
+  assert.equal(calls, 6);
+  assert.equal(result.incomplete, true);
+  assert.deepEqual(result.rows, []);
+});
+
+test('global transaction filters never query unsupported stock columns', async () => {
+  let reads = 0;
+  const fetchFn = async (url, options) => {
+    if (url.endsWith('/send')) {
+      assert.match(options.body.get('message'), /Jumlah transaksi: 1/);
+      assert.match(options.body.get('message'), /Sumber: Barang Masuk/);
+      return Response.json({ status: true });
+    }
+    reads++;
+    assert.match(url, /inventory_barang_/);
+    return Response.json([{ sku: '00123', nama_barang: 'Kabel', qty: 1, pic: 'Andi' }, { sku: '002', qty: 1, pic: 'Budi' }]);
+  };
+  assert.equal((await handleFonnteWebhook({ request: request({ sender: '6281234567890', message: 'cari pic=andi; jumlah=1' }), env }, fetchFn)).status, 200);
+  assert.equal(reads, 2);
+});
+
+test('global result cards show all fifteen rows, without silently dropping outbound matches', async () => {
+  const fetchFn = async (url, options) => {
+    if (url.endsWith('/send')) {
+      const reply = options.body.get('message');
+      assert.match(reply, /15 baris ditampilkan/);
+      assert.match(reply, /Sumber: Barang Keluar/);
+      assert.match(reply, /\*15\./);
+      return Response.json({ status: true });
+    }
+    return Response.json(Array.from({ length: 3 }, () => ({ sku: 'ABC', nama_barang: 'Kabel', stok_akhir: 2, qty: 1 })));
+  };
+  assert.equal((await handleFonnteWebhook({ request: request({ sender: '6281234567890', message: 'kabel' }), env }, fetchFn)).status, 200);
 });

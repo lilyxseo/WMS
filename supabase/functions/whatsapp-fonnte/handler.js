@@ -7,11 +7,14 @@ function getDatabaseConfig(env) {
 import { buildInventorySearchQuery, normalizeSearchQuery } from './inventory-search.js';
 import { BOT_HELP, CommandError, parseAdvancedCommand, searchAdvancedInventory, formatAdvancedReply } from './commands.js';
 import { resolveMenu, displayText } from './menu.js';
+import { formatTransactionRow } from './transactions.js';
 
 const SOURCES = [
   ['Kartu Stock', 'inventory_kartu_stok'],
   ['RPL', 'inventory_rpl'],
   ['BULKY', 'inventory_bulky'],
+  ['Barang Masuk', 'inventory_barang_masuk'],
+  ['Barang Keluar', 'inventory_barang_keluar'],
 ];
 const HELP = BOT_HELP;
 const json = (body, status = 200) => new Response(JSON.stringify(body), {
@@ -36,7 +39,7 @@ export function parseInventoryMessage(message) {
 export async function searchInventory(env, search, fetchFn = fetch) {
   const config = getDatabaseConfig(env);
   const filter = buildInventorySearchQuery(search.query, search.fields);
-  const batches = await Promise.all(SOURCES.map(async ([source, table]) => {
+  const batches = await Promise.all(SOURCES.slice(0, 3).map(async ([source, table]) => {
     const response = await fetchFn(`${config.url}/rest/v1/${table}?select=sku,nama_barang,lokasi_bulky,stok_akhir${filter}&order=sku.asc,lokasi_bulky.asc,source_row_number.asc&limit=11`, {
       headers: { apikey: config.key, Authorization: `Bearer ${config.key}` },
       signal: AbortSignal.timeout(10000),
@@ -49,13 +52,14 @@ export async function searchInventory(env, search, fetchFn = fetch) {
   return batches.flat();
 }
 
-export function formatInventoryReply(rows) {
-  if (!rows.length) return 'Data stok tidak ditemukan. Coba SKU, nama barang, atau lokasi lain.';
+export function formatInventoryReply(rows, limit = 10) {
+  if (!rows.length) return 'Data tidak ditemukan. Coba SKU, nama barang, lokasi, atau kata lain.';
   const clean = displayText;
-  const items = rows.slice(0, 10).map((row, index) =>
-    `*${index + 1}. ${clean(row.nama_barang)}*\nSKU: ${clean(row.sku)}\nBarang: ${clean(row.nama_barang)}\nLokasi: ${clean(row.lokasi_bulky)}\nStok: ${clean(row.stok_akhir)}\nSumber: ${clean(row.source)}`);
+  const items = rows.slice(0, limit).map((row, index) =>
+    /^Barang (Masuk|Keluar)$/.test(row.source) ? formatTransactionRow(row, index)
+      : `*${index + 1}. ${clean(row.nama_barang)}*\nSKU: ${clean(row.sku)}\nBarang: ${clean(row.nama_barang)}\nLokasi: ${clean(row.lokasi_bulky)}\nStok: ${clean(row.stok_akhir)}\nSumber: ${clean(row.source)}`);
   return `${items.join('\n\n──────────\n\n')}`
-    + (rows.length > 10 ? '\n\nDitampilkan 10 baris pertama. Perjelas pencarian untuk hasil lainnya.' : '');
+    + (rows.length > limit ? `\n\nDitampilkan ${limit} baris pertama. Perjelas pencarian untuk hasil lainnya.` : '');
 }
 
 export async function handleFonnteWebhook({ request, env }, fetchFn = fetch) {
