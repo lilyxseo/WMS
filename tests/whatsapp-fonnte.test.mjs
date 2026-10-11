@@ -97,6 +97,26 @@ test('transaction search finds matches beyond 5000 rows and scans until actual e
  assert.equal(result.rows[0].sku,'FOUND');assert.equal(calls,7);assert.equal(result.hasMore,false);
 });
 
+test('transaction free text searches every business column but excludes database metadata',()=>{
+ const filters=parseAdvancedCommand('masuk #T-007894').filters;
+ for(const field of ['tanggal','from_location','to_location','sku','nama_barang','qty','status','pic','keterangan','no_iseller','netsuite','keterangan_lainnya','lokasi_surat_jalan','dokumen','stockout','status_lanjutan','no_iseller_awal']) {
+  assert.equal(transactionMatches({[field]:'Transfer #T-007894 selesai'},filters),true,field);
+ }
+ assert.equal(transactionMatches({source_row_number:'#T-007894',id:'#T-007894',synced_at:'#T-007894'},filters),false);
+ assert.equal(transactionMatches({no_iseller:'#T-007895'},filters),false);
+ assert.equal(transactionMatches({no_iseller:'#T-007894',pic:'ABI'},parseAdvancedCommand('keluar #T-007894 abi').filters),true);
+ assert.equal(transactionMatches({no_iseller:'#T-007894'},parseAdvancedCommand('keluar iseller=#T-007894').filters),true);
+});
+
+test('Iseller transfer search works through webhook for both transaction directions',async()=>{
+ for(const command of ['masuk','keluar']) {
+  const h=harness({transactions:[{sku:'UNRELATED',no_iseller:'#T-007895'},{sku:'MATCH',nama_barang:'Merlyn',no_iseller:'#T-007894',qty:2}]});
+  const reply=await send(h,`${command} #T-007894`);
+  assert.match(reply,/SKU: MATCH/); assert.doesNotMatch(reply,/SKU: UNRELATED/);
+  assert.ok(new URL(h.reads[0]).searchParams.get('select').split(',').includes('no_iseller'));
+ }
+});
+
 test('plain navigation handles both transaction directions and boundaries',async()=>{
  for(const command of ['masuk','keluar']) {
   const pageSize=command==='masuk'?10:3;

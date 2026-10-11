@@ -108,7 +108,11 @@ saat pencarian berikutnya, bukan otomatis dihapus oleh scheduler.
 `keluar` tanpa kata menampilkan transaksi baris terbaru. Barang Masuk menampilkan 10 transaksi
 per halaman; Barang Keluar tetap 3. Hasil menampilkan nomor halaman, rentang data,
 dan perintah lanjut/sebelumnya yang tersedia. Filter transaksi mendukung nama, SKU, lokasi, tanggal, PIC, status,
-dokumen, dan jumlah. Jumlah memakai pencocokan teks; 12 bisa cocok dengan 120.
+dokumen, dan jumlah. Pencarian teks bebas mencocokkan seluruh kolom bisnis transaksi,
+termasuk Iseller, Netsuite, keterangan lainnya, Stockout, status lanjutan dan Iseller awal.
+Contoh: `masuk #T-007894` atau `keluar #T-007894`; bisa digabung dengan kata lain
+atau beberapa nomor dipisahkan koma. Filter khusus tersedia seperti `keluar iseller=#T-007894`.
+Metadata database tidak ikut dicari. Jumlah memakai pencocokan teks; 12 bisa cocok dengan 120.
 Pencarian transaksi tidak dibatasi 5.000 baris. Database dibaca dalam batch
 1.000 baris hingga halaman dan satu hasil berikutnya ditemukan atau data habis.
 Hanya empat hasil transaksi ditahan dalam memori. Query tanpa kata pencarian

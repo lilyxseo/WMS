@@ -21,7 +21,7 @@ export function parseAdvancedCommand(message) {
     options.source = transaction[1].toLowerCase() === 'masuk' ? 'Barang Masuk' : 'Barang Keluar';
     first = transaction[2] || '';
   }
-  const names = { sku: 'sku', nama: 'nama_barang', barang: 'nama_barang', lokasi: 'lokasi_bulky', tanggal: 'tanggal', status: 'status', pic: 'pic', dokumen: 'dokumen', jumlah: 'qty' };
+  const names = { sku: 'sku', nama: 'nama_barang', barang: 'nama_barang', lokasi: 'lokasi_bulky', tanggal: 'tanggal', status: 'status', pic: 'pic', dokumen: 'dokumen', jumlah: 'qty', qty: 'qty', from: 'from_location', to: 'to_location', iseller: 'no_iseller', netsuite: 'netsuite', keterangan: 'keterangan', stockout: 'stockout' };
   const seen = new Set();
   const add = part => {
     const match = /^([a-z]+)\s*=\s*(.+)$/i.exec(part);

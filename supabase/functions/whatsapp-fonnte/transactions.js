@@ -2,11 +2,12 @@ import { inventorySearchGroups } from './inventory-search.js';
 import { displayText } from './menu.js';
 
 const COMMON = ['tanggal', 'from_location', 'to_location', 'sku', 'nama_barang', 'qty', 'status', 'pic', 'keterangan', 'no_iseller', 'netsuite', 'keterangan_lainnya', 'lokasi_surat_jalan', 'dokumen'];
+const SEARCHABLE = [...COMMON, 'stockout', 'status_lanjutan', 'no_iseller_awal', 'lokasi_bulky'];
 const normalize = value => String(value ?? '').normalize('NFKC').toLocaleLowerCase('id').replace(/\s+/g, ' ').trim();
 
 export function transactionMatches(row, filters) {
   return filters.every(filter => {
-    const fields = filter.fields.length > 1 ? Object.keys(row).filter(key => key !== 'source_row_number')
+    const fields = filter.fields.length > 1 ? SEARCHABLE
       : filter.fields[0] === 'lokasi_bulky' ? ['from_location', 'to_location', 'lokasi_surat_jalan'] : filter.fields;
     if (filter.exact) return normalize(row.sku) === normalize(filter.query);
     const text = normalize(fields.map(key => row[key]).join(' '));
