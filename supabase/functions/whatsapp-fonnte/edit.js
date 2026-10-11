@@ -1,6 +1,6 @@
 import { loadSearch, saveSearch } from './sessions.js';
 import { displayText } from './menu.js';
-import { commitSheetEdit } from './sheet-edit.js';
+import { commitSheetEdit, hasGoogleCredentials } from './sheet-edit.js';
 import { normalizeLocation, normalizeSku, normalizeText } from './sheet-normalization.js';
 
 const FIELDS = [
@@ -45,7 +45,7 @@ export async function handleEdit(message, sender, env, config, fetchFn) {
   if (!start && !editing && /^(simpan|ubah|batal)$/.test(lower)) return 'Tidak ada draft edit aktif. Cari transaksi lalu balas edit 1.';
   if (!start && !editing) return undefined;
   if (!canEdit(env, sender)) return 'Nomor Anda belum memiliki izin edit. Pencarian tetap dapat digunakan.';
-  if (!env.GOOGLE_CLIENT_EMAIL || !env.GOOGLE_PRIVATE_KEY || !env.SHEET_ID_2026) return 'Edit belum dikonfigurasi. Admin perlu mengisi GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY, dan SHEET_ID_2026 di Supabase Secrets.';
+  if (!hasGoogleCredentials(env) || !env.SHEET_ID_2026) return 'Edit belum dikonfigurasi. Admin perlu mengisi kredensial Google OAuth atau Service Account, serta SHEET_ID_2026 di Supabase Secrets.';
   if (lower === 'batal') { await saveSearch(config, sender, { ...(state.context || {}), phase: 'done' }, fetchFn); return 'Edit dibatalkan. Kirim pencarian baru untuk melanjutkan.'; }
   if (start) {
     if (!state || !/^Barang (Masuk|Keluar)$/.test(state.source) || !state.rows?.[Number(start[1]) - 1]) return 'Cari transaksi dahulu, misalnya masuk merlyn, lalu balas edit 1 sesuai nomor hasil.';

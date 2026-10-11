@@ -10,7 +10,26 @@ function canonical(field, value) {
 }
 const b64 = data => btoa(typeof data === 'string' ? data : JSON.stringify(data)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 
+const OAUTH_KEYS = ['GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET', 'GOOGLE_OAUTH_REFRESH_TOKEN'];
+const hasOAuthConfig = env => OAUTH_KEYS.some(key => Boolean(env[key]));
+export function hasGoogleCredentials(env) {
+  return hasOAuthConfig(env) ? OAUTH_KEYS.every(key => Boolean(env[key])) : Boolean(env.GOOGLE_CLIENT_EMAIL && env.GOOGLE_PRIVATE_KEY);
+}
+
 export async function googleToken(env, fetchFn) {
+  // Explicit OAuth settings select the Gmail identity. Never silently fall back to another account.
+  if (hasOAuthConfig(env)) {
+    if (!hasGoogleCredentials(env)) throw new Error('Google OAuth configuration incomplete');
+    const response = await fetchFn('https://oauth2.googleapis.com/token', {
+      method: 'POST', body: new URLSearchParams({ grant_type: 'refresh_token',
+        client_id: env.GOOGLE_OAUTH_CLIENT_ID, client_secret: env.GOOGLE_OAUTH_CLIENT_SECRET,
+        refresh_token: env.GOOGLE_OAUTH_REFRESH_TOKEN }), signal: AbortSignal.timeout(10000),
+    });
+    const payload = await response.json();
+    if (!response.ok || typeof payload.access_token !== 'string' || !payload.access_token) throw new Error('Google OAuth authentication failed');
+    return payload.access_token;
+  }
+  if (!hasGoogleCredentials(env)) throw new Error('Google authentication configuration missing');
   const now = Math.floor(Date.now() / 1000);
   const unsigned = `${b64({ alg: 'RS256', typ: 'JWT' })}.${b64({ iss: env.GOOGLE_CLIENT_EMAIL, scope: 'https://www.googleapis.com/auth/spreadsheets', aud: 'https://oauth2.googleapis.com/token', exp: now + 3600, iat: now })}`;
   const pem = env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n').replace(/-----[^-]+-----/g, '').replace(/\s/g, '');

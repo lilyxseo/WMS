@@ -1,3 +1,4 @@
+import { hasGoogleCredentials } from './sheet-edit.js';
 import { loadSearch, saveSearch } from './sessions.js';
 import { displayText } from './menu.js';
 import { buildInventorySearchQuery } from './inventory-search.js';
@@ -31,7 +32,7 @@ export async function handleStock(message, sender, env, config, fetchFn) {
   let profile;
   try { profile = await requireStockProfile(config, sender, fetchFn); }
   catch (error) { if (error instanceof ProfileError) return error.message; throw error; }
-  if (!env.GOOGLE_CLIENT_EMAIL || !env.GOOGLE_PRIVATE_KEY || !env.SHEET_ID_2026) return 'Stock in/out belum dikonfigurasi. Admin perlu mengisi GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY dan SHEET_ID_2026 di Supabase Secrets.';
+  if (!hasGoogleCredentials(env) || !env.SHEET_ID_2026) return 'Stock in/out belum dikonfigurasi. Admin perlu mengisi kredensial Google OAuth atau Service Account dan SHEET_ID_2026 di Supabase Secrets.';
   if (active && !start && state.profile.id !== profile.id) return 'Profil nomor WhatsApp sudah berubah. Batalkan draft lalu mulai stock in/out baru.';
   if (start || lower === 'ubah') {
     state = { kind: 'stock', direction: start ? start[1].toLowerCase() : state.direction, phase: 'query', page: 1, nonce: crypto.randomUUID(), profile: { id: profile.id, full_name: normalizeText(profile.full_name), role: profile.role } };

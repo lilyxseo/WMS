@@ -1,3 +1,4 @@
+import { hasGoogleCredentials } from './sheet-edit.js';
 import { loadSearch, saveSearch } from './sessions.js';
 import { canEdit } from './edit.js';
 import { displayText } from './menu.js';
@@ -22,7 +23,7 @@ export async function handleMovement(message, sender, env, config, fetchFn) {
   }
   if (state?.kind === 'movement' && state.phase === 'saving') return 'Movement sedang diproses atau belum terkonfirmasi. Periksa WMS sebelum mengulang.';
   if (!canEdit(env, sender)) return 'Nomor Anda belum memiliki izin movement. Hubungi admin untuk akses editor.';
-  if (!env.GOOGLE_CLIENT_EMAIL || !env.GOOGLE_PRIVATE_KEY || !env.SHEET_ID_2026 || !env.SHEET_ID_INVENTORY) return 'Movement belum dikonfigurasi. Admin perlu mengisi GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY, SHEET_ID_2026 dan SHEET_ID_INVENTORY di Supabase Secrets.';
+  if (!hasGoogleCredentials(env) || !env.SHEET_ID_2026 || !env.SHEET_ID_INVENTORY) return 'Movement belum dikonfigurasi. Admin perlu mengisi kredensial Google OAuth atau Service Account, SHEET_ID_2026 dan SHEET_ID_INVENTORY di Supabase Secrets.';
   if (lower === 'batal' || lower === 'menu') {
     await saveSearch(config, sender, {}, fetchFn);
     return lower === 'menu' ? undefined : 'Movement dibatalkan. Tidak ada data disimpan.';

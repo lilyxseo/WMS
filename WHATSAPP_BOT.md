@@ -320,3 +320,43 @@ ke hasil pencarian, panduan submenu, atau langkah transaksi yang sedang aktif.
 Tampilan hasil Barang Masuk/Keluar memakai label `SKU`, `Tanggal`, `From`, `To`,
 `Qty`, `Status`, dan `PIC`. Kolom Keterangan tidak ditampilkan dalam hasil pencarian;
 data aslinya tetap tersimpan dan dapat digunakan untuk pencarian atau edit.
+
+## Menggunakan akun Gmail melalui OAuth
+
+Bot mendukung OAuth akun Google pribadi untuk semua operasi Google Sheets (edit, movement,
+inbound, dan outbount). Email Gmail dan password saja bukan kredensial API. Pemilik akun harus
+mengotorisasi scope `https://www.googleapis.com/auth/spreadsheets`, lalu menyimpan refresh token
+untuk bot. Akun Gmail tersebut harus memiliki akses Editor ke spreadsheet tujuan.
+
+Langkah konfigurasi:
+
+1. Buka Google Cloud Console pada project milik Anda, aktifkan Google Sheets API.
+2. Atur Google Auth Platform / OAuth consent screen. Untuk Gmail pribadi pilih audience External;
+   jika aplikasi masih Testing, tambahkan Gmail Anda sebagai test user.
+3. Buat OAuth Client ID bertipe Web application. Tambahkan authorized redirect URI:
+   `https://developers.google.com/oauthplayground`.
+4. Buka https://developers.google.com/oauthplayground → Settings (ikon roda gigi) → aktifkan
+   **Use your own OAuth credentials**, isi Client ID dan Client Secret dari langkah sebelumnya.
+   Pilih Access type **Offline** dan consent prompt jika tersedia.
+5. Masukkan scope `https://www.googleapis.com/auth/spreadsheets`, klik Authorize APIs,
+   login menggunakan Gmail yang mempunyai akses spreadsheet, lalu setujui izin Google.
+6. Klik Exchange authorization code for tokens. Ambil **refresh token**, bukan access token.
+7. Isi Supabase Dashboard → Edge Functions → Secrets:
+   - `GOOGLE_OAUTH_CLIENT_ID`: Client ID OAuth milik project Anda.
+   - `GOOGLE_OAUTH_CLIENT_SECRET`: Client Secret OAuth tersebut.
+   - `GOOGLE_OAUTH_REFRESH_TOKEN`: refresh token akun Gmail yang sudah memberi izin.
+   - `SHEET_ID_2026` dan `SHEET_ID_INVENTORY`: spreadsheet tujuan yang sama seperti sebelumnya.
+
+Jika salah satu secret OAuth diisi, bot memilih mode OAuth dan mewajibkan ketiganya lengkap.
+OAuth yang gagal/tidak lengkap tidak otomatis memakai Service Account lama. Jika ketiga secret
+OAuth tidak tersedia, konfigurasi Service Account tetap berlaku. Secret lama boleh dihapus setelah
+OAuth akun Gmail berfungsi. Dukungan ini hanya mengubah bot Edge Function; aplikasi Cloudflare WMS
+masih menggunakan konfigurasi Service Account-nya sendiri.
+
+Untuk scope Sheets, refresh token dari consent screen External berstatus **Testing** biasanya
+kedaluwarsa setelah 7 hari. Untuk pemakaian bot berkelanjutan, atur status publishing yang sesuai
+(Production) dan ikuti persyaratan verifikasi yang ditampilkan Google. Token juga bisa dicabut
+melalui pengaturan akun Google; bot akan gagal autentikasi sampai akses diotorisasi kembali.
+Jangan menaruh Client Secret atau refresh token di source, chat, atau log. Simpan langsung di
+Supabase Secrets. Pergantian akun efektif setelah secret OAuth lengkap tersedia; deploy kode
+saja tidak memberikan izin akun Gmail dan tidak memindahkan kredensial secara otomatis.
