@@ -85,21 +85,34 @@ export async function handleFonnteWebhook({ request, env }, fetchFn = fetch) {
   try {
     const answer = payload.message.trim().toLowerCase();
     const isAnswer = ['y', 'n'].includes(answer);
+    const navigation = ['lanjut', 'berikutnya', 'sebelumnya'].includes(answer);
+    const followup = isAnswer || navigation;
     let options;
-    if (isAnswer) {
+    if (followup) {
       options = await loadSearch(getDatabaseConfig(env), phone(sender), fetchFn);
       if (!options) reply = 'Pencarian sebelumnya tidak tersedia atau sudah kedaluwarsa (15 menit). Kirim pencarian baru, misalnya merlyn a20-1.';
-      else {
+      else if (navigation) {
+        if (answer !== 'sebelumnya' && options.hasMore === false) {
+          reply = 'Sudah di halaman terakhir. Balas sebelumnya untuk kembali atau kirim pencarian baru.';
+          options = undefined;
+        } else if (answer === 'sebelumnya' && options.page <= 1) {
+          reply = 'Anda sudah di halaman pertama. Balas lanjut jika masih ada hasil berikutnya.';
+          options = undefined;
+        } else options = { ...options, page: options.page + (answer === 'sebelumnya' ? -1 : 1) };
+      } else if (/^Barang (Masuk|Keluar)$/.test(options.source)) {
+        reply = 'Pilihan y/n hanya untuk stok Kartu Stok. Balas lanjut atau sebelumnya untuk navigasi transaksi.';
+        options = undefined;
+      } else {
         options = { ...options, page: 1, stock: 'semua', hideZero: answer === 'n' };
         options.command = options.command.replace(/;\s*stok\s*=\s*[^;]+/ig, '').trim();
         if (answer === 'y') options.command += '; stok=semua';
       }
     }
     const menu = resolveMenu(payload.message);
-    const advanced = !isAnswer && menu === undefined ? parseAdvancedCommand(payload.message) : undefined;
-    if (!isAnswer && menu !== undefined) reply = menu;
-    else if (!isAnswer && advanced) options = advanced;
-    else if (!isAnswer) {
+    const advanced = !followup && menu === undefined ? parseAdvancedCommand(payload.message) : undefined;
+    if (!followup && menu !== undefined) reply = menu;
+    else if (!followup && advanced) options = advanced;
+    else if (!followup) {
       const search = parseInventoryMessage(payload.message);
       if (!search) reply = HELP;
       else {
@@ -110,8 +123,8 @@ export async function handleFonnteWebhook({ request, env }, fetchFn = fetch) {
       if (!['', 'Kartu Stock', 'Barang Masuk', 'Barang Keluar'].includes(options.source)) throw new CommandError('Pencarian global hanya memakai Kartu Stok. Gunakan masuk/keluar untuk transaksi.');
       const result = await searchAdvancedInventory(env, options, fetchFn, SOURCES, getDatabaseConfig(env));
       reply = formatAdvancedReply(result, options, formatInventoryReply);
+      await saveSearch(getDatabaseConfig(env), phone(sender), { ...options, hasMore: result.hasMore }, fetchFn);
       if (!options.source || options.source === 'Kartu Stock') {
-        await saveSearch(getDatabaseConfig(env), phone(sender), options, fetchFn);
         reply += '\n\n*Tampilkan stok 0? y/n*\ny = stok 0 dan stok yang masih ada\nn = sembunyikan stok 0\nPilihan berlaku untuk pencarian ini selama 15 menit.';
       }
     }

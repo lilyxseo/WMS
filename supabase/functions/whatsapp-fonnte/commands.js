@@ -33,7 +33,7 @@ export function parseAdvancedCommand(message) {
       if (value.length < 2 && name !== 'jumlah') throw new CommandError('Pencarian minimal 2 karakter.');
       filters.push({ query: value, fields: [names[name]] });
     } else if (name === 'halaman') {
-      if (!/^[1-9]\d*$/.test(value) || Number(value) > 100) throw new CommandError('Halaman harus berupa angka 1–100.');
+      if (!/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(Number(value) * 10)) throw new CommandError('Halaman harus berupa angka bulat positif yang valid.');
       options.page = Number(value);
     } else if (name === 'sumber') {
       const source = { 'kartu stock': 'Kartu Stock', 'kartu stok': 'Kartu Stock', rpl: 'RPL', bulky: 'BULKY', 'barang masuk': 'Barang Masuk', masuk: 'Barang Masuk', 'barang keluar': 'Barang Keluar', keluar: 'Barang Keluar' }[value];
@@ -89,15 +89,14 @@ export async function searchAdvancedInventory(env, search, fetchFn, sources, con
 }
 
 export function formatAdvancedReply(result, search, formatRows) {
-  const previous = search.page > 1 ? `\n⬅️ Halaman sebelumnya, kirim:\n${search.command}; halaman=${search.page - 1}` : '';
-  const warning = result.incomplete ? '\n⚠️ Pencarian transaksi dibatasi 5.000 baris terbaru per sumber. Baris lebih lama belum diperiksa.' : '';
+  const previous = search.page > 1 ? '\nHalaman sebelumnya: balas sebelumnya.' : '';
   if (!result.rows.length) return (search.page > 1 ? `🔎 *Hasil Pencarian*\nTidak ada hasil pada halaman ${search.page}.` : formatRows([]))
-    + warning + previous + '\n\n💡 Coba kata lebih singkat atau hapus filter sumber/stok.\nKetik menu untuk panduan pencarian.';
+    + previous + '\n\n💡 Coba kata lebih singkat atau hapus filter sumber/stok.\nKetik menu untuk panduan pencarian.';
   const body = formatRows(result.rows, 15);
   const dates = result.rows.map(row => Date.parse(row.synced_at)).filter(Number.isFinite);
   const freshness = dates.length ? `\nSinkronisasi tertua pada hasil: ${new Date(Math.min(...dates)).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB.` : '\nWaktu sinkronisasi tidak tersedia.';
   const scope = `Sumber: ${search.source || 'Kartu Stock'} • ${search.hideZero ? 'Stok 0 disembunyikan' : `Filter stok: ${search.stock || 'semua'}`}`;
   return `🔎 *Hasil Pencarian WMS*\nPencarian: ${displayText(search.command, 400)}\n${scope}\nHalaman ${search.page} • ${result.rows.length} baris ditampilkan\n\n${body}\n\n🕒 ${freshness.trim()}`
-    + warning + previous + (result.hasMore && search.page < 100 ? `\n\n➡️ Berikutnya, kirim:\n${search.command}; halaman=${search.page + 1}` : result.hasMore ? '\nPerjelas pencarian untuk hasil tambahan.' : result.incomplete ? '\nAkhir hasil dalam batas pencarian.' : '\n\n✅ Akhir hasil pencarian.')
+    + previous + (result.hasMore ? '\n\nHalaman berikutnya: balas lanjut.' : '\n\n✅ Akhir hasil pencarian.')
     + '\n\nKetik menu untuk pencarian lainnya.';
 }

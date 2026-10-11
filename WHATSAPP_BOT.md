@@ -77,8 +77,8 @@ Pencarian global **hanya membaca `inventory_kartu_stok`**. Langsung kirim:
   detail memakai SKU persis tanpa membedakan kapitalisasi.
 
 Global menampilkan **10 baris per halaman**, disertai perintah halaman berikut
-atau sebelumnya. Semua hasil dapat ditelusuri sampai batas halaman 100; jika
-masih ada lebih banyak, perjelas pencarian. Nilai negatif tetap ditampilkan.
+atau sebelumnya. Balas `lanjut` untuk halaman berikutnya dan `sebelumnya` untuk kembali,
+tanpa simbol atau menyalin query. Tidak ada batas jumlah halaman bisnis. Nilai negatif tetap ditampilkan.
 Default stok 0 disembunyikan. Setelah hasil, bot bertanya:
 
 ```text
@@ -87,11 +87,12 @@ Tampilkan stok 0? y/n
 
 - `y`: ulang pencarian terakhir dari halaman 1, tampilkan stok 0 serta stok lain.
 - `n`: ulang pencarian terakhir dari halaman 1, sembunyikan stok 0.
-- `stok=semua` pada perintah halaman berikut mempertahankan pilihan `y`.
+- Balasan `lanjut`/`sebelumnya` mempertahankan pilihan `y`.
 
 Konteks disimpan per nomor WhatsApp dalam `whatsapp_search_sessions` dengan
-masa berlaku 15 menit. Pencarian baru menggantikan konteks sebelumnya. Perintah
-barang masuk/keluar tidak menggantikan konteks stok. Nomor lain tidak dapat
+masa berlaku 15 menit. Pencarian baru menggantikan konteks sebelumnya. Pencarian barang masuk/keluar juga disimpan; navigasi selalu mengikuti
+pencarian terakhir, baik stok maupun transaksi. `y/n` hanya berlaku saat
+konteks terakhir adalah pencarian stok. Nomor lain tidak dapat
 memakai konteks pengguna. RLS aktif; hanya role server yang memperoleh akses.
 Tidak ada data hasil atau kredensial yang disimpan; hanya nomor, perintah/filter,
 dan waktu kedaluwarsa. Baris kedaluwarsa tidak dibaca; baris pengguna diperbarui
@@ -101,8 +102,12 @@ saat pencarian berikutnya, bukan otomatis dihapus oleh scheduler.
 `keluar` tanpa kata menampilkan transaksi baris terbaru. Hasil tetap 3 transaksi
 per halaman. Filter transaksi mendukung nama, SKU, lokasi, tanggal, PIC, status,
 dokumen, dan jumlah. Jumlah memakai pencocokan teks; 12 bisa cocok dengan 120.
-Pencarian transaksi dibatasi 5.000 baris terbaru per sumber dan memberi peringatan
-jika riwayat lama belum diperiksa. Urutan mengikuti baris sumber, bukan tanggal
+Pencarian transaksi tidak dibatasi 5.000 baris. Database dibaca dalam batch
+1.000 baris hingga halaman dan satu hasil berikutnya ditemukan atau data habis.
+Hanya empat hasil transaksi ditahan dalam memori. Query tanpa kata pencarian
+membaca halaman langsung dengan offset. Pencarian langka pada riwayat besar
+dapat membutuhkan lebih banyak waktu; kegagalan dibalas sebagai kegagalan,
+bukan hasil kosong. Urutan mengikuti baris sumber, bukan tanggal
 teks campuran. Jumlah transaksi tidak dijumlahkan sebagai saldo stok.
 
 Waktu sinkronisasi hasil stok ditampilkan dalam WIB. Query halaman baru bisa

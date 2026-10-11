@@ -18,7 +18,7 @@ function harness({stock=[],transactions=[]}={}) {
    return Response.json(value && Date.parse(value.expires_at)>Date.now() ? [{search:value.search}] : []);
   }
   reads.push(url);
-  if(url.includes('inventory_barang_')) return Response.json(transactions);
+  if(url.includes('inventory_barang_')) return Response.json(transactions.slice(Number(q.get('offset')), Number(q.get('offset')) + Number(q.get('limit'))));
   assert.ok(url.includes('inventory_kartu_stok'));
   const all=q.get('stok_akhir')==='neq.0' ? stock.filter(r=>Number(r.stok_akhir)!==0) : stock;
   const start=Number(q.get('offset')||0);return Response.json(all.slice(start,start+Number(q.get('limit'))));
@@ -40,8 +40,8 @@ test('global reads only Kartu Stok and displays ten rows, with proper next-page 
  const first=await send(h,'merlyn a20-1');
  assert.equal(h.reads.length,1);assert.match(h.reads[0],/limit=11/);
  assert.match(first,/10 baris ditampilkan/);assert.match(first,/SKU: SKU9/);assert.doesNotMatch(first,/SKU: SKU10/);
- assert.match(first,/merlyn a20-1; halaman=2/);assert.match(first,/Tampilkan stok 0\? y\/n/);
- const next=await send(h,'merlyn a20-1; halaman=2');
+ assert.match(first,/balas lanjut/);assert.match(first,/Tampilkan stok 0\? y\/n/);
+ const next=await send(h,'lanjut');
  assert.match(h.reads[1],/offset=10/);assert.match(next,/SKU: SKU10/);assert.match(next,/3 baris ditampilkan/);
  assert.doesNotMatch(next,/maksimal 3 baris per sumber/);
 });
@@ -69,13 +69,13 @@ test('search contexts are isolated by sender and expire',async()=>{
 });
 test('yes preference is retained by the next-page command',async()=>{
  const h=harness({stock:Array.from({length:12},(_,i)=>item(i,i%2?5:0))});await send(h,'merlyn');
- const yes=await send(h,'y');assert.match(yes,/merlyn; stok=semua; halaman=2/);
- const next=await send(h,'merlyn; stok=semua; halaman=2');assert.match(next,/SKU: SKU10/);assert.match(next,/Stok: 0/);
+ const yes=await send(h,'y');assert.match(yes,/balas lanjut/);
+ const next=await send(h,'lanjut');assert.match(next,/SKU: SKU10/);assert.match(next,/Stok: 0/);
 });
-test('dedicated inbound and outbound queries remain independent of stock and do not overwrite context',async()=>{
+test('dedicated inbound and outbound queries remain independent of stock and save their navigation context',async()=>{
  const h=harness({stock:[item(1)],transactions:[{sku:'6840',nama_barang:'Merlyn',qty:12,pic:'Andi',from_location:'A20-1',to_location:'B01',tanggal:'10/11/2026'}]});await send(h,'merlyn');
  for(const command of ['masuk merlyn','keluar merlyn']) {const text=await send(h,command);assert.match(text,/Jumlah transaksi: 12/);assert.match(text,/PIC: Andi/);assert.doesNotMatch(text,/Tampilkan stok 0/);}
- assert.equal(h.sessions.get('6281234567890').search.command,'merlyn');
+ assert.equal(h.sessions.get('6281234567890').search.command,'keluar merlyn');
 });
 test('legacy aliases, structured filters and menu registry stay usable',async()=>{
  assert.deepEqual(parseInventoryMessage('SKU 00123'),{query:'00123',fields:['sku']});
@@ -90,7 +90,33 @@ test('database and session failures produce an honest error; send rejection retu
  const fetchFn=async(url,options)=>url.endsWith('/send')?(assert.match(options.body.get('message'),/Database WMS belum dapat diakses/),Response.json({status:false})):Response.json({}, {status:500});
  assert.equal((await handleFonnteWebhook({request:request('merlyn'),env},fetchFn)).status,502);
 });
-test('transaction scan detects history beyond its explicit bound',async()=>{
- let calls=0;const fetchFn=async()=>Response.json(Array.from({length:++calls===6?1:1000},()=>({sku:'OTHER'})));
- const result=await searchTransactions({url:'https://test/',key:'test'},'inventory_barang_masuk','Barang Masuk',{page:1,filters:[{query:'missing',fields:['sku']}]},fetchFn);assert.equal(result.incomplete,true);assert.equal(calls,6);
+test('transaction search finds matches beyond 5000 rows and scans until actual end',async()=>{
+ let calls=0;const fetchFn=async()=>Response.json(++calls<=6?Array.from({length:1000},()=>({sku:'OTHER'})):[{sku:'FOUND',qty:3}]);
+ const result=await searchTransactions({url:'https://test/',key:'test'},'inventory_barang_masuk','Barang Masuk',{page:1,filters:[{query:'found',fields:['sku']}]},fetchFn);
+ assert.equal(result.rows[0].sku,'FOUND');assert.equal(calls,7);assert.equal(result.hasMore,false);
+});
+
+test('plain navigation handles both transaction directions and boundaries',async()=>{
+ for(const command of ['masuk','keluar']) {
+  const h=harness({transactions:Array.from({length:7},(_,i)=>({sku:`TX${i}`,qty:2}))});
+  assert.match(await send(h,command),/SKU: TX0/);
+  assert.match(await send(h,'lanjut'),/SKU: TX3/);
+  assert.match(await send(h,'lanjut'),/SKU: TX6/);
+  const reads=h.reads.length;assert.match(await send(h,'lanjut'),/halaman terakhir/);assert.equal(h.reads.length,reads);
+  assert.match(await send(h,'sebelumnya'),/SKU: TX3/);assert.match(await send(h,'sebelumnya'),/SKU: TX0/);
+  assert.match(await send(h,'sebelumnya'),/halaman pertama/);
+ }
+});
+
+test('navigation restores filters and zero-stock preference without requiring symbols',async()=>{
+ const h=harness({stock:Array.from({length:12},(_,i)=>item(i,i%2?5:0))});
+ await send(h,'merlyn a20-1');await send(h,'y');
+ const next=await send(h,'lanjut');assert.match(next,/Stok: 0/);assert.match(next,/SKU: SKU10/);
+ assert.match(await send(h,'sebelumnya'),/SKU: SKU0/);
+ assert.ok(h.reads.every(url=>url.includes('merlyn')&&url.includes('a20-1')));
+});
+
+test('page numbers above 100 remain accessible and invalid numbers are rejected',()=>{
+ assert.equal(parseAdvancedCommand('masuk; halaman=150').page,150);
+ for(const value of ['0','-1','1.5','9007199254740992']) assert.throws(()=>parseAdvancedCommand(`masuk; halaman=${value}`));
 });

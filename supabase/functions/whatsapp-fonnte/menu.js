@@ -20,7 +20,7 @@ export function renderMenu(entries = SEARCH_MENU) {
     'Tambahkan filter setelah titik koma:',
     '• sumber=Kartu Stock / Barang Masuk / Barang Keluar',
     '• stok=ada / kosong / semua',
-    '• halaman=2 untuk melanjutkan hasil',
+    '• navigasi: balas lanjut atau sebelumnya',
     '• transaksi: tanggal=, status=, pic=, dokumen=, jumlah=',
     'Contoh: cari merlyn; stok=ada',
     '',
@@ -28,7 +28,7 @@ export function renderMenu(entries = SEARCH_MENU) {
     `Kirim nomor ${entries.map(item => item.id).join(', ')} untuk petunjuk, atau langsung kirim contoh perintah.`,
     'Ketik menu kapan saja untuk kembali.',
     '',
-    'ℹ️ Data mengikuti sinkronisasi WMS. Filter stok hanya mencari sumber stok. Transaksi dibaca dari baris terbaru, maksimal 5.000 baris per sumber.',
+    'ℹ️ Data mengikuti sinkronisasi WMS. Filter stok hanya mencari sumber stok. Transaksi dicari dari baris terbaru sampai hasil ditemukan atau data habis.',
   ].join('\n');
 }
 
@@ -44,9 +44,9 @@ export function resolveMenu(message) {
     `🔎 *${entry.title}*`, entry.description, '',
     '*Kirim perintah berikut, ganti nilainya:*', entry.example,
     ...(entry.extra ? [entry.extra] : []), '',
-    '*Filter opsional*', entry.command === 'cari' ? `${entry.example}; stok=ada` : `${entry.example}; halaman=2`, '',
+    '*Filter opsional*', entry.command === 'cari' ? `${entry.example}; stok=ada` : 'Balas lanjut untuk halaman berikutnya.', '',
     'Hasil stok memuat lokasi dan stok; transaksi memuat tanggal, asal/tujuan, jumlah, status, dan PIC.',
-    'Salin perintah navigasi dari balasan untuk pindah halaman.',
+    'Cukup balas lanjut atau sebelumnya untuk pindah halaman.',
     'Ketik menu untuk melihat semua pilihan.',
   ].join('\n');
 }

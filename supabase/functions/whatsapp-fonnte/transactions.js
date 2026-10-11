@@ -17,24 +17,29 @@ export async function searchTransactions(config, table, source, search, fetchFn)
   const fields = [...COMMON, ...(source === 'Barang Masuk' ? ['stockout'] : ['status_lanjutan', 'no_iseller_awal']), 'source_row_number'];
   const headers = { apikey: config.key, Authorization: `Bearer ${config.key}` };
   const rows = [];
-  let incomplete = false;
-  // Bounded reads match numeric qty and other business values without casting database fields.
-  const maxRows = 5000, batchSize = 1000;
-  const needed = search.page * 3 + 1;
-  for (let offset = 0; offset <= maxRows; offset += batchSize) {
-    const limit = offset === maxRows ? 1 : batchSize;
+  const batchSize = 1000, skip = (search.page - 1) * 3;
+  let matched = 0;
+  const direct = !search.filters.length && !search.hideZero;
+  // Read until the requested page and one lookahead match are found, or history ends.
+  // Keep only four matches in memory, regardless of how much history is scanned.
+  for (let offset = direct ? skip : 0; ; offset += batchSize) {
+    const limit = direct ? 4 : batchSize;
     const response = await fetchFn(`${config.url}/rest/v1/${table}?select=${fields.join(',')}&order=source_row_number.desc&offset=${offset}&limit=${limit}`, {
       headers, signal: AbortSignal.timeout(10000),
     });
     if (!response.ok) throw new Error('Transaction lookup failed');
     const batch = await response.json();
     if (!Array.isArray(batch)) throw new Error('Invalid transaction response');
-    if (offset === maxRows) { incomplete = batch.length > 0; break; }
-    rows.push(...batch.filter(row => (!search.hideZero || Number(row.qty) !== 0) && transactionMatches(row, search.filters)));
-    if (rows.length >= needed || batch.length < batchSize) break;
+    for (const row of batch) {
+      if ((!search.hideZero || Number(row.qty) !== 0) && transactionMatches(row, search.filters)) {
+        if (direct || matched >= skip) rows.push(row);
+        matched++;
+        if (rows.length === 4) break;
+      }
+    }
+    if (direct || rows.length === 4 || batch.length < batchSize) break;
   }
-  const offset = (search.page - 1) * 3;
-  return { source, rows: rows.slice(offset, offset + 3), hasMore: rows.length > offset + 3, incomplete };
+  return { source, rows: rows.slice(0, 3), hasMore: rows.length > 3 };
 }
 
 export function formatTransactionRow(row, index) {
