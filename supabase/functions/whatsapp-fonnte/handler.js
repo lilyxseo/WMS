@@ -9,6 +9,7 @@ import { BOT_HELP, CommandError, parseAdvancedCommand, searchAdvancedInventory, 
 import { resolveMenu, displayText } from './menu.js';
 import { formatTransactionRow } from './transactions.js';
 import { loadSearch, saveSearch } from './sessions.js';
+import { handleEdit, canEdit } from './edit.js';
 
 const SOURCES = [
   ['Kartu Stock', 'inventory_kartu_stok'],
@@ -83,6 +84,9 @@ export async function handleFonnteWebhook({ request, env }, fetchFn = fetch) {
   }
   let reply;
   try {
+    const editReply = await handleEdit(payload.message, phone(sender), env, getDatabaseConfig(env), fetchFn);
+    if (editReply !== undefined) reply = editReply;
+    else {
     const answer = payload.message.trim().toLowerCase();
     const isAnswer = ['y', 'n'].includes(answer);
     const navigation = ['lanjut', 'berikutnya', 'sebelumnya'].includes(answer);
@@ -123,10 +127,12 @@ export async function handleFonnteWebhook({ request, env }, fetchFn = fetch) {
       if (!['', 'Kartu Stock', 'Barang Masuk', 'Barang Keluar'].includes(options.source)) throw new CommandError('Pencarian global hanya memakai Kartu Stok. Gunakan masuk/keluar untuk transaksi.');
       const result = await searchAdvancedInventory(env, options, fetchFn, SOURCES, getDatabaseConfig(env));
       reply = formatAdvancedReply(result, options, formatInventoryReply);
-      await saveSearch(getDatabaseConfig(env), phone(sender), { ...options, hasMore: result.hasMore }, fetchFn);
+      await saveSearch(getDatabaseConfig(env), phone(sender), { ...options, hasMore: result.hasMore, rows: /^Barang (Masuk|Keluar)$/.test(options.source) ? result.rows : undefined }, fetchFn);
+      if (/^Barang (Masuk|Keluar)$/.test(options.source) && result.rows.length && canEdit(env, phone(sender))) reply += '\n\nUntuk edit, balas edit 1 sesuai nomor transaksi.';
       if (!options.source || options.source === 'Kartu Stock') {
         reply += '\n\n*Tampilkan stok 0? y/n*\ny = stok 0 dan stok yang masih ada\nn = sembunyikan stok 0\nPilihan berlaku untuk pencarian ini selama 15 menit.';
       }
+    }
     }
   } catch (error) {
     reply = error instanceof CommandError || error.message.startsWith('Pencarian ')

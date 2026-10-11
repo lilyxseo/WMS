@@ -62,9 +62,9 @@ dan hostname proyek Supabase untuk pengembangan di lingkungan cloud.
 
 ## Pencarian dan menu
 
-Ketik `menu`, `bantuan`, atau `halo`. Menu memiliki tiga fitur: pencarian global,
-barang masuk, dan barang keluar. Nomor 1–3 membuka panduan, bukan memilih hasil.
-Menu utama ditampilkan ringkas: tiga pilihan, contoh, dan satu baris navigasi.
+Ketik `menu`, `bantuan`, atau `halo`. Menu memiliki empat fitur: pencarian global,
+barang masuk, barang keluar, dan edit transaksi. Nomor 1–4 membuka panduan, bukan memilih hasil.
+Menu utama ditampilkan ringkas: empat pilihan, contoh, dan satu baris navigasi.
 Panduan singkat per fitur tersedia saat nomor menu dikirim.
 Menu dan panduan dihasilkan dari `SEARCH_MENU` di `menu.js`; fitur baru wajib
 menambah registry, implementasi, dan tes sekaligus.
@@ -96,8 +96,9 @@ masa berlaku 15 menit. Pencarian baru menggantikan konteks sebelumnya. Pencarian
 pencarian terakhir, baik stok maupun transaksi. `y/n` hanya berlaku saat
 konteks terakhir adalah pencarian stok. Nomor lain tidak dapat
 memakai konteks pengguna. RLS aktif; hanya role server yang memperoleh akses.
-Tidak ada data hasil atau kredensial yang disimpan; hanya nomor, perintah/filter,
-dan waktu kedaluwarsa. Baris kedaluwarsa tidak dibaca; baris pengguna diperbarui
+Konteks pencarian stok menyimpan nomor, perintah/filter dan waktu kedaluwarsa.
+Konteks transaksi turut menyimpan baris pada halaman terakhir untuk pemilihan
+edit. Draft edit menyimpan nilai lama dan baru; kredensial tidak disimpan. Baris kedaluwarsa tidak dibaca; baris pengguna diperbarui
 saat pencarian berikutnya, bukan otomatis dihapus oleh scheduler.
 
 `masuk kabel` / `keluar ABC123` mencari transaksi masing-masing. `masuk` /
@@ -164,3 +165,56 @@ konteks bot serta izin server. Migrasi WMS lain tidak dijalankan. Deployment
 berhenti jika pembuatan tabel gagal. Lihat status deployment melalui
 tab Actions GitHub, workflow **Deploy WhatsApp bot to Supabase**. Konfigurasi
 workflow di Git belum membuktikan deployment berhasil; pastikan run hijau.
+
+## Edit barang masuk / keluar
+
+Fitur awal ini hanya mengedit transaksi yang sudah ada; tambah/hapus belum
+tersedia. Menu otomatis memuat pilihan Edit transaksi dari registry.
+
+Alur:
+
+1. Kirim `masuk merlyn` atau `keluar ABC123`.
+2. Balas `edit 1` sesuai nomor hasil di halaman terakhir.
+3. Pilih nomor kolom: jumlah, status, PIC, keterangan, asal, tujuan, tanggal,
+   SKU, atau nama barang.
+4. Kirim nilai baru. Bot menampilkan nilai lama → baru.
+5. Balas `simpan`, `ubah` untuk menambahkan kolom lain, atau `batal`.
+
+Jumlah menerima angka 0 atau lebih. Tanggal memakai YYYY-MM-DD. Identitas
+transaksi tampil sebelum memilih kolom. Nomor hasil hanya berlaku pada halaman
+terakhir; tidak sama dengan nomor baris spreadsheet. Draft kedaluwarsa setelah
+15 menit tanpa interaksi. `menu` membatalkan draft yang belum disimpan.
+
+Konfigurasi tambahan di Supabase Edge Function Secrets:
+
+- `WHATSAPP_EDITOR_NUMBERS`: nomor editor yang disetujui, dipisahkan koma.
+  Nomor juga harus masuk `WHATSAPP_ALLOWED_NUMBERS`. Default kosong berarti
+  tidak ada nomor yang dapat mengedit; izin pencarian tidak otomatis memberi izin edit.
+- `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY`: service account Google yang sama
+  dengan WMS; spreadsheet harus dibagikan dengan izin editor ke service account.
+- `SHEET_ID_2026`: spreadsheet utama transaksi WMS.
+
+Google private key diperlukan untuk signing lokal, sehingga tidak bisa berupa
+placeholder proxy. Isi nilainya secara aman pada Secrets Supabase, bukan chat.
+Status, PIC, SKU dan lokasi berupa teks sesuai data WMS; belum ada validasi
+referensi katalog/user. Tidak ada editor yang diberikan otomatis oleh deploy.
+
+Google Sheets menjadi sumber utama: `Barang Masuk` dan `Barang KeIuar` (huruf I
+besar sesuai nama sheet WMS yang dipakai aplikasi). Sebelum menulis, bot
+membandingkan kolom A–I dengan snapshot transaksi. Bila data berbeda atau belum
+tersinkron, edit ditolak dan pengguna harus mencari ulang setelah sinkronisasi.
+Writes memakai RAW untuk mempertahankan teks sebagai teks, bukan formula.
+
+Konfirmasi diklaim secara atomik melalui session nonce/phase di Supabase agar
+konfirmasi duplikat tidak melakukan write kedua. Sesudah Sheets tersimpan,
+Supabase diperbarui untuk nomor baris tersebut. Jika mirror gagal, bot melaporkan
+bahwa Sheets tersimpan tetapi sinkronisasi Supabase masih ditunggu. Jika respons
+write Sheets gagal/timeout, hasil dianggap belum pasti; bot meminta pemeriksaan
+WMS, bukan mencoba write ulang otomatis. Sheets dan Supabase bukan satu transaksi
+atomik. Perubahan Sheets oleh pengguna lain di antara pemeriksaan dan write
+masih dapat terjadi; jangan melakukan edit bersamaan pada baris yang sama.
+
+Konteks edit menyimpan snapshot transaksi dan draft perubahan sementara dalam
+session yang hanya dapat diakses server. Tidak ada token/private key dalam
+session. Pencarian/navigasi tetap read-only. Jangan mengedit data produksi saat
+menjalankan tes; suite menggunakan Sheets, Supabase, dan Fonnte tiruan.

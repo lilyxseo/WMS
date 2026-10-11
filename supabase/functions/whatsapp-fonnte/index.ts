@@ -9,5 +9,9 @@ Deno.serve((request: Request) => handleFonnteWebhook({
     FONNTE_TOKEN: Deno.env.get('FONNTE_TOKEN'),
     FONNTE_WEBHOOK_SECRET: Deno.env.get('FONNTE_WEBHOOK_SECRET'),
     WHATSAPP_ALLOWED_NUMBERS: Deno.env.get('WHATSAPP_ALLOWED_NUMBERS'),
+    WHATSAPP_EDITOR_NUMBERS: Deno.env.get('WHATSAPP_EDITOR_NUMBERS'),
+    GOOGLE_CLIENT_EMAIL: Deno.env.get('GOOGLE_CLIENT_EMAIL'),
+    GOOGLE_PRIVATE_KEY: Deno.env.get('GOOGLE_PRIVATE_KEY'),
+    SHEET_ID_2026: Deno.env.get('SHEET_ID_2026'),
   },
 }));
