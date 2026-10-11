@@ -17,6 +17,7 @@ function harness({stock=[],transactions=[]}={}) {
    const value=sessions.get(q.get('sender').slice(3));
    return Response.json(value && Date.parse(value.expires_at)>Date.now() ? [{search:value.search}] : []);
   }
+  if(url.includes('/users?')) return Response.json([]);
   reads.push(url);
   if(url.includes('inventory_barang_')) return Response.json(transactions.slice(Number(q.get('offset')), Number(q.get('offset')) + Number(q.get('limit'))));
   assert.ok(url.includes('inventory_kartu_stok'));
