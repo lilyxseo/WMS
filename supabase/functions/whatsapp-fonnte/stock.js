@@ -1,3 +1,4 @@
+import { formatGoogleFailure } from './google-errors.js';
 import { hasGoogleCredentials } from './sheet-edit.js';
 import { loadSearch, saveSearch } from './sessions.js';
 import { displayText } from './menu.js';
@@ -95,7 +96,10 @@ export async function handleStock(message, sender, env, config, fetchFn) {
   if (!(await claim.json()).length) return 'Konfirmasi sudah diproses atau kedaluwarsa. Periksa WMS.';
   let reply;
   try { reply = await commitStock(env, state, fetchFn); }
-  catch { reply = `Penyimpanan gagal atau belum terkonfirmasi. Jangan mengulang sebelum memeriksa Barang ${state.direction === 'in' ? 'Masuk' : 'Keluar'} di WMS.\nReferensi: ${state.nonce}`; }
+  catch (error) {
+    console.error('[WHATSAPP_STOCK_GOOGLE_FAILED]', JSON.stringify({ reference: state.nonce, code: error.code || 'UNKNOWN', writeAttempted: error.writeAttempted ?? true }));
+    reply = formatGoogleFailure(error, state.nonce, `Barang ${state.direction === 'in' ? 'Masuk' : 'Keluar'}`);
+  }
   await saveSearch(config, sender, { kind: 'stock', phase: 'done', nonce: state.nonce, direction: state.direction }, fetchFn);
   return reply;
 }

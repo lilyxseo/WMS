@@ -66,7 +66,7 @@ dan hostname proyek Supabase untuk pengembangan di lingkungan cloud.
 
 Ketik `menu`, `bantuan`, atau `halo`. Menu memiliki empat fitur: pencarian global,
 barang masuk, barang keluar, edit transaksi, movement, stock in, dan stock out.
-Nomor 1–7 membuka panduan, bukan memilih hasil saat wizard tidak aktif.
+Nomor 1–8 membuka panduan, bukan memilih hasil saat wizard tidak aktif.
 Menu utama ditampilkan ringkas: empat pilihan, contoh, dan satu baris navigasi.
 Panduan singkat per fitur tersedia saat nomor menu dikirim.
 Menu dan panduan dihasilkan dari `SEARCH_MENU` di `menu.js`; fitur baru wajib
@@ -360,3 +360,17 @@ melalui pengaturan akun Google; bot akan gagal autentikasi sampai akses diotoris
 Jangan menaruh Client Secret atau refresh token di source, chat, atau log. Simpan langsung di
 Supabase Secrets. Pergantian akun efektif setelah secret OAuth lengkap tersedia; deploy kode
 saja tidak memberikan izin akun Gmail dan tidak memindahkan kredensial secara otomatis.
+
+## Diagnostik Google
+
+Kirim `cek google` (menu 8) untuk memeriksa kredensial aktif, autentikasi, akses baca spreadsheet,
+dan keberadaan tab wajib tanpa menulis transaksi atau mengubah draft aktif. Pemeriksaan baca
+tidak membuktikan izin Editor atau izin menulis pada tab yang dilindungi.
+
+Error inbound/outbount kini membedakan kegagalan sebelum penulisan (tidak ada transaksi ditulis)
+dengan penulisan yang sudah dicoba tetapi belum terkonfirmasi. Kode error membedakan refresh token
+ditolak, OAuth Client ID/Secret salah, Sheets API belum aktif, scope kurang, spreadsheet/tab
+tidak ditemukan, akses ditolak, dan batas request Google. Log hanya menyimpan referensi draft,
+kode error, dan apakah penulisan sudah dicoba; token dan respons mentah Google tidak dicetak.
+Untuk error lama yang belum terkonfirmasi, periksa keterangan `WA:<referensi>` pada Barang Masuk/Keluar
+sebelum mengulang transaksi.

@@ -1,3 +1,4 @@
+import { handleGoogleCheck } from './google-check.js';
 function getDatabaseConfig(env) {
   const url = String(env.SUPABASE_URL || '').replace(/\/$/, '');
   const key = env.WMS_SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
@@ -95,7 +96,8 @@ export async function handleFonnteWebhook({ request, env }, fetchFn = fetch) {
   }
   let reply;
   try {
-    const stockReply = await handleStock(payload.message, phone(sender), env, getDatabaseConfig(env), fetchFn);
+    const googleReply = await handleGoogleCheck(payload.message, env, fetchFn);
+    const stockReply = googleReply !== undefined ? googleReply : await handleStock(payload.message, phone(sender), env, getDatabaseConfig(env), fetchFn);
     const movementReply = stockReply !== undefined ? stockReply : await handleMovement(payload.message, phone(sender), env, getDatabaseConfig(env), fetchFn);
     const editReply = movementReply !== undefined ? movementReply : await handleEdit(payload.message, phone(sender), env, getDatabaseConfig(env), fetchFn);
     if (editReply !== undefined) reply = editReply;

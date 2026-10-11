@@ -1,3 +1,4 @@
+import { GoogleAccessError, googleResponseError } from './google-errors.js';
 import { googleToken } from './sheet-edit.js';
 import { movementDates } from './sheet-movement.js';
 import { displayText } from './menu.js';
@@ -5,13 +6,20 @@ import { normalizeLocation, normalizeSku, normalizeText, normalizeNumber } from 
 
 export async function commitStock(env, state, fetchFn) {
   if (!['in', 'out'].includes(state.direction) || !Number.isFinite(state.qty) || state.qty <= 0 || !state.profile?.id || !normalizeText(state.profile.full_name) || !normalizeLocation(state.location) || !normalizeSku(state.row?.sku)) throw new Error('Invalid stock draft');
-  const access = await googleToken(env, fetchFn);
+  let access;
+  try { access = await googleToken(env, fetchFn); }
+  catch (error) { if (error instanceof GoogleAccessError) throw error; throw new GoogleAccessError('GOOGLE_AUTH_FAILED', 'Autentikasi Google gagal. Periksa kredensial Google pada Supabase Secrets.', false); }
   const base = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(env.SHEET_ID_2026)}`;
   const headers = { Authorization: `Bearer ${access}`, 'Content-Type': 'application/json' };
   const read = async range => {
-    const response = await fetchFn(`${base}/values/${encodeURIComponent(range)}?valueRenderOption=FORMATTED_VALUE`, { headers, signal: AbortSignal.timeout(15000) });
-    if (!response.ok) throw new Error('Stock source read failed');
-    return (await response.json()).values || [];
+    let response;
+    try { response = await fetchFn(`${base}/values/${encodeURIComponent(range)}?valueRenderOption=FORMATTED_VALUE`, { headers, signal: AbortSignal.timeout(15000) }); }
+    catch { throw new GoogleAccessError('SHEETS_READ_CONNECTION_FAILED', 'Koneksi baca Google Sheets gagal. Coba cek google kembali nanti.', false); }
+    if (!response.ok) throw await googleResponseError(response);
+    let payload;
+    try { payload = await response.json(); }
+    catch { throw new GoogleAccessError('SHEETS_INVALID_RESPONSE', 'Respons baca Google Sheets tidak valid. Coba cek google kembali nanti.', false); }
+    return payload.values || [];
   };
   const stock = await read("'Kartu Stock'!A:Z");
   const header = (stock[0] || []).map(value => String(value).toUpperCase().replace(/\s/g, ''));
@@ -34,6 +42,6 @@ export async function commitStock(env, state, fetchFn) {
   // Only the warehouse location is requested. Counterparty locations remain blank.
   const values = [dates.sheetDate, inbound ? '' : state.location, inbound ? state.location : '', state.row.sku, state.row.nama_barang, state.qty, status, normalizeText(state.profile.full_name), `STOCK ${state.direction.toUpperCase()} WHATSAPP | WA:${state.nonce} | USER:${state.profile.id}`];
   const response = await fetchFn(`${base}/values/${encodeURIComponent(`'${sheet}'!A:I`)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, { method: 'POST', headers, body: JSON.stringify({ values: [values] }), signal: AbortSignal.timeout(15000) });
-  if (!response.ok) throw new Error('Stock source write failed or uncertain');
+  if (!response.ok) throw await googleResponseError(response, true);
   return `✅ *Stock ${inbound ? 'In' : 'Out'} tersimpan*\nSKU: ${displayText(state.row.sku)}\nBarang: ${displayText(state.row.nama_barang)}\nLokasi: ${displayText(state.location)}\nQty: ${state.qty}\nPIC: ${displayText(state.profile.full_name)}\nTanggal: ${dates.date}\n\nSinkronkan WMS untuk memperbarui pencarian Supabase.\nReferensi: ${state.nonce}`;
 }

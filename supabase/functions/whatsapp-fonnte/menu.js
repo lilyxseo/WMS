@@ -7,6 +7,7 @@ export const SEARCH_MENU = Object.freeze([
   { id: '5', command: 'movement', title: 'Movement', description: 'Pindahkan barang: cari, pilih asal, isi tujuan, jumlah dan PIC, lalu konfirmasi. Khusus nomor editor.', example: 'movement merlyn a20-1', extra: 'movement' },
   { id: '6', command: 'inbound', title: 'Inbound', description: 'Cari barang, isi lokasi tujuan dan qty, lalu konfirmasi. PIC otomatis dari profil nomor WhatsApp.', example: 'inbound merlyn', extra: 'inbound' },
   { id: '7', command: 'outbount', title: 'Outbount', description: 'Cari barang, isi lokasi asal dan qty, lalu konfirmasi. Stok diperiksa dan PIC otomatis dari profil.', example: 'outbount merlyn a20-1', extra: 'outbount' },
+  { id: '8', command: 'cek google', title: 'Cek Google', description: 'Periksa autentikasi dan akses spreadsheet tanpa membuat transaksi.', example: 'cek google' },
 ]);
 
 export function renderMenu(entries = SEARCH_MENU) {

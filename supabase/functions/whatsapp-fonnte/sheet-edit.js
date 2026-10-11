@@ -1,3 +1,4 @@
+import { GoogleAccessError } from './google-errors.js';
 import { normalizeDate, normalizeNumber, normalizeLocation, normalizeSku, normalizeText } from './sheet-normalization.js';
 const FIELD_ORDER = ['tanggal', 'from_location', 'to_location', 'sku', 'nama_barang', 'qty', 'status', 'pic', 'keterangan'];
 const clean = value => String(value ?? '').trim();
@@ -20,13 +21,20 @@ export async function googleToken(env, fetchFn) {
   // Explicit OAuth settings select the Gmail identity. Never silently fall back to another account.
   if (hasOAuthConfig(env)) {
     if (!hasGoogleCredentials(env)) throw new Error('Google OAuth configuration incomplete');
-    const response = await fetchFn('https://oauth2.googleapis.com/token', {
+    let response;
+    try { response = await fetchFn('https://oauth2.googleapis.com/token', {
       method: 'POST', body: new URLSearchParams({ grant_type: 'refresh_token',
         client_id: env.GOOGLE_OAUTH_CLIENT_ID, client_secret: env.GOOGLE_OAUTH_CLIENT_SECRET,
         refresh_token: env.GOOGLE_OAUTH_REFRESH_TOKEN }), signal: AbortSignal.timeout(10000),
-    });
-    const payload = await response.json();
-    if (!response.ok || typeof payload.access_token !== 'string' || !payload.access_token) throw new Error('Google OAuth authentication failed');
+    }); } catch { throw new GoogleAccessError('OAUTH_CONNECTION_FAILED', 'Koneksi ke Google OAuth gagal. Coba cek google kembali nanti.', false, 'Google OAuth authentication failed'); }
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || typeof payload.access_token !== 'string' || !payload.access_token) {
+      const code = payload.error === 'invalid_grant' ? 'OAUTH_INVALID_GRANT' : ['invalid_client', 'unauthorized_client'].includes(payload.error) ? 'OAUTH_INVALID_CLIENT' : 'OAUTH_TOKEN_FAILED';
+      const message = code === 'OAUTH_INVALID_GRANT' ? 'Refresh token ditolak Google. Token mungkin dicabut, kedaluwarsa, atau tidak cocok dengan OAuth Client ID. Buat refresh token baru memakai Client ID yang sama.'
+        : code === 'OAUTH_INVALID_CLIENT' ? 'Client ID atau Client Secret OAuth ditolak Google. Periksa kedua secret dan pastikan refresh token dibuat dengan client yang sama.'
+        : 'Autentikasi Google OAuth gagal. Periksa tiga secret OAuth, lalu gunakan cek google.';
+      throw new GoogleAccessError(code, message, false, 'Google OAuth authentication failed');
+    }
     return payload.access_token;
   }
   if (!hasGoogleCredentials(env)) throw new Error('Google authentication configuration missing');
