@@ -1,0 +1,5 @@
+project_id = "wms"
+
+# Fonnte cannot send a Supabase user JWT. The handler validates its own secret.
+[functions.whatsapp-fonnte]
+verify_jwt = false
