@@ -302,3 +302,16 @@ Untuk kegagalan yang belum terkonfirmasi, bot memberikan referensi dan tidak men
 
 Kolom nomor telepon ditambahkan oleh admin di luar deploy ini. Deploy tidak mengubah struktur
 atau isi tabel `users`, dan tes menggunakan profil serta Sheets tiruan tanpa transaksi produksi.
+
+## Sapaan welcome
+
+Saat membuka menu utama (`menu`, `help`, `bantuan`, `mulai`, `start`, `halo`, `hai`,
+atau salam `selamat pagi/siang/sore/malam`), bot menampilkan welcome sebelum daftar menu.
+Nama diambil dari `users.full_name` (fallback `username`) dan role dari `users.role`,
+berdasarkan nomor WhatsApp pengirim. Nomor lama di allowlist yang belum memiliki profil
+mendapat welcome umum dengan keterangan bahwa nama dan role belum tersedia.
+
+Sapaan memakai waktu `BUSINESS_TIME_ZONE`, default `Asia/Jakarta`:
+pagi 05:00–10:59, siang 11:00–14:59, sore 15:00–17:59, dan malam 18:00–04:59.
+Isi salam yang dikirim tidak mengubah sapaan waktu sebenarnya. Sapaan tidak ditambahkan
+ke hasil pencarian, panduan submenu, atau langkah transaksi yang sedang aktif.

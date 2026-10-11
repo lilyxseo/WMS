@@ -6,9 +6,10 @@ function getDatabaseConfig(env) {
 }
 import { buildInventorySearchQuery, normalizeSearchQuery } from './inventory-search.js';
 import { BOT_HELP, CommandError, parseAdvancedCommand, searchAdvancedInventory, formatAdvancedReply } from './commands.js';
-import { resolveMenu, displayText } from './menu.js';
+import { resolveMenu, displayText, isMainMenu } from './menu.js';
 import { formatTransactionRow } from './transactions.js';
 import { loadSearch, saveSearch } from './sessions.js';
+import { renderWelcome } from './welcome.js';
 import { handleStock } from './stock.js';
 import { findPhoneProfile, normalizePhone } from './profiles.js';
 import { handleMovement } from './movement.js';
@@ -85,9 +86,11 @@ export async function handleFonnteWebhook({ request, env }, fetchFn = fetch) {
     || typeof payload.message !== 'string') {
     return json({ success: true, ignored: true });
   }
+  let verifiedProfile;
   if (!allowed.includes(phone(sender))) {
     try {
-      if (!await findPhoneProfile(getDatabaseConfig(env), phone(sender), fetchFn)) return json({ success: true, ignored: true });
+      verifiedProfile = await findPhoneProfile(getDatabaseConfig(env), phone(sender), fetchFn);
+      if (!verifiedProfile) return json({ success: true, ignored: true });
     } catch { return json({ success: false, message: 'Profil WhatsApp belum dapat diverifikasi' }, 503); }
   }
   let reply;
@@ -124,7 +127,15 @@ export async function handleFonnteWebhook({ request, env }, fetchFn = fetch) {
     }
     const menu = resolveMenu(payload.message);
     const advanced = !followup && menu === undefined ? parseAdvancedCommand(payload.message) : undefined;
-    if (!followup && menu !== undefined) reply = menu;
+    if (!followup && menu !== undefined) {
+      if (isMainMenu(payload.message)) {
+        if (!verifiedProfile) {
+          try { verifiedProfile = await findPhoneProfile(getDatabaseConfig(env), phone(sender), fetchFn); }
+          catch { /* Existing allowed numbers may keep opening the menu without a readable profile. */ }
+        }
+        reply = `${renderWelcome(verifiedProfile, new Date(), env.BUSINESS_TIME_ZONE || 'Asia/Jakarta')}\n\n${menu}`;
+      } else reply = menu;
+    }
     else if (!followup && advanced) options = advanced;
     else if (!followup) {
       const search = parseInventoryMessage(payload.message);

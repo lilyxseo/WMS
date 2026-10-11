@@ -18,9 +18,14 @@ export function renderMenu(entries = SEARCH_MENU) {
   ].join('\n');
 }
 
+export function isMainMenu(message) {
+  const text = String(message ?? '').trim().toLowerCase();
+  return !text || /^(menu|help|bantuan|mulai|start|halo|hai|selamat (pagi|siang|sore|malam))$/.test(text);
+}
+
 export function resolveMenu(message) {
   const text = String(message ?? '').trim().toLowerCase();
-  if (!text || /^(menu|help|bantuan|mulai|start|halo|hai)$/i.test(text)) return renderMenu();
+  if (isMainMenu(text)) return renderMenu();
   const topic = text.replace(/^(menu|help|bantuan)\s+/, '');
   const alias = { sku: 'cari', barang: 'cari', lokasi: 'cari', detail: 'cari' };
   const entry = SEARCH_MENU.find(item => item.id === topic || item.command === (alias[topic] || topic));
