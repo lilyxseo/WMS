@@ -28,6 +28,16 @@ export function pdfAttachment(payload, allowUnknown = false) {
     ? { url: media.url, filename: media.filename } : undefined;
 }
 
+export function pdfMediaStatus(payload) {
+  const media = mediaInfo(payload);
+  const knownFields = ['url','file_url','fileUrl','media_url','filename','fileName','file_name','extension','type','mime','mimetype','mimeType','messageType','document','file','media'];
+  return {
+    receivedAt: new Date().toISOString(), hasDownloadUrl: Boolean(media.url), hasFilename: Boolean(media.filename),
+    documentDetected: media.pdf || media.document, hasExtension: typeof payload.extension === 'string' && Boolean(payload.extension.trim()),
+    fields: knownFields.filter(key => Object.hasOwn(payload,key)),
+  };
+}
+
 function attachmentUrl(value, env) {
   let url;
   try { url = new URL(value); } catch { throw new PdfError('URL dokumen tidak valid. Kirim PDF sebagai dokumen WhatsApp.'); }

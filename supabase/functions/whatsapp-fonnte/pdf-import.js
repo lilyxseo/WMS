@@ -3,11 +3,19 @@ import { requireStockProfile, ProfileError } from './profiles.js';
 import { hasGoogleCredentials } from './sheet-edit.js';
 import { GoogleAccessError } from './google-errors.js';
 import { displayText } from './menu.js';
-import { PdfError, pdfAttachment, isDocumentPayload, downloadPdf, parsePdfPages, transferName, validateTransferRows } from './pdf-document.js';
+import { PdfError, pdfAttachment, isDocumentPayload, pdfMediaStatus, downloadPdf, parsePdfPages, transferName, validateTransferRows } from './pdf-document.js';
 import { commitPdfImport } from './sheet-pdf.js';
 
 const help = '*Import PDF*\nKirim PDF transfer sebagai dokumen WhatsApp.\nPreview diperiksa sebelum sheet baru dibuat di Inventory.\n\nKetik batal untuk keluar.';
 const dbHeaders = config => ({ apikey: config.key, Authorization: `Bearer ${config.key}`, 'Content-Type': 'application/json', Prefer: 'return=representation' });
+export function pdfDiagnostic(state) {
+  const media = state?.kind === 'pdf-import' ? state.lastMedia : undefined;
+  if (!media) return '*Cek PDF*\nBelum ada data lampiran untuk diperiksa, atau draft sudah kedaluwarsa. Kirim PDF sebagai dokumen, lalu ketik cek pdf.';
+  const yes = value => value ? 'ada' : 'tidak ada';
+  return `*Cek PDF • Webhook Fonnte*\nLink unduhan: ${yes(media.hasDownloadUrl)}\nNama file: ${yes(media.hasFilename)}\nMetadata dokumen: ${yes(media.documentDetected)}\nEkstensi: ${yes(media.hasExtension)}\nField media: ${media.fields?.join(', ') || 'tidak ada'}\n\n`
+    + (media.hasDownloadUrl ? 'Link file diterima. Jika preview belum muncul, periksa balasan error terakhir dari bot.' : 'Fonnte belum meneruskan link unduhan pada pesan ini. Nama file atau caption saja belum cukup untuk membaca PDF. Salin hasil cek ini untuk pemeriksaan integrasi Fonnte.')
+    + '\nPemeriksaan ini tidak membuat atau mengubah sheet.';
+}
 export function pdfPreview(state) {
   const page = state.page || 1, first = (page - 1) * 10, rows = state.rows.slice(first, first + 10);
   return `📄 *Tinjau Import PDF*\nSheet: ${displayText(state.header.transferNumber)}\nFrom: ${displayText(state.header.from)}\nTo: ${displayText(state.header.to)}\nReferensi transfer: ${displayText(state.header.referenceNumber)}\nItem: ${state.rows.length} • Total Qty: ${state.rows.reduce((sum,row) => sum + Number(row.qty),0)}\n\n`
@@ -39,10 +47,17 @@ async function audit(config, profile, state, result, fetchFn) {
 
 export async function handlePdfImport(payload, sender, env, config, fetchFn, extractPdf) {
   const input = String(payload.message || '').trim(), lower = input.toLowerCase();
-  const start = /^(?:import\s+pdf|pdf)$/i.test(input), document = isDocumentPayload(payload);
+  const start = /^(?:import\s+pdf|pdf)$/i.test(input), diagnostic = /^cek\s+pdf$/i.test(input), document = isDocumentPayload(payload);
   let state = await loadSearch(config, sender, fetchFn);
   const attachment = pdfAttachment(payload, state?.kind === 'pdf-import');
-  if (!start && !attachment && !document && state?.kind !== 'pdf-import') return undefined;
+  if (!start && !attachment && !document && !diagnostic && state?.kind !== 'pdf-import') return undefined;
+  if (diagnostic && !attachment && !document) {
+    try {
+      const profile = await requireStockProfile(config,sender,fetchFn);
+      if (state?.kind === 'pdf-import' && state.profileId !== profile.id) return 'Profil nomor berubah. Mulai import PDF baru sebelum memeriksa draft.';
+      return pdfDiagnostic(state);
+    } catch (error) { if (error instanceof ProfileError) return error.message.replace('stock in/out','import PDF'); throw error; }
+  }
   if (attachment || document || state?.kind === 'pdf-import' && state.phase === 'file' && !start) {
     console.info('[WHATSAPP_PDF_MEDIA]', JSON.stringify({ hasDownloadUrl: Boolean(attachment?.url), hasFilename: Boolean(attachment?.filename || payload.filename || payload.fileName), documentDetected: document, hasExtension: typeof payload.extension === 'string' && Boolean(payload.extension.trim()) }));
   }
@@ -60,14 +75,23 @@ export async function handlePdfImport(payload, sender, env, config, fetchFn, ext
   if (!hasGoogleCredentials(env) || !env.SHEET_ID_INVENTORY) return 'Import PDF belum dikonfigurasi. Periksa kredensial Google dan SHEET_ID_INVENTORY.';
   if (state?.kind === 'pdf-import' && state.profileId !== profile.id && !start && !attachment) return 'Profil nomor berubah. Batalkan draft lalu kirim PDF kembali.';
   try {
+    const observed = attachment || document || state?.kind === 'pdf-import' && state.phase === 'file' && !start;
+    const lastMedia = observed ? pdfMediaStatus(payload) : state?.lastMedia;
+    if (observed && state?.kind === 'pdf-import') {
+      state = { ...state, lastMedia }; await saveSearch(config,sender,state,fetchFn);
+    }
     if (document && !attachment) {
-      if (state?.kind !== 'pdf-import') await saveSearch(config, sender, { kind: 'pdf-import', phase: 'file', nonce: crypto.randomUUID(), profileId: profile.id }, fetchFn);
-      return '⚠️ *Link PDF belum diterima*\nFonnte mengirim informasi dokumen tanpa link unduhan. Aktifkan Webhook File pada pengaturan perangkat Fonnte, simpan, lalu kirim ulang PDF sebagai dokumen.\nDraft tetap tersedia; tidak perlu mengetik import pdf lagi. Tidak ada sheet dibuat.';
+      if (state?.kind !== 'pdf-import') await saveSearch(config, sender, { kind: 'pdf-import', phase: 'file', nonce: crypto.randomUUID(), profileId: profile.id, lastMedia }, fetchFn);
+      return '⚠️ *Link PDF belum diterima*\nWebhook Fonnte memuat informasi dokumen, tetapi tidak menyertakan link unduhan. Nama file saja belum cukup untuk membaca PDF.\nKetik cek pdf untuk memeriksa data yang diterima bot. Draft tetap tersedia; tidak ada sheet dibuat.';
     }
     if (start || attachment) {
       if (!attachment) {
         state = { kind: 'pdf-import', phase: 'file', nonce: crypto.randomUUID(), profileId: profile.id };
         await saveSearch(config, sender, state, fetchFn); return help;
+      }
+      if (state?.kind !== 'pdf-import') {
+        state = { kind: 'pdf-import', phase: 'file', nonce: crypto.randomUUID(), profileId: profile.id, lastMedia };
+        await saveSearch(config,sender,state,fetchFn);
       }
       const bytes = await downloadPdf(attachment, env, fetchFn);
       let pages;
@@ -77,12 +101,12 @@ export async function handlePdfImport(payload, sender, env, config, fetchFn, ext
         throw new PdfError('PDF tidak dapat dibaca. Pastikan dokumen tidak rusak atau terkunci password, lalu kirim ulang.');
       }
       const parsed = parsePdfPages(pages);
-      state = { kind: 'pdf-import', phase: parsed.header.transferNumber ? 'confirm' : 'number', nonce: crypto.randomUUID(), profileId: profile.id, page: 1, ...parsed };
+      state = { kind: 'pdf-import', phase: parsed.header.transferNumber ? 'confirm' : 'number', nonce: crypto.randomUUID(), profileId: profile.id, page: 1, lastMedia, ...parsed };
       if (state.header.transferNumber) transferName(state.header.transferNumber);
       await saveSearch(config, sender, state, fetchFn);
       return state.phase === 'number' ? `PDF terbaca: ${state.rows.length} item. Nomor transfer belum terdeteksi.\nKirim nomor transfer untuk nama sheet, misalnya #T-007894.` : pdfPreview(state);
     }
-    if (state.phase === 'file') return '*Menunggu dokumen PDF*\nPesan ini belum memuat link file yang bisa dibaca. Jika PDF sudah dikirim, periksa Webhook File pada pengaturan perangkat Fonnte lalu kirim ulang dokumen.\nTidak perlu memulai ulang import.\n\nKetik batal untuk keluar.';
+    if (state.phase === 'file') return '*Menunggu dokumen PDF*\nPesan ini belum memuat link file yang bisa dibaca. Jika PDF sudah dikirim, ketik cek pdf untuk memeriksa data yang diteruskan Fonnte.\nTidak perlu memulai ulang import.\n\nKetik batal untuk keluar.';
     if (state.phase === 'number') {
       state.header.transferNumber = transferName(input.replace(/^nomor\s+/i,'')); state.phase = 'confirm';
       await saveSearch(config, sender, state, fetchFn); return pdfPreview(state);

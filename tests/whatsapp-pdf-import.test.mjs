@@ -67,10 +67,10 @@ test('PDF import recognizes extensionless document URLs, MIME variants and white
  assert.equal(pdfAttachment({url:'https://api.fonnte.com/files/photo',type:'image',extension:'jpg'}),undefined);
 });
 
-test('document without download URL explains Fonnte Webhook File and keeps draft ready for resend',async()=>{
+test('document without download URL explains missing media data and keeps draft ready for resend',async()=>{
  const f=fixture();await f.send('import pdf');const nonce=f.state.nonce;
  const reply=await f.send(undefined,{filename:'transfer.pdf',type:'document',url:''});
- assert.match(reply,/Link PDF belum diterima/);assert.match(reply,/Webhook File/);assert.equal(f.state.nonce,nonce);assert.equal(f.state.phase,'file');assert.equal(f.writes.length,0);
+ assert.match(reply,/Link PDF belum diterima/);assert.match(reply,/cek pdf/);assert.doesNotMatch(reply,/Webhook File|pengaturan perangkat/);assert.equal(f.state.nonce,nonce);assert.equal(f.state.phase,'file');assert.equal(f.writes.length,0);
  assert.match(await f.send(undefined,{url:'https://api.fonnte.com/files/opaque-token',type:'document'}),/Tinjau Import PDF/);
  const direct=fixture();assert.match(await direct.send(undefined,{filename:'transfer.pdf'}),/Link PDF belum diterima/);assert.equal(direct.state.phase,'file');
  const stock=fixture();stock.state={kind:'stock',phase:'qty'};assert.match(await stock.send(undefined,{filename:'transfer.pdf'}),/Selesaikan input/);assert.equal(stock.state.phase,'qty');
@@ -78,7 +78,16 @@ test('document without download URL explains Fonnte Webhook File and keeps draft
 
 test('plain replies while waiting for a PDF explain missing file link instead of repeating initial prompt',async()=>{
  const f=fixture();await f.send('import pdf');const nonce=f.state.nonce;
- assert.match(await f.send('Transfer #T-007894'),/Webhook File/);assert.equal(f.state.nonce,nonce);assert.equal(f.writes.length,0);
+ assert.match(await f.send('Transfer #T-007894'),/cek pdf/);assert.equal(f.state.nonce,nonce);assert.equal(f.writes.length,0);
+});
+
+test('cek pdf reports observed media flags without disclosing file names, URLs, sender or tokens',async()=>{
+ const f=fixture();await f.send('import pdf');await f.send(undefined,{filename:'private-transfer.pdf',type:'document',url:'',token:'sensitive'});
+ const nonce=f.state.nonce, report=await f.send('cek pdf');
+ assert.match(report,/Link unduhan: tidak ada/);assert.match(report,/Nama file: ada/);assert.match(report,/Metadata dokumen: ada/);
+ assert.doesNotMatch(report,/private-transfer\.pdf|sensitive|6281234567890|Webhook File/);assert.equal(f.state.nonce,nonce);assert.equal(f.writes.length,0);
+ await f.send(undefined,attachment);const withLink=await f.send('cek pdf');assert.match(withLink,/Link unduhan: ada/);assert.doesNotMatch(withLink,/https:\/\/api.fonnte.com|transfer\.pdf/);assert.equal(f.state.phase,'confirm');
+ const empty=fixture();assert.match(await empty.send('cek pdf'),/Belum ada data lampiran/);assert.equal(empty.state,undefined);
 });
 
 test('PDF preview supports pagination and edits to header and global item number with formula-safe strings',async()=>{

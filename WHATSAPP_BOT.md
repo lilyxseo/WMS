@@ -128,9 +128,14 @@ kirim dokumen PDF. Fonnte harus meneruskan `url` dan identitas PDF (`extension=p
 nama file `.pdf`, atau MIME `application/pdf`) ke webhook. Caption boleh kosong.
 URL dokumen bertanda `type=document/file`, URL tanpa ekstensi, variasi MIME seperti
 `mimetype`, dan field link file juga dikenali; isi unduhan tetap wajib lolos pemeriksaan PDF.
-Jika bot terus meminta PDF, aktifkan **Webhook File** pada pengaturan perangkat Fonnte,
-simpan, lalu kirim ulang dokumen. Tanpa URL file, bot menjelaskan link unduhan belum
-diterima dan mempertahankan draft; tidak perlu mengetik `import pdf` lagi.
+Jika bot terus meminta PDF, kirim dokumen lalu ketik **`cek pdf`** untuk mengetahui
+apakah webhook menyertakan URL unduhan dan metadata dokumen. Pemeriksaan menyebutkan
+keberadaan link, nama file, ekstensi, dan nama field media tanpa menampilkan nilainya.
+Tidak ada pengaturan Fonnte khusus yang diasumsikan tersedia. Tanpa URL file, bot
+menjelaskan link unduhan belum diterima dan mempertahankan draft; nama file atau
+caption saja tidak dapat digunakan untuk membaca isi PDF. Hasil `cek pdf` membantu
+memastikan payload aktual sebelum menentukan konfigurasi atau dukungan media yang
+perlu diperiksa bersama Fonnte. Tidak perlu mengetik `import pdf` lagi.
 Log `WHATSAPP_PDF_MEDIA` hanya mencatat keberadaan metadata, tanpa isi pesan, nomor,
 nama file, atau URL dokumen, untuk membantu pemeriksaan webhook.
 Role PIC/Developer dan nomor profil yang valid wajib tersedia, termasuk saat konfirmasi.
