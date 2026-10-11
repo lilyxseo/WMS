@@ -316,3 +316,7 @@ Sapaan memakai waktu `BUSINESS_TIME_ZONE`, default `Asia/Jakarta`:
 pagi 05:00–10:59, siang 11:00–14:59, sore 15:00–17:59, dan malam 18:00–04:59.
 Isi salam yang dikirim tidak mengubah sapaan waktu sebenarnya. Sapaan tidak ditambahkan
 ke hasil pencarian, panduan submenu, atau langkah transaksi yang sedang aktif.
+
+Tampilan hasil Barang Masuk/Keluar memakai label `SKU`, `Tanggal`, `From`, `To`,
+`Qty`, `Status`, dan `PIC`. Kolom Keterangan tidak ditampilkan dalam hasil pencarian;
+data aslinya tetap tersimpan dan dapat digunakan untuk pencarian atau edit.

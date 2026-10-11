@@ -74,8 +74,8 @@ test('yes preference is retained by the next-page command',async()=>{
  const next=await send(h,'lanjut');assert.match(next,/SKU: SKU10/);assert.match(next,/Stok: 0/);
 });
 test('dedicated inbound and outbound queries remain independent of stock and save their navigation context',async()=>{
- const h=harness({stock:[item(1)],transactions:[{sku:'6840',nama_barang:'Merlyn',qty:12,pic:'Andi',from_location:'A20-1',to_location:'B01',tanggal:'10/11/2026'}]});await send(h,'merlyn');
- for(const command of ['masuk merlyn','keluar merlyn']) {const text=await send(h,command);assert.match(text,/Jumlah transaksi: 12/);assert.match(text,/PIC: Andi/);assert.doesNotMatch(text,/Tampilkan stok 0/);}
+ const h=harness({stock:[item(1)],transactions:[{sku:'6840',nama_barang:'Merlyn',qty:12,pic:'Andi',keterangan:'CATATAN INTERNAL',from_location:'A20-1',to_location:'B01',tanggal:'10/11/2026'}]});await send(h,'merlyn');
+ for(const command of ['masuk merlyn','keluar merlyn']) {const text=await send(h,command);assert.match(text,/Qty: 12/);assert.match(text,/From: A20-1/);assert.match(text,/To: B01/);assert.doesNotMatch(text,/Asal:|Tujuan:|Jumlah transaksi:|Keterangan:|CATATAN INTERNAL/);assert.match(text,/PIC: Andi/);assert.doesNotMatch(text,/Tampilkan stok 0/);}
  assert.equal(h.sessions.get('6281234567890').search.command,'keluar merlyn');
 });
 test('legacy aliases, structured filters and menu registry stay usable',async()=>{
