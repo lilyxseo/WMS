@@ -88,3 +88,15 @@ test('short transaction grids are clamped before finding the first row', async (
  } });
  assert.equal(result.rowNumber, 4);
 });
+
+test('movement history previews clamp to short grids', async () => {
+ const { readSheetPreview } = await import('../supabase/functions/whatsapp-fonnte/sheet-values.js');
+ let reads = 0;
+ const rows = await readSheetPreview({ id: 'history', sheet: 'Movement', label: 'SHEET_ID_INVENTORY', headers: {}, fetchFn: async url => {
+  if (url.includes('?fields=')) return Response.json({ sheets: [{ properties: { title: 'Movement', gridProperties: { rowCount: 4, columnCount: 7 } } }] });
+  reads++;
+  if (decodeURIComponent(url).includes('!A1:G50')) return Response.json({ error: { message: 'Range exceeds grid limits' } }, { status: 400 });
+  assert.match(decodeURIComponent(url), /!A1:G4/); return Response.json({ values: [['Tanggal','From','To','SKU','Nama','Awal','Aktual']] });
+ } });
+ assert.equal(reads, 2); assert.equal(rows[0][6], 'Aktual');
+});

@@ -115,3 +115,17 @@ export async function findTransactionSlot(options) {
     throw new GoogleAccessError('SHEETS_SLOT_CHECK_FAILED', `Pemeriksaan baris tersedia ${options.sheet} belum berhasil. Coba ulang nanti.`, false);
   }
 }
+
+// Read a small header preview without exceeding short/narrow sheet grids.
+export async function readSheetPreview({ id, sheet, columns = 7, rows = 50, label, headers, fetchFn }) {
+  const read = (lastColumn, lastRow) => readSheetValues({ id, range: `'${sheet}'!A1:${columnName(lastColumn)}${lastRow}`, label, headers, fetchFn });
+  try { return await read(columns, rows); }
+  catch (error) {
+    if (!(error instanceof GoogleAccessError) || error.code !== 'SHEETS_GRID_LIMIT') throw error;
+    const response = await fetchFn(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}?fields=sheets.properties(title,gridProperties)`, { headers, signal: AbortSignal.timeout(15000) });
+    if (!response.ok) throw await googleResponseError(response, false, label);
+    const grid = (await response.json()).sheets?.find(tab => tab.properties?.title === sheet)?.properties?.gridProperties;
+    if (!Number.isInteger(grid?.rowCount) || grid.rowCount < 1 || !Number.isInteger(grid?.columnCount) || grid.columnCount < 1) throw error;
+    return await read(Math.min(columns, grid.columnCount), Math.min(rows, grid.rowCount));
+  }
+}

@@ -226,21 +226,28 @@ menjalankan tes; suite menggunakan Sheets, Supabase, dan Fonnte tiruan.
 ## Movement melalui WhatsApp
 
 Menu `5` menampilkan panduan. Kirim `movement` atau langsung `movement merlyn a20-1`.
-Bot mencari Kartu Stok dengan stok positif, 10 hasil per halaman. Pilih nomor barang/lokasi asal;
-`lanjut` dan `sebelumnya` menavigasi hasil. Isi lokasi tujuan, jumlah, dan PIC. Bot menampilkan
-ringkasan; hanya `simpan` pada tahap konfirmasi yang menulis data. `ubah` memulai ulang draft,
-`batal` membatalkan, dan `menu` keluar ke menu utama. Draft berlaku 15 menit.
+Bot menampilkan SKU unik (10 per halaman), lalu pilihan lokasi From dengan stok positif.
+Pilih nomor To atau ketik lokasi baru; `y` memakai saran tujuan. Saran memprioritaskan
+pola lokasi yang sama, kemudian qty terbesar, mengikuti ide konsolidasi pada aplikasi.
+Qty dapat diketik atau balas `y` untuk seluruh stok asal. PIC otomatis dari konfigurasi
+role profil WhatsApp. Tinjau menampilkan From/To, qty, stok awal, sisa stok asal, dan PIC;
+hanya `y` di tahap Tinjau yang menyimpan. `ubah` mengulang input, `batal` membatalkan,
+dan `menu` keluar. Navigasi SKU/lokasi memakai `lanjut` dan `sebelumnya`.
 
-Akses movement menggunakan `WHATSAPP_EDITOR_NUMBERS`; nomor harus masuk allowlist pencarian
-atau terdaftar di `users.phone_number`. Stock in/out menggunakan role profil seperti dijelaskan di bawah.
+Akses movement memakai `users.phone_number` dan role PIC/Developer seperti aplikasi.
+Role/PIC diperiksa ulang sebelum menyimpan; perubahan nama/stok meminta Tinjau terbaru.
+Draft berlaku 15 menit; error sebelum penulisan mempertahankan draft untuk `ulang`.
+Jika hasil penulisan belum pasti atau hanya satu tab berhasil, bot tidak mencoba ulang
+untuk mencegah transaksi ganda. Balasan tidak menampilkan instruksi sinkronisasi/referensi.
+
 Selain konfigurasi Google untuk edit, tambahkan **`SHEET_ID_INVENTORY`** di Supabase Secrets,
-berisi spreadsheet yang mempunyai tab `Movement`. Service account harus mempunyai akses Editor
+berisi spreadsheet yang mempunyai tab `Movement`. Akun OAuth Gmail/Service Account harus mempunyai akses Editor
 ke spreadsheet tersebut dan `SHEET_ID_2026`. `BUSINESS_TIME_ZONE` opsional, default `Asia/Jakarta`.
 
 Sesuai alur WMS `/api/movement/in`, bot mencatat:
 
 - `Barang Masuk` pada `SHEET_ID_2026`: tanggal M/D/YYYY, asal, tujuan, SKU, nama, qty,
-  status `Movement`, PIC, keterangan `INTERNAL STOCK TRANSFER | WA:<referensi>`.
+  status `Movement`, PIC, keterangan persis `INTERNAL STOCK TRANSFER`; mengisi baris tersedia pertama berdasarkan Tanggal/SKU, tanpa menulis kolom tambahan.
 - `Movement` pada `SHEET_ID_INVENTORY`: tanggal YYYY-MM-DD, asal, tujuan, SKU, nama,
   stok lokasi awal, dan stok aktual (jumlah yang dipindahkan).
 
@@ -253,7 +260,7 @@ sama dengan tujuan, atau susunan header yang tidak sesuai sebelum menulis.
 Konfirmasi memakai klaim bersyarat session (nonce + tahap confirm + belum kedaluwarsa), sehingga
 konfirmasi ganda untuk draft yang sama tidak menulis ulang. Dua spreadsheet tidak dapat ditulis
 secara atomik: bila Barang Masuk tersimpan tetapi riwayat Movement gagal, bot menyebutkan kondisi
-tersebut dan referensi untuk pemeriksaan admin. Jangan mengulang transaksi yang belum terkonfirmasi.
+tersebut untuk pemeriksaan admin. Jangan mengulang transaksi yang belum terkonfirmasi.
 Pemeriksaan stok lalu penulisan Google Sheets bukan lock stok lintas pengguna maupun aplikasi WMS;
 hindari menjalankan perpindahan bersamaan untuk SKU/lokasi yang sama. Setelah menyimpan, periksa
 sinkronisasi sebelum membuat perpindahan berikutnya pada stok yang sama.
@@ -463,3 +470,7 @@ huruf besar/kecil dinormalisasi. Jika nama terbaru berbeda dan dapat ditentukan
 secara jelas, draft diperbarui dan ringkasan meminta konfirmasi y lagi sebelum
 menulis. SKU tetap dicocokkan sebagai teks, termasuk nol di depan. SKU yang
 hilang, nama kosong/ambigu, stok berubah, dan lokasi ganda tetap membatalkan penulisan.
+
+Movement yang berhasil dicatat ke activity_logs dengan action CREATE_MOVEMENT,
+identitas profil nomor WhatsApp, PIC konfigurasi, From/To, qty, dan tanggal Jakarta.
+Bot memproses satu transfer SKU/lokasi per draft; aplikasi tetap mendukung session multi-item.
