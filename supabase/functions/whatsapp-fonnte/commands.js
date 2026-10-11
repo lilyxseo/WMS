@@ -93,10 +93,8 @@ export function formatAdvancedReply(result, search, formatRows) {
   if (!result.rows.length) return (search.page > 1 ? `🔎 *Hasil Pencarian*\nTidak ada hasil pada halaman ${search.page}.` : formatRows([]))
     + previous + '\n\n💡 Coba kata lebih singkat atau hapus filter sumber/stok.\nKetik menu untuk panduan pencarian.';
   const body = formatRows(result.rows, 15);
-  const dates = result.rows.map(row => Date.parse(row.synced_at)).filter(Number.isFinite);
-  const freshness = dates.length ? `\nSinkronisasi tertua pada hasil: ${new Date(Math.min(...dates)).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB.` : '\nWaktu sinkronisasi tidak tersedia.';
   const scope = search.hideZero ? 'Stok 0 disembunyikan' : `Filter stok: ${search.stock || 'semua'}`;
-  return `🔎 *Hasil Pencarian WMS*\nPencarian: ${displayText(search.command, 400)}\n${scope}\nHalaman ${search.page} • ${result.rows.length} baris ditampilkan\n\n${body}\n\n🕒 ${freshness.trim()}`
+  return `🔎 *Hasil Pencarian WMS*\nPencarian: ${displayText(search.command, 400)}\n${scope}\nHalaman ${search.page} • ${result.rows.length} baris ditampilkan\n\n${body}`
     + previous + (result.hasMore ? '\n\nHalaman berikutnya: balas lanjut.' : '\n\n✅ Akhir hasil pencarian.')
     + '\n\nKetik menu untuk pencarian lainnya.';
 }
