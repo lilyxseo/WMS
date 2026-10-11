@@ -61,6 +61,23 @@ dan hostname proyek Supabase untuk pengembangan di lingkungan cloud.
 
 ## Pesan yang didukung
 
+Ketik `menu`, `bantuan`, atau `halo` untuk menu pencarian dengan judul tebal,
+penjelasan tiap pilihan, dan contoh perintah. Kirim nomor menu 1–5 untuk panduan
+pilihan tersebut; nomor membuka panduan, bukan memilih baris hasil pencarian.
+Perintah tanpa nilai (`sku`, `barang`, `lokasi`, `detail`, `cari`) juga membuka
+panduan. `menu sku` atau `bantuan lokasi` membuka panduan langsung.
+
+Daftar menu terpusat di `supabase/functions/whatsapp-fonnte/menu.js` melalui
+`SEARCH_MENU`. Setiap fitur pencarian baru wajib didaftarkan di sana bersamaan
+dengan parser dan tesnya. Menu utama serta panduan nomor/perintah dibangkitkan
+dari registry ini, sehingga tidak perlu menyalin daftar menu di beberapa file.
+Jangan mendaftarkan menu yang belum memiliki implementasi pencarian.
+
+Hasil menggunakan kartu bernomor, pemisah antarbarang, konteks pencarian,
+filter aktif, jumlah baris pada halaman, dan waktu sinkronisasi. Balasan
+menyertakan perintah untuk halaman berikutnya/sebelumnya dan cara kembali ke
+menu. Jumlah baris yang tampil bukan total seluruh hasil database.
+
 - `sku ABC123`: cari sebagian SKU, tanpa mengubah nol di depan.
 - `detail ABC123`: cari SKU persis (tanpa membedakan kapitalisasi).
 - `barang kabel` atau `nama barang kabel`: cari nama barang.

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { handleFonnteWebhook, parseInventoryMessage, formatInventoryReply } from '../supabase/functions/whatsapp-fonnte/handler.js';
 import { parseAdvancedCommand } from '../supabase/functions/whatsapp-fonnte/commands.js';
+import { SEARCH_MENU, renderMenu, resolveMenu } from '../supabase/functions/whatsapp-fonnte/menu.js';
 
 const env = {
   FONNTE_TOKEN: 'test-token', FONNTE_WEBHOOK_SECRET: 'test-secret',
@@ -172,4 +173,49 @@ test('invalid advanced commands send guidance without database access', async ()
     return Response.json({ status: true });
   };
   assert.equal((await handleFonnteWebhook({ request: request({ sender: '6281234567890', message: 'sku ABC; halaman=-1' }), env }, fetchFn)).status, 200);
+});
+
+test('menu registry automatically includes every command and its guidance', () => {
+  for (const entry of SEARCH_MENU) {
+    assert.ok(renderMenu().includes(entry.title));
+    assert.ok(renderMenu().includes(entry.example));
+    assert.ok(resolveMenu(entry.id).includes(entry.example));
+    assert.equal(resolveMenu(`menu ${entry.command}`), resolveMenu(entry.id));
+  }
+  const extra = { id: '6', command: 'test', title: 'New search feature', description: 'New guidance', example: 'test ABC' };
+  const generated = renderMenu([...SEARCH_MENU, extra]);
+  assert.ok(generated.includes(extra.title));
+  assert.ok(generated.includes(extra.example));
+  assert.ok(generated.includes('1, 2, 3, 4, 5, 6'));
+});
+
+test('menu, greetings, bare commands and numbered guidance never query inventory', async () => {
+  for (const message of ['menu', 'halo', 'mulai', '1', 'menu 2', 'bantuan lokasi', 'detail', 'cari']) {
+    const fetchFn = async (url, options) => {
+      assert.equal(url, 'https://api.fonnte.com/send');
+      assert.match(options.body.get('message'), /Ketik menu|kembali/);
+      return Response.json({ status: true });
+    };
+    assert.equal((await handleFonnteWebhook({ request: request({ sender: '6281234567890', message }), env }, fetchFn)).status, 200);
+  }
+});
+
+test('result cards neutralize formatting and show zero stock', () => {
+  const text = formatInventoryReply([{ sku: '*SKU*\nInjected', nama_barang: '_Kabel_', lokasi_bulky: 'A-01', stok_akhir: 0, source: 'RPL' }]);
+  assert.match(text, /\*1\. Kabel\*/);
+  assert.match(text, /SKU: SKU Injected/);
+  assert.match(text, /Stok: 0/);
+  assert.doesNotMatch(text, /_Kabel_|\*SKU\*/);
+});
+
+test('empty later page offers usable previous-page command and help', async () => {
+  const fetchFn = async (url, options) => {
+    if (!url.endsWith('/send')) return Response.json([]);
+    const reply = options.body.get('message');
+    assert.match(reply, /Tidak ada hasil pada halaman 2/);
+    assert.match(reply, /barang kabel; halaman=1/);
+    assert.match(reply, /Ketik menu/);
+    return Response.json({ status: true });
+  };
+  assert.equal((await handleFonnteWebhook({ request: request({ sender: '6281234567890', message: 'barang kabel; halaman=2' }), env }, fetchFn)).status, 200);
 });

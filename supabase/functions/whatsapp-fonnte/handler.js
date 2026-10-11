@@ -6,6 +6,7 @@ function getDatabaseConfig(env) {
 }
 import { buildInventorySearchQuery, normalizeSearchQuery } from './inventory-search.js';
 import { BOT_HELP, CommandError, parseAdvancedCommand, searchAdvancedInventory, formatAdvancedReply } from './commands.js';
+import { resolveMenu, displayText } from './menu.js';
 
 const SOURCES = [
   ['Kartu Stock', 'inventory_kartu_stok'],
@@ -50,10 +51,10 @@ export async function searchInventory(env, search, fetchFn = fetch) {
 
 export function formatInventoryReply(rows) {
   if (!rows.length) return 'Data stok tidak ditemukan. Coba SKU, nama barang, atau lokasi lain.';
-  const clean = value => String(value ?? '-').replace(/[\r\n]/g, ' ').slice(0, 120);
-  const items = rows.slice(0, 10).map(row =>
-    `SKU: ${clean(row.sku)}\nBarang: ${clean(row.nama_barang)}\nLokasi: ${clean(row.lokasi_bulky)}\nStok: ${clean(row.stok_akhir)}\nSumber: ${row.source}`);
-  return `Hasil stok WMS (data terakhir tersinkron):\n\n${items.join('\n\n')}`
+  const clean = displayText;
+  const items = rows.slice(0, 10).map((row, index) =>
+    `*${index + 1}. ${clean(row.nama_barang)}*\nSKU: ${clean(row.sku)}\nBarang: ${clean(row.nama_barang)}\nLokasi: ${clean(row.lokasi_bulky)}\nStok: ${clean(row.stok_akhir)}\nSumber: ${clean(row.source)}`);
+  return `${items.join('\n\n──────────\n\n')}`
     + (rows.length > 10 ? '\n\nDitampilkan 10 baris pertama. Perjelas pencarian untuk hasil lainnya.' : '');
 }
 
@@ -79,8 +80,10 @@ export async function handleFonnteWebhook({ request, env }, fetchFn = fetch) {
   }
   let reply;
   try {
-    const advanced = parseAdvancedCommand(payload.message);
-    if (advanced) {
+    const menu = resolveMenu(payload.message);
+    const advanced = menu === undefined ? parseAdvancedCommand(payload.message) : undefined;
+    if (menu !== undefined) reply = menu;
+    else if (advanced) {
       const result = await searchAdvancedInventory(env, advanced, fetchFn, SOURCES, getDatabaseConfig(env));
       reply = formatAdvancedReply(result, advanced, formatInventoryReply);
     } else {
@@ -92,8 +95,9 @@ export async function handleFonnteWebhook({ request, env }, fetchFn = fetch) {
       }
     }
   } catch (error) {
-    reply = error instanceof CommandError || error.message.startsWith('Pencarian ') ? error.message
-      : 'Database WMS belum dapat diakses. Silakan coba lagi nanti.';
+    reply = error instanceof CommandError || error.message.startsWith('Pencarian ')
+      ? `⚠️ *Periksa perintah pencarian*\n${error.message}\n\nKetik menu untuk contoh yang tersedia.`
+      : '⚠️ *Pencarian belum tersedia*\nDatabase WMS belum dapat diakses. Silakan coba lagi nanti.';
   }
   try {
     const response = await fetchFn('https://api.fonnte.com/send', {

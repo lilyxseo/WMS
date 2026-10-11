@@ -1,15 +1,7 @@
 import { normalizeSearchQuery, buildInventorySearchQuery } from './inventory-search.js';
+import { renderMenu, displayText } from './menu.js';
 
-export const BOT_HELP = `Bot stok WMS
-sku ABC123 — cari SKU
-barang kabel — cari nama
-lokasi A-01 — cari lokasi
-detail ABC123 — SKU persis
-cari kabel A-01 — cari gabungan
-cari nama=kabel; lokasi=A-01; sumber=RPL; stok=ada
-Tambahkan ; halaman=2 untuk hasil berikutnya.
-Sumber: Kartu Stock, RPL, BULKY. Stok: ada, kosong, semua.
-Data mengikuti sinkronisasi terakhir WMS.`;
+export const BOT_HELP = renderMenu();
 
 export class CommandError extends Error {}
 
@@ -81,10 +73,14 @@ export async function searchAdvancedInventory(env, search, fetchFn, sources, con
 }
 
 export function formatAdvancedReply(result, search, formatRows) {
-  if (!result.rows.length) return search.page > 1 ? `Tidak ada hasil pada halaman ${search.page}. Coba halaman sebelumnya.` : formatRows([]);
+  const previous = search.page > 1 ? `\n⬅️ Halaman sebelumnya, kirim:\n${search.command}; halaman=${search.page - 1}` : '';
+  if (!result.rows.length) return (search.page > 1 ? `🔎 *Hasil Pencarian*\nTidak ada hasil pada halaman ${search.page}.` : formatRows([]))
+    + previous + '\n\n💡 Coba kata lebih singkat atau hapus filter sumber/stok.\nKetik menu untuk panduan pencarian.';
   const body = formatRows(result.rows);
   const dates = result.rows.map(row => Date.parse(row.synced_at)).filter(Number.isFinite);
   const freshness = dates.length ? `\nSinkronisasi tertua pada hasil: ${new Date(Math.min(...dates)).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB.` : '\nWaktu sinkronisasi tidak tersedia.';
-  return `Halaman ${search.page} (maksimal 3 baris per sumber)\n${body}${freshness}`
-    + (result.hasMore && search.page < 100 ? `\n\nBerikutnya, kirim:\n${search.command}; halaman=${search.page + 1}` : result.hasMore ? '\nPerjelas pencarian untuk hasil tambahan.' : '\nAkhir hasil pencarian.');
+  const scope = `Sumber: ${search.source || 'Semua'} • Filter stok: ${search.stock || 'semua'}`;
+  return `🔎 *Hasil Pencarian WMS*\nPencarian: ${displayText(search.command, 400)}\n${scope}\nHalaman ${search.page} • ${result.rows.length} baris ditampilkan\n(maksimal 3 baris per sumber)\n\n${body}\n\n🕒 ${freshness.trim()}`
+    + previous + (result.hasMore && search.page < 100 ? `\n\n➡️ Berikutnya, kirim:\n${search.command}; halaman=${search.page + 1}` : result.hasMore ? '\nPerjelas pencarian untuk hasil tambahan.' : '\n\n✅ Akhir hasil pencarian.')
+    + '\n\nKetik menu untuk pencarian lainnya.';
 }
