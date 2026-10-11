@@ -1,3 +1,4 @@
+import { inventorySearchGroups } from './inventory-search.js';
 import { displayText } from './menu.js';
 
 const COMMON = ['tanggal', 'from_location', 'to_location', 'sku', 'nama_barang', 'qty', 'status', 'pic', 'keterangan', 'no_iseller', 'netsuite', 'keterangan_lainnya', 'lokasi_surat_jalan', 'dokumen'];
@@ -9,7 +10,7 @@ export function transactionMatches(row, filters) {
       : filter.fields[0] === 'lokasi_bulky' ? ['from_location', 'to_location', 'lokasi_surat_jalan'] : filter.fields;
     if (filter.exact) return normalize(row.sku) === normalize(filter.query);
     const text = normalize(fields.map(key => row[key]).join(' '));
-    return normalize(filter.query).split(' ').every(token => text.includes(token));
+    return inventorySearchGroups(filter.query).some(query => normalize(query).split(' ').every(token => text.includes(token)));
   });
 }
 

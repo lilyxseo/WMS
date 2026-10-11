@@ -421,3 +421,13 @@ menambah kapasitas baris yang diperlukan dengan appendDimension, kemudian membac
 ulang baris tujuan sebelum menulis nilai. Baris yang sudah terisi tetap ditolak.
 Jika penambahan kapasitas ditolak, transaksi belum ditulis. Pesan error pembacaan
 juga menyertakan range agar batas baris dan batas kolom dapat dibedakan.
+
+### Pencarian beberapa barang sekaligus
+
+Kirim `cari 8844,2299,3399,merlyn white,merlyn gold`. Koma memisahkan alternatif
+pencarian: barang cukup cocok dengan salah satu alternatif. Semua kata dalam
+satu alternatif harus cocok pada SKU/nama/lokasi, termasuk contoh `merlyn a20-1`.
+Hasil dikembalikan dalam satu daftar tanpa menggandakan baris yang cocok dengan
+beberapa alternatif. SKU yang sama di lokasi berbeda tetap ditampilkan sebagai
+baris stok berbeda. Navigasi lanjut/sebelumnya dan opsi stok 0 tetap berlaku.
+Pemisahan koma juga didukung pada pencarian Barang Masuk/Keluar dan filter nama/SKU/lokasi.

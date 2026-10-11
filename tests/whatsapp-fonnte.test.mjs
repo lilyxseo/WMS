@@ -121,3 +121,35 @@ test('page numbers above 100 remain accessible and invalid numbers are rejected'
  assert.equal(parseAdvancedCommand('masuk; halaman=150').page,150);
  for(const value of ['0','-1','1.5','9007199254740992']) assert.throws(()=>parseAdvancedCommand(`masuk; halaman=${value}`));
 });
+
+test('comma searches create one OR tree with AND words inside each alternative', () => {
+ const query = '8844,2299,3399,merlyn white, merlyn gold';
+ const parsed = parseInventoryMessage(`cari ${query}`);
+ const params = new URL(`https://test/?x=1${buildInventorySearchQuery(parsed.query, ['sku','nama_barang','lokasi_bulky'])}`).searchParams;
+ const word = token => `or(sku.ilike.*${token}*,nama_barang.ilike.*${token}*,lokasi_bulky.ilike.*${token}*)`;
+ assert.equal(params.get('or'), `(${word('8844')},${word('2299')},${word('3399')},and(${word('merlyn')},${word('white')}),and(${word('merlyn')},${word('gold')}))`);
+ assert.equal(params.has('and'), false);
+ const deduped = new URL(`https://test/?x=1${buildInventorySearchQuery('8844, 8844, ,', ['sku'])}`).searchParams;
+ assert.equal(deduped.get('or'), '(sku.ilike.*8844*)');
+ assert.throws(() => parseInventoryMessage('cari , ,'), /minimal 2 karakter/);
+ assert.throws(() => parseInventoryMessage('cari 8844,x'), /minimal 2 karakter/);
+});
+test('comma matching accepts any complete alternative and preserves other explicit filters', () => {
+ const filters = [{ query: '8844,2299,merlyn white,merlyn gold', fields: ['sku','nama_barang','lokasi_bulky'] }];
+ for (const row of [{ sku: 'SKU-8844', nama_barang: 'Pump' }, { sku: 'SKU-2299' }, { nama_barang: 'GOTO MERLYN WHITE' }, { nama_barang: 'MERLYN', lokasi_bulky: 'GOLD' }]) assert.equal(transactionMatches(row, filters), true);
+ for (const row of [{ sku: 'SKU-3399' }, { nama_barang: 'MERLYN GREEN' }, { nama_barang: 'WHITE GOLD' }]) assert.equal(transactionMatches(row, filters), false);
+ assert.equal(transactionMatches({ nama_barang: 'MERLYN WHITE', pic: 'ABI' }, [...filters, { query: 'enggal', fields: ['pic'] }]), false);
+});
+test('comma search keeps one combined page and retains alternatives during zero-stock toggles and navigation', async () => {
+ const h = harness({ stock: Array.from({ length: 13 }, (_, index) => item(index, index === 0 ? 0 : 7)) });
+ const first = await send(h, 'cari 8844,2299,3399,merlyn white, merlyn gold');
+ assert.match(first, /10 baris ditampilkan/); assert.doesNotMatch(first, /SKU: SKU0\n/);
+ const clause = new URL(h.reads[0]).searchParams.get('or');
+ assert.ok(clause.includes('and(or(')); assert.ok(clause.includes('*2299*'));
+ const all = await send(h, 'y'); assert.match(all, /SKU: SKU0\n/);
+ await send(h, 'lanjut');
+ assert.equal(h.reads.length, 3);
+ assert.ok(h.reads.every(url => new URL(url).searchParams.get('or') === clause));
+ assert.equal(new URL(h.reads[2]).searchParams.get('offset'), '10');
+ assert.equal(new URL(h.reads[2]).searchParams.has('stok_akhir'), false);
+});

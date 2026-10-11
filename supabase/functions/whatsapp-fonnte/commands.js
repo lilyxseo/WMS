@@ -1,4 +1,4 @@
-import { normalizeSearchQuery, buildInventorySearchFilters } from './inventory-search.js';
+import { normalizeSearchQuery, buildInventorySearchFilters, inventorySearchGroups } from './inventory-search.js';
 import { renderMenu, displayText } from './menu.js';
 import { searchTransactions } from './transactions.js';
 
@@ -51,7 +51,7 @@ export function parseAdvancedCommand(message) {
     const match = /^(detail|sku|barang|nama(?:\s+barang)?|lokasi|cari)\s+(.+)$/i.exec(first);
     const mode = match?.[1].toLowerCase() || 'cari';
     const query = normalizeSearchQuery(match ? match[2] : first);
-    if (query.length < 2) throw new CommandError('Pencarian minimal 2 karakter.');
+    if (!inventorySearchGroups(query).length || inventorySearchGroups(query).some(part => part.length < 2)) throw new CommandError('Setiap pencarian minimal 2 karakter. Pisahkan pencarian dengan koma.');
     detail = mode === 'detail';
     filters.push({ query, fields: mode === 'sku' || detail ? ['sku'] : mode === 'lokasi' ? ['lokasi_bulky']
       : mode === 'barang' || mode.startsWith('nama') ? ['nama_barang'] : ['sku', 'nama_barang', 'lokasi_bulky'], exact: detail });

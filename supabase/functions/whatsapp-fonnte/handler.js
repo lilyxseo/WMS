@@ -5,7 +5,7 @@ function getDatabaseConfig(env) {
   if (!url || !key) throw new Error('Missing database configuration');
   return { url, key };
 }
-import { buildInventorySearchQuery, normalizeSearchQuery } from './inventory-search.js';
+import { buildInventorySearchQuery, normalizeSearchQuery, inventorySearchGroups } from './inventory-search.js';
 import { BOT_HELP, CommandError, parseAdvancedCommand, searchAdvancedInventory, formatAdvancedReply } from './commands.js';
 import { resolveMenu, displayText, isMainMenu } from './menu.js';
 import { formatTransactionRow } from './transactions.js';
@@ -34,7 +34,7 @@ export function parseInventoryMessage(message) {
   const match = /^(sku|barang|nama(?:\s+barang)?|lokasi|cari)\s*[:=]?\s+(.+)$/i.exec(input);
   const mode = match ? match[1].toLowerCase() : 'cari';
   const query = normalizeSearchQuery(match ? match[2] : input);
-  if (query.length < 2) throw new Error('Pencarian minimal 2 karakter.');
+  if (!inventorySearchGroups(query).length || inventorySearchGroups(query).some(part => part.length < 2)) throw new Error('Setiap pencarian minimal 2 karakter. Pisahkan pencarian dengan koma.');
   const fields = mode === 'sku' ? ['sku'] : mode === 'lokasi' ? ['lokasi_bulky']
     : mode === 'barang' || mode.startsWith('nama') ? ['nama_barang']
       : ['sku', 'nama_barang', 'lokasi_bulky'];
