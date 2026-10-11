@@ -28,5 +28,8 @@ export function buildInventorySearchFilters(value, fields = ['sku', 'nama_barang
 
 export function buildInventorySearchQuery(value, fields) {
   const filters = buildInventorySearchFilters(value, fields);
-  return filters.length ? `&${filters.join('&')}` : '';
+  // PostgREST must receive a single logical tree; duplicate `or` parameters
+  // can lose earlier tokens depending on the request parser.
+  if (filters.length > 1) return `&and=(${filters.map(filter => filter.replace(/^or=/, 'or')).join(',')})`;
+  return filters.length ? `&${filters[0]}` : '';
 }

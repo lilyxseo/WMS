@@ -87,6 +87,16 @@ menu. Jumlah baris yang tampil bukan total seluruh hasil database.
 - `ABC123`, `kabel A-01`, atau `cari kabel`: pencarian global di stok dan transaksi.
   Pencarian stok memakai SKU, nama, dan lokasi; pencarian transaksi memakai semua
   nilai bisnis yang dibaca, termasuk tanggal, status, PIC, dokumen, dan jumlah.
+- Pencarian global secara default menyembunyikan `stok_akhir=0` dan transaksi
+  dengan `qty=0`. Filter ini diterapkan sebelum pagination. Nilai negatif tidak
+  disembunyikan. `stok=kosong`/`stok=semua` dapat digunakan untuk pemeriksaan stok
+  nol; perintah khusus `masuk`/`keluar` tetap menampilkan jumlah nol jika cocok.
+- Semua kata memakai pencocokan **mengandung**, tidak peka kapitalisasi dan
+  tidak harus berurutan. `merlyn green gold` cocok dengan nama
+  `GOTO MERLYN GALLON PUMP GREEN GOLD`. `merlyn 6840` cocok jika nama mengandung
+  merlyn dan SKU mengandung 6840 pada baris yang sama. Ini bukan pencarian fuzzy
+  untuk salah ketik. Filter multi-kata dikirim sebagai satu pohon AND/OR agar
+  setiap kata tetap diterapkan oleh PostgREST.
 - `masuk kabel` atau `barang masuk kabel`: cari penerimaan barang.
 - `keluar ABC123` atau `barang keluar ABC123`: cari pengeluaran barang.
 - `masuk` / `keluar`: tampilkan transaksi dari baris sumber terbaru.

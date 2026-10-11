@@ -94,7 +94,7 @@ export async function handleFonnteWebhook({ request, env }, fetchFn = fetch) {
       const search = parseInventoryMessage(payload.message);
       if (!search) reply = HELP;
       else {
-        const options = { page: 1, source: '', stock: 'semua', filters: [search], command: payload.message.trim() };
+        const options = { page: 1, source: '', stock: 'semua', hideZero: true, filters: [search], command: payload.message.trim() };
         reply = formatAdvancedReply(await searchAdvancedInventory(env, options, fetchFn, SOURCES, getDatabaseConfig(env)), options, formatInventoryReply);
       }
     }

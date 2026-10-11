@@ -4,6 +4,7 @@ import { handleFonnteWebhook, parseInventoryMessage, formatInventoryReply } from
 import { parseAdvancedCommand } from '../supabase/functions/whatsapp-fonnte/commands.js';
 import { SEARCH_MENU, renderMenu, resolveMenu } from '../supabase/functions/whatsapp-fonnte/menu.js';
 import { transactionMatches, searchTransactions } from '../supabase/functions/whatsapp-fonnte/transactions.js';
+import { buildInventorySearchQuery } from '../supabase/functions/whatsapp-fonnte/inventory-search.js';
 
 const env = {
   FONNTE_TOKEN: 'test-token', FONNTE_WEBHOOK_SECRET: 'test-secret',
@@ -120,8 +121,8 @@ test('combined lookup scopes source, stock, offset, and every search field', asy
     }
     queries++;
     assert.match(url, /inventory_rpl\?/);
-    assert.match(url, /or=\(nama_barang\.ilike/);
-    assert.match(url, /or=\(lokasi_bulky\.ilike/);
+    assert.match(url, /or\(nama_barang\.ilike/);
+    assert.match(url, /or\(lokasi_bulky\.ilike/);
     assert.match(url, /stok_akhir=gt\.0/);
     assert.match(url, /offset=3&limit=4/);
     return Response.json(Array.from({ length: 4 }, (_, i) => ({ sku: `SKU${i}`, nama_barang: 'Kabel', lokasi_bulky: 'A-01', stok_akhir: 7, synced_at: '2026-10-11T00:00:00Z' })));
@@ -298,4 +299,46 @@ test('global result cards show all fifteen rows, without silently dropping outbo
     return Response.json(Array.from({ length: 3 }, () => ({ sku: 'ABC', nama_barang: 'Kabel', stok_akhir: 2, qty: 1 })));
   };
   assert.equal((await handleFonnteWebhook({ request: request({ sender: '6281234567890', message: 'kabel' }), env }, fetchFn)).status, 200);
+});
+
+test('contains searches AND all words while permitting name and SKU suffix matches', () => {
+  for (const text of ['merlyn green gold', 'merlyn 6840']) {
+    const url = new URL(`https://test.supabase.co/rest/v1/items?select=sku${buildInventorySearchQuery(text, ['sku', 'nama_barang', 'lokasi_bulky'])}`);
+    assert.equal(url.searchParams.getAll('and').length, 1);
+    assert.equal(url.searchParams.has('or'), false);
+    for (const word of text.split(' ')) assert.ok(url.searchParams.get('and').includes(`sku.ilike.*${word}*`));
+  }
+  const row = { sku: 'SKU-006840', nama_barang: 'GOTO MERLYN GALLON PUMP GREEN GOLD' };
+  const fields = ['sku', 'nama_barang', 'lokasi_bulky'];
+  for (const query of ['merlyn green gold', 'merlyn 6840', 'gold merlyn green']) assert.equal(transactionMatches(row, [{ query, fields }]), true);
+  assert.equal(transactionMatches(row, [{ query: 'merlyn blue', fields }]), false);
+});
+
+test('global search excludes zero balances and zero transaction quantities before pagination', async () => {
+  const fetchFn = async (url, options) => {
+    if (url.endsWith('/send')) {
+      const message = options.body.get('message');
+      assert.match(message, /Stok\/jumlah 0 disembunyikan/);
+      assert.doesNotMatch(message, /Jumlah transaksi: 0/);
+      assert.match(message, /Jumlah transaksi: 5/);
+      return Response.json({ status: true });
+    }
+    if (url.includes('inventory_barang_')) return Response.json([
+      { sku: '6840', nama_barang: 'Merlyn Green Gold', qty: 0 },
+      { sku: '6840', nama_barang: 'Merlyn Green Gold', qty: '0.00' },
+      { sku: '6840', nama_barang: 'Merlyn Green Gold', qty: 5 },
+    ]);
+    const params = new URL(url).searchParams;
+    assert.equal(params.get('stok_akhir'), 'neq.0');
+    assert.ok(params.get('and').includes('nama_barang.ilike.*merlyn*'));
+    assert.ok(params.get('and').includes('sku.ilike.*6840*'));
+    return Response.json([{ sku: '6840', nama_barang: 'Merlyn Green Gold', stok_akhir: 5 }]);
+  };
+  assert.equal((await handleFonnteWebhook({ request: request({ sender: '6281234567890', message: 'merlyn 6840' }), env }, fetchFn)).status, 200);
+});
+
+test('explicit stock filters and dedicated transaction views retain zero-quantity access', () => {
+  assert.equal(parseAdvancedCommand('cari merlyn; halaman=2').hideZero, true);
+  assert.equal(parseAdvancedCommand('cari merlyn; stok=kosong').hideZero, false);
+  assert.equal(parseAdvancedCommand('masuk merlyn').hideZero, false);
 });

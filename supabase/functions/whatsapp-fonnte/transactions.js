@@ -30,7 +30,7 @@ export async function searchTransactions(config, table, source, search, fetchFn)
     const batch = await response.json();
     if (!Array.isArray(batch)) throw new Error('Invalid transaction response');
     if (offset === maxRows) { incomplete = batch.length > 0; break; }
-    rows.push(...batch.filter(row => transactionMatches(row, search.filters)));
+    rows.push(...batch.filter(row => (!search.hideZero || Number(row.qty) !== 0) && transactionMatches(row, search.filters)));
     if (rows.length >= needed || batch.length < batchSize) break;
   }
   const offset = (search.page - 1) * 3;

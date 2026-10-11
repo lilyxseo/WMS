@@ -1,4 +1,4 @@
-import { normalizeSearchQuery, buildInventorySearchQuery } from './inventory-search.js';
+import { normalizeSearchQuery, buildInventorySearchFilters } from './inventory-search.js';
 import { renderMenu, displayText } from './menu.js';
 import { searchTransactions } from './transactions.js';
 
@@ -59,15 +59,17 @@ export function parseAdvancedCommand(message) {
   parts.forEach(add);
   if (!filters.length && !transaction) throw new CommandError('Isi kata pencarian untuk mencari.');
   if (/^Barang (Masuk|Keluar)$/.test(options.source) && options.stock !== 'semua') throw new CommandError('Filter stok hanya untuk sumber stok, bukan jumlah transaksi.');
-  return { ...options, detail, command: input.replace(/;\s*halaman\s*=\s*\d+\s*/ig, '').trim() };
+  return { ...options, detail, hideZero: !transaction && !detail && !seen.has('stok'), command: input.replace(/;\s*halaman\s*=\s*\d+\s*/ig, '').trim() };
 }
 
 export async function searchAdvancedInventory(env, search, fetchFn, sources, config) {
   // One independent sorted query per source; page each source so no source is starved.
-  const filter = search.filters.map(item => item.exact
-    ? `&sku=ilike.${encodeURIComponent(item.query.replace(/[\\%_*]/g, char => `\\${char}`))}`
-    : buildInventorySearchQuery(item.query, item.fields)).join('');
-  const stock = search.stock === 'ada' ? '&stok_akhir=gt.0' : search.stock === 'kosong' ? '&stok_akhir=eq.0' : '';
+  const exact = search.filters.filter(item => item.exact).map(item =>
+    `&sku=ilike.${encodeURIComponent(item.query.replace(/[\\%_*]/g, char => `\\${char}`))}`
+  ).join('');
+  const clauses = search.filters.filter(item => !item.exact).flatMap(item => buildInventorySearchFilters(item.query, item.fields));
+  const filter = exact + (clauses.length > 1 ? `&and=(${clauses.map(clause => clause.replace(/^or=/, 'or')).join(',')})` : clauses.length ? `&${clauses[0]}` : '');
+  const stock = search.stock === 'ada' ? '&stok_akhir=gt.0' : search.stock === 'kosong' ? '&stok_akhir=eq.0' : search.hideZero ? '&stok_akhir=neq.0' : '';
   const batches = await Promise.all(sources.filter(([name]) => !search.source || name === search.source).map(async ([source, table]) => {
     if (/^Barang (Masuk|Keluar)$/.test(source)) {
       if (search.stock !== 'semua') return { source, rows: [], hasMore: false };
@@ -93,7 +95,7 @@ export function formatAdvancedReply(result, search, formatRows) {
   const body = formatRows(result.rows, 15);
   const dates = result.rows.map(row => Date.parse(row.synced_at)).filter(Number.isFinite);
   const freshness = dates.length ? `\nSinkronisasi tertua pada hasil: ${new Date(Math.min(...dates)).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB.` : '\nWaktu sinkronisasi tidak tersedia.';
-  const scope = `Sumber: ${search.source || 'Semua'} • Filter stok: ${search.stock || 'semua'}`;
+  const scope = `Sumber: ${search.source || 'Semua'} • ${search.hideZero ? 'Stok/jumlah 0 disembunyikan' : `Filter stok: ${search.stock || 'semua'}`}`;
   return `🔎 *Hasil Pencarian WMS*\nPencarian: ${displayText(search.command, 400)}\n${scope}\nHalaman ${search.page} • ${result.rows.length} baris ditampilkan\n(maksimal 3 baris per sumber)\n\n${body}\n\n🕒 ${freshness.trim()}`
     + warning + previous + (result.hasMore && search.page < 100 ? `\n\n➡️ Berikutnya, kirim:\n${search.command}; halaman=${search.page + 1}` : result.hasMore ? '\nPerjelas pencarian untuk hasil tambahan.' : result.incomplete ? '\nAkhir hasil dalam batas pencarian.' : '\n\n✅ Akhir hasil pencarian.')
     + '\n\nKetik menu untuk pencarian lainnya.';

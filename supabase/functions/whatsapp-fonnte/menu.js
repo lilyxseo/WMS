@@ -9,6 +9,9 @@ export function renderMenu(entries = SEARCH_MENU) {
   return [
     '📦 *WMS • Pencarian & Transaksi*',
     'Langsung kirim kata pencarian; tidak perlu memilih jenis SKU/nama/lokasi.',
+    'Contoh: merlyn green gold atau merlyn 6840.',
+    'Semua kata dicari dengan aturan mengandung; tidak harus berurutan.',
+    'Pencarian global menyembunyikan stok/jumlah 0.',
     '',
     '*Pilih cara pencarian*',
     ...entries.flatMap(item => [`*${item.id}. ${item.title}*`, item.description, `Contoh: ${item.example}`, '']),
