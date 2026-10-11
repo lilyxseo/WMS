@@ -55,7 +55,7 @@ export async function handleGoogleCheck(message, env, fetchFn) {
       const values = (await response.json()).values || [];
       const parsed = parseKartuStockHeader(values);
       lines.push(parsed.missing.length ? stockHeaderFailure(parsed) : `Header Kartu Stock: sesuai, baris ${parsed.headerIndex + 1}.`);
-      if (parsed.headerIndex >= 0) lines.push(`Kolom terbaca: ${values[parsed.headerIndex].map(displayText).filter(Boolean).join(' | ')}.`);
+      if (parsed.headerIndex >= 0) lines.push(`Kolom terbaca: ${values[parsed.headerIndex].map(value => displayText(value)).filter(Boolean).join(' | ')}.`);
     } catch (error) { lines.push(`Header Kartu Stock: ${error instanceof GoogleAccessError ? error.userMessage : 'belum dapat diperiksa.'}`); }
   }
   lines.push('', 'Tidak ada transaksi ditulis. Izin Editor/proteksi tab belum diuji lewat penulisan.');

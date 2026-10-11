@@ -19,7 +19,7 @@ test('Google diagnostics authenticate and check required tabs without writing sp
  const reply = await handleGoogleCheck('cek google', env, fetchFn);
  assert.match(reply, /OAuth Gmail/); assert.match(reply, /Akun OAuth: gmail@test.invalid/); assert.match(reply, /Autentikasi: berhasil/); assert.match(reply, /Tab wajib: tersedia/);
  assert.match(reply, /Tidak ada transaksi ditulis/); assert.match(reply, /Izin Editor\/proteksi tab belum diuji/);
- assert.doesNotMatch(reply, /private-client|private-refresh|private-access/); assert.match(reply, /Header Kartu Stock: sesuai, baris 2/); assert.equal(calls.length, 5);
+ assert.doesNotMatch(reply, /private-client|private-refresh|private-access/); assert.match(reply, /Header Kartu Stock: sesuai, baris 2/); assert.match(reply, /Kolom terbaca: Lokasi \| SKU \| Nama Barang \| Saldo Akhir/); assert.equal(calls.length, 5);
 });
 test('missing configuration and invalid grants produce actionable errors without writing or exposing raw Google responses', async () => {
  const noFetch = () => { throw new Error('Should not fetch'); };
