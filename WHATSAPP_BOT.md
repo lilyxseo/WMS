@@ -409,3 +409,9 @@ di atas tabel tidak mengganggu. Alias Lokasi/Location, Nama Barang/Description,
 dan Stok Akhir/Saldo Akhir/Ending Stock didukung. Stok Akhir diprioritaskan
 di atas Qty; Stok Awal tidak digunakan sebagai saldo tersedia. Header ganda ditolak.
 `cek google` juga melaporkan baris header dan nama kolom yang terbaca, tanpa menulis transaksi.
+
+Jika pembacaan seluruh kolom ditolak Google karena ukuran respons atau batas grid,
+bot membaca ulang dengan batas kolom aktual dan per 1.000 baris sampai akhir grid.
+Baris kosong tetap dipertahankan agar pemilihan baris transaksi tidak bergeser.
+Kegagalan salah satu batch membatalkan proses sebelum menulis; data parsial tidak digunakan.
+Error pembacaan mencantumkan tahap/tab dan nama konfigurasi spreadsheet tanpa respons mentah Google.

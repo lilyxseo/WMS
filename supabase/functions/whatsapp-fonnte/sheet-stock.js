@@ -1,3 +1,4 @@
+import { readSheetValues } from './sheet-values.js';
 import { parseKartuStockHeader, stockHeaderFailure } from './kartu-stok-header.js';
 import { readKartuStock } from './kartu-stok-source.js';
 import { GoogleAccessError, googleResponseError } from './google-errors.js';
@@ -13,16 +14,7 @@ export async function commitStock(env, state, fetchFn) {
   catch (error) { if (error instanceof GoogleAccessError) throw error; throw new GoogleAccessError('GOOGLE_AUTH_FAILED', 'Autentikasi Google gagal. Periksa kredensial Google pada Supabase Secrets.', false); }
   const base = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(env.SHEET_ID_2026)}`;
   const headers = { Authorization: `Bearer ${access}`, 'Content-Type': 'application/json' };
-  const read = async (range, render = 'FORMATTED_VALUE', sheetId = env.SHEET_ID_2026, secret = 'SHEET_ID_2026') => {
-    let response;
-    try { response = await fetchFn(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId)}/values/${encodeURIComponent(range)}?valueRenderOption=${render}`, { headers, signal: AbortSignal.timeout(15000) }); }
-    catch { throw new GoogleAccessError('SHEETS_READ_CONNECTION_FAILED', 'Koneksi baca Google Sheets gagal. Coba cek google kembali nanti.', false); }
-    if (!response.ok) throw await googleResponseError(response, false, secret);
-    let payload;
-    try { payload = await response.json(); }
-    catch { throw new GoogleAccessError('SHEETS_INVALID_RESPONSE', 'Respons baca Google Sheets tidak valid. Coba cek google kembali nanti.', false); }
-    return payload.values || [];
-  };
+  const read = (range, render = 'FORMATTED_VALUE', sheetId = env.SHEET_ID_2026, secret = 'SHEET_ID_2026') => readSheetValues({ id: sheetId, range, render, label: secret, headers, fetchFn });
   const stock = await readKartuStock(env, (id, range, label) => read(range, 'FORMATTED_VALUE', id, label));
   const parsed = parseKartuStockHeader(stock);
   if (parsed.missing.length) return `${stockHeaderFailure(parsed)}\nStock in/out tidak disimpan.`;

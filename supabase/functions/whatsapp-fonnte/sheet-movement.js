@@ -1,6 +1,6 @@
+import { readSheetValues } from './sheet-values.js';
 import { parseKartuStockHeader, stockHeaderFailure } from './kartu-stok-header.js';
 import { readKartuStock } from './kartu-stok-source.js';
-import { googleResponseError } from './google-errors.js';
 import { displayText } from './menu.js';
 import { googleToken } from './sheet-edit.js';
 import { normalizeLocation, normalizeSku, normalizeNumber } from './sheet-normalization.js';
@@ -15,11 +15,7 @@ export async function commitMovement(env, state, fetchFn) {
   const access = await googleToken(env, fetchFn);
   const headers = { Authorization: `Bearer ${access}`, 'Content-Type': 'application/json' };
   const base = id => `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}`;
-  const read = async (id, range, label = 'SHEET_ID_2026') => {
-    const response = await fetchFn(`${base(id)}/values/${encodeURIComponent(range)}?valueRenderOption=FORMATTED_VALUE`, { headers, signal: AbortSignal.timeout(15000) });
-    if (!response.ok) throw await googleResponseError(response, false, label);
-    return (await response.json()).values || [];
-  };
+  const read = (id, range, label = 'SHEET_ID_2026') => readSheetValues({ id, range, label, headers, fetchFn });
   // Re-read the authoritative stock sheet, rather than trusting the sync snapshot.
   const stock = await readKartuStock(env, read);
   const parsed = parseKartuStockHeader(stock);
