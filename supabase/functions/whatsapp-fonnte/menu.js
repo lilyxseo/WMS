@@ -7,28 +7,10 @@ export const SEARCH_MENU = Object.freeze([
 
 export function renderMenu(entries = SEARCH_MENU) {
   return [
-    '📦 *WMS • Pencarian & Transaksi*',
-    'Langsung kirim kata pencarian; tidak perlu memilih jenis SKU/nama/lokasi.',
-    'Contoh: merlyn green gold atau merlyn 6840.',
-    'Semua kata dicari dengan aturan mengandung; tidak harus berurutan.',
-    'Global hanya mengambil Kartu Stok, 10 hasil per halaman.',
-    'Stok 0 disembunyikan; balas y/n pada pertanyaan untuk mengubahnya.',
-    '',
-    '*Pilih cara pencarian*',
-    ...entries.flatMap(item => [`*${item.id}. ${item.title}*`, item.description, `Contoh: ${item.example}`, '']),
-    '*Persempit hasil*',
-    'Tambahkan filter setelah titik koma:',
-    '• sumber=Kartu Stock / Barang Masuk / Barang Keluar',
-    '• stok=ada / kosong / semua',
-    '• navigasi: balas lanjut atau sebelumnya',
-    '• transaksi: tanggal=, status=, pic=, dokumen=, jumlah=',
-    'Contoh: cari merlyn; stok=ada',
-    '',
-    '*Cara menggunakan menu*',
-    `Kirim nomor ${entries.map(item => item.id).join(', ')} untuk petunjuk, atau langsung kirim contoh perintah.`,
-    'Ketik menu kapan saja untuk kembali.',
-    '',
-    'ℹ️ Data mengikuti sinkronisasi WMS. Filter stok hanya mencari sumber stok. Transaksi dicari dari baris terbaru sampai hasil ditemukan atau data habis.',
+    '📦 *Menu WMS*', '',
+    ...entries.flatMap(item => [`*${item.id}. ${item.title}*`, `Contoh: ${item.example}`, '']),
+    'Kirim pencarian langsung atau nomor menu untuk panduan.',
+    'Navigasi: lanjut • sebelumnya • menu',
   ].join('\n');
 }
 
@@ -42,12 +24,9 @@ export function resolveMenu(message) {
   if (!entry) return undefined;
   return [
     `🔎 *${entry.title}*`, entry.description, '',
-    '*Kirim perintah berikut, ganti nilainya:*', entry.example,
+    'Contoh:', entry.example,
     ...(entry.extra ? [entry.extra] : []), '',
-    '*Filter opsional*', entry.command === 'cari' ? `${entry.example}; stok=ada` : 'Balas lanjut untuk halaman berikutnya.', '',
-    'Hasil stok memuat lokasi dan stok; transaksi memuat tanggal, asal/tujuan, jumlah, status, dan PIC.',
-    'Cukup balas lanjut atau sebelumnya untuk pindah halaman.',
-    'Ketik menu untuk melihat semua pilihan.',
+    'Ketik menu untuk pilihan lainnya.',
   ].join('\n');
 }
 

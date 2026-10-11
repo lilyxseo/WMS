@@ -64,6 +64,8 @@ dan hostname proyek Supabase untuk pengembangan di lingkungan cloud.
 
 Ketik `menu`, `bantuan`, atau `halo`. Menu memiliki tiga fitur: pencarian global,
 barang masuk, dan barang keluar. Nomor 1–3 membuka panduan, bukan memilih hasil.
+Menu utama ditampilkan ringkas: tiga pilihan, contoh, dan satu baris navigasi.
+Panduan singkat per fitur tersedia saat nomor menu dikirim.
 Menu dan panduan dihasilkan dari `SEARCH_MENU` di `menu.js`; fitur baru wajib
 menambah registry, implementasi, dan tes sekaligus.
 

@@ -80,7 +80,7 @@ test('dedicated inbound and outbound queries remain independent of stock and sav
 test('legacy aliases, structured filters and menu registry stay usable',async()=>{
  assert.deepEqual(parseInventoryMessage('SKU 00123'),{query:'00123',fields:['sku']});
  assert.equal(parseAdvancedCommand('cari nama=merlyn; lokasi=a20-1').filters.length,2);
- const h=harness();for(const command of ['menu','halo','1','menu masuk']) {assert.match(await send(h,command),/Ketik menu|kembali/);}
+ const h=harness();for(const command of ['menu','halo','1','menu masuk']) {assert.match(await send(h,command),/Navigasi:|Ketik menu/);}
  assert.equal(h.reads.length,0);for(const entry of SEARCH_MENU) {assert.ok(renderMenu().includes(entry.example));assert.ok(resolveMenu(entry.id).includes(entry.example));}
 });
 test('formatting preserves zero values and neutralizes user-controlled markdown',()=>{
