@@ -1,3 +1,4 @@
+import { stockIdentity } from './stock-identity.js';
 import { readSheetValues, readTransactionRow, findTransactionSlot } from './sheet-values.js';
 import { parseKartuStockHeader, stockHeaderFailure } from './kartu-stok-header.js';
 import { readKartuStock } from './kartu-stok-source.js';
@@ -18,9 +19,14 @@ export async function commitStock(env, state, fetchFn) {
   const stock = await readKartuStock(env, (id, range, label) => read(range, 'FORMATTED_VALUE', id, label));
   const parsed = parseKartuStockHeader(stock);
   if (parsed.missing.length) return `${stockHeaderFailure(parsed)}\nStock in/out tidak disimpan.`;
-  const [locationIndex, skuIndex, nameIndex, qtyIndex] = parsed.indices;
+  const [locationIndex, skuIndex, , qtyIndex] = parsed.indices;
   const skuRows = stock.slice(parsed.headerIndex + 1).filter(row => normalizeSku(row[skuIndex]) === normalizeSku(state.row.sku));
-  if (!skuRows.length || skuRows.some(row => normalizeText(row[nameIndex]) !== normalizeText(state.row.nama_barang))) return 'SKU/nama barang berubah di WMS. Transaksi tidak disimpan. Sinkronkan WMS lalu cari ulang.';
+  if (!skuRows.length) return `SKU ${displayText(state.row.sku)} belum ditemukan pada Kartu Stock yang dibaca bot. Transaksi belum disimpan. Periksa sumber spreadsheet dengan cek google; SHEET_ID_KARTU_STOK harus menunjuk sumber stok WMS.`;
+  const identity = stockIdentity(skuRows, parsed.indices, state);
+  if (!identity.matches) {
+    if (identity.name) return { saved: false, reviewRequired: true, row: { ...state.row, nama_barang: identity.name }, reply: 'Nama barang pada Kartu Stock berbeda dari hasil pencarian. Nama diperbarui pada ringkasan; transaksi belum disimpan.' };
+    return `Nama barang untuk SKU ${displayText(state.row.sku)} kosong atau tidak konsisten di Kartu Stock. Transaksi belum disimpan. Periksa data barang/lokasi yang dipilih.`;
+  }
   if (state.direction === 'out') {
     const locationRows = skuRows.filter(row => normalizeLocation(row[locationIndex]) === normalizeLocation(state.location));
     const available = locationRows.length === 1 ? normalizeNumber(locationRows[0][qtyIndex]).value : undefined;

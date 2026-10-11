@@ -150,11 +150,15 @@ export async function handleStock(message, sender, env, config, fetchFn) {
   const claim = await fetchFn(`${config.url}/rest/v1/whatsapp_search_sessions?sender=eq.${encodeURIComponent(sender)}&search->>nonce=eq.${state.nonce}&search->>phase=eq.confirm&expires_at=gt.${encodeURIComponent(new Date().toISOString())}`, { method: 'PATCH', headers: { ...headers(config), 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify({ search: { ...state, phase: 'saving' } }), signal: AbortSignal.timeout(10000) });
   if (!claim.ok) return 'Penyimpanan belum dapat dimulai. Coba lagi.';
   if (!(await claim.json()).length) return 'Konfirmasi sudah diproses atau kedaluwarsa. Periksa WMS.';
-  let reply, retryable = false;
+  let reply, retryable = false, needsReview = false;
   try {
     const result = await commitStock(env, state, fetchFn);
     reply = typeof result === 'string' ? result : result.reply;
     retryable = typeof result === 'string';
+    if (result.reviewRequired) {
+      state.row = result.row; needsReview = true;
+      reply += '\n\n' + review(state);
+    }
     if (result.saved) {
       try { await writeStockAudit(config, profile, state, result, fetchFn); }
       catch { reply += '\nHistory WMS belum tercatat. Transaksi sudah tersimpan; jangan ulang transaksi.'; }
@@ -166,6 +170,6 @@ export async function handleStock(message, sender, env, config, fetchFn) {
     reply = formatGoogleFailure(error, undefined, `Barang ${state.direction === 'in' ? 'Masuk' : 'Keluar'}`);
   }
   if (retryable) reply += '\n\nBalas ulang untuk mencoba lagi dengan data input yang sama.';
-  await saveSearch(config, sender, retryable ? { ...state, phase: 'retry' } : { kind: 'stock', phase: 'done', nonce: state.nonce, direction: state.direction }, fetchFn);
+  await saveSearch(config, sender, needsReview ? { ...state, phase: 'confirm' } : retryable ? { ...state, phase: 'retry' } : { kind: 'stock', phase: 'done', nonce: state.nonce, direction: state.direction }, fetchFn);
   return reply;
 }

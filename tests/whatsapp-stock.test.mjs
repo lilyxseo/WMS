@@ -8,7 +8,7 @@ const pair = await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulu
 const privateKey = '-----BEGIN PRIVATE KEY-----\n' + Buffer.from(await crypto.subtle.exportKey('pkcs8', pair.privateKey)).toString('base64') + '\n-----END PRIVATE KEY-----';
 const item = { sku: '00123', nama_barang: 'Merlyn Green Gold', lokasi_bulky: 'A20-1', stok_akhir: 12, source_row_number: 2 };
 const user = { id: 'user-id', full_name: 'Andi', username: 'andi', email: 'andi@test.invalid', role: 'PIC Inventory', phone_number: '6281234567890' };
-function fixture({ profiles = [{ ...user }], allowlisted = true, claimFail = false, liveStock = 12, headerFail = false, writeFail = false, many = false, profileReadFail = false, auditFail = false, occupiedBeforeWrite = false, targetRow = [], stockRows, locationRows, transactionReadFailures = 0, sheetRows } = {}) {
+function fixture({ profiles = [{ ...user }], allowlisted = true, claimFail = false, liveStock = 12, headerFail = false, writeFail = false, many = false, profileReadFail = false, auditFail = false, occupiedBeforeWrite = false, targetRow = [], stockRows, locationRows, transactionReadFailures = 0, liveName = item.nama_barang, sheetRows } = {}) {
  const env = { SUPABASE_URL: 'https://test.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'test-role', FONNTE_TOKEN: 'test', FONNTE_WEBHOOK_SECRET: 'secret', WHATSAPP_ALLOWED_NUMBERS: allowlisted ? '6281234567890' : '', GOOGLE_CLIENT_EMAIL: 'test@example.com', GOOGLE_PRIVATE_KEY: privateKey, SHEET_ID_2026: 'transactions' };
  let session; const replies = [], writes = [], queries = [], audits = [];
  const fetchFn = async (url, options = {}) => {
@@ -38,7 +38,7 @@ function fixture({ profiles = [{ ...user }], allowlisted = true, claimFail = fal
    if (options.method === 'PUT') { writes.push({ url, body: JSON.parse(options.body) }); return Response.json({}, { status: writeFail ? 500 : 200 }); }
    const decoded = decodeURIComponent(url);
    if (transactionReadFailures > 0 && /Barang (Masuk|KeIuar).*A1:I500/.test(decoded)) { transactionReadFailures--; throw new TypeError('Network failed'); }
-   if (decoded.includes('Kartu Stock')) return Response.json({ values: [['LOKASI BULKY','SKU','NAMA BARANG','STOK AKHIR'], ...(locationRows ? locationRows.map(row => [row.lokasi_bulky, item.sku, item.nama_barang, row.stok_akhir]) : [['A20-1','00123','Merlyn Green Gold',String(liveStock)]])] });
+   if (decoded.includes('Kartu Stock')) return Response.json({ values: [['LOKASI BULKY','SKU','NAMA BARANG','STOK AKHIR'], ...(locationRows ? locationRows.map(row => [row.lokasi_bulky, item.sku, item.nama_barang, row.stok_akhir]) : [['A20-1','00123',liveName,String(liveStock)]])] });
    if (/!A(\d+):I\1(?:\?|$)/.test(decoded)) return Response.json({ values: occupiedBeforeWrite ? [['existing']] : [targetRow] });
    const header = headerFail ? ['wrong'] : ['TANGGAL','FROM','TO','SKU','NAMA BARANG','QTY','STATUS','PIC','KETERANGAN'];
    return Response.json({ values: [header, ...(sheetRows || [['date','old','old','OLD','Old',1,'Barang Masuk','ABI','RECEIPT'], [], ['date','later','later','LATER','Later',1,'Barang Masuk','ABI','RECEIPT']])] });
@@ -242,4 +242,11 @@ test('ulang does not repeat a write with an uncertain outcome', async () => {
  const f = fixture({ writeFail: true }); await preview(f, 'in');
  const reply = await f.send('y'); assert.match(reply, /Status penulisan belum terkonfirmasi/); assert.doesNotMatch(reply, /Balas ulang/);
  assert.match(await f.send('ulang'), /sudah diproses/); assert.equal(f.writes.length, 1);
+});
+
+test('a renamed SKU is shown for a new y confirmation rather than forcing another search', async () => {
+ const f = fixture({ liveName: 'MERLYN GREEN GOLD NEW NAME' }); await preview(f, 'in');
+ const review = await f.send('y'); assert.match(review, /Nama diperbarui/); assert.match(review, /MERLYN GREEN GOLD NEW NAME/);
+ assert.equal(f.session.phase, 'confirm'); assert.equal(f.writes.length, 0);
+ assert.match(await f.send('y'), /tersimpan/); assert.equal(f.writes[0].body.values[0][4], 'MERLYN GREEN GOLD NEW NAME');
 });

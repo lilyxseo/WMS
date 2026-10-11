@@ -456,3 +456,10 @@ Jika penulisan sudah dicoba dan hasilnya belum pasti, `ulang` diblokir untuk
 mencegah transaksi ganda; periksa WMS terlebih dahulu. Draft tetap memiliki
 masa berlaku session 15 menit. Error yang terjadi sebelum fitur ini diterapkan
 tidak memiliki draft lengkap untuk dicoba ulang.
+
+Pemeriksaan nama barang sebelum stock in/out memakai nama pada lokasi relevan,
+bukan mewajibkan semua lokasi dengan SKU sama memiliki ejaan identik. Spasi dan
+huruf besar/kecil dinormalisasi. Jika nama terbaru berbeda dan dapat ditentukan
+secara jelas, draft diperbarui dan ringkasan meminta konfirmasi y lagi sebelum
+menulis. SKU tetap dicocokkan sebagai teks, termasuk nol di depan. SKU yang
+hilang, nama kosong/ambigu, stok berubah, dan lokasi ganda tetap membatalkan penulisan.
