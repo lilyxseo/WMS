@@ -17,3 +17,12 @@ test('distinct SKU pagination skips duplicate locations across batches and pages
  const second = await searchStockItems(config, { query: 'merlyn', direction: 'out', page: 2 }, fetchFn);
  assert.deepEqual(second.rows.map(row => row.sku), ['010', '011']); assert.equal(second.hasMore, false); assert.equal(calls, 4);
 });
+
+test('location choices omit zero stock and ambiguous duplicate rows', async () => {
+ const { stockLocations } = await import('../supabase/functions/whatsapp-fonnte/stock-search.js');
+ const result = await stockLocations(config, '00123', async url => {
+  assert.equal(new URL(url).searchParams.get('sku'), 'eq.00123');
+  return Response.json([{ lokasi_bulky: 'A1', stok_akhir: 10 }, { lokasi_bulky: 'A1', stok_akhir: 0 }, { lokasi_bulky: 'A2', stok_akhir: 4 }, { lokasi_bulky: 'A3', stok_akhir: 0 }, { lokasi_bulky: 'A4', stok_akhir: 'invalid' }]);
+ });
+ assert.deepEqual(result, [{ count: 1, location: 'A2', qty: 4 }]);
+});

@@ -262,10 +262,10 @@ sinkronisasi sebelum membuat perpindahan berikutnya pada stok yang sama.
 
 Menu `6` (Inbound) dan `7` (Outbount). Kirim `inbound`, `outbount`, atau pencarian langsung
 `inbound merlyn`. Alias `outbound`, `stock in/out`, `stok in/out`, dan `stock-in/out` tetap berlaku.
-Inbound: cari SKU/nama → pilih SKU → From **IWT E-COM** (y/n) → To **MASIH DI INBOUND** (y/n) → qty → konfirmasi `simpan`.
-Balas `y` untuk menggunakan default atau `n` lalu kirim nilai pengganti.
-Outbount: cari SKU/nama → pilih barang → lokasi From → qty → konfirmasi `simpan`.
-Balas `sama` pada To/lokasi untuk memakai lokasi hasil. `ubah` memulai ulang; `batal`/`menu`
+Inbound: cari SKU/nama → pilih SKU → From **IWT E-COM** → To **MASIH DI INBOUND** → qty → konfirmasi `y`.
+Balas `y` untuk menggunakan default; setiap jawaban selain `y` langsung dipakai sebagai nilai pengganti.
+Outbount: cari SKU/nama → pilih SKU → pilih nomor lokasi From dengan stok positif → qty → konfirmasi `y`.
+Pada pilihan lokasi outbount, `sama` masih diterima untuk memakai lokasi hasil. `ubah` memulai ulang; `batal`/`menu`
 membatalkan. Pilihan barang menampilkan satu data per SKU, 10 SKU per halaman, dengan
 navigasi `lanjut`/`sebelumnya`; lokasi berbeda tidak membuat SKU tampil berulang. Inbound boleh memilih
 barang stok 0 dan tujuan baru; outbount hanya memilih stok positif dan memeriksa stok lokasi asal.
@@ -437,3 +437,22 @@ Hasil dikembalikan dalam satu daftar tanpa menggandakan baris yang cocok dengan
 beberapa alternatif. SKU yang sama di lokasi berbeda tetap ditampilkan sebagai
 baris stok berbeda. Navigasi lanjut/sebelumnya dan opsi stok 0 tetap berlaku.
 Pemisahan koma juga didukung pada pencarian Barang Masuk/Keluar dan filter nama/SKU/lokasi.
+
+Outbount menampilkan 10 lokasi per halaman setelah memilih SKU. Balas nomor lokasi,
+atau ketik lokasi langsung; lanjut/sebelumnya mengganti halaman daftar lokasi.
+Lokasi tanpa stok positif atau baris stok ganda tidak ditawarkan. Stok lokasi
+diperiksa lagi saat dipilih dan pada spreadsheet sebelum transaksi disimpan.
+
+Pada ringkasan Tinjau Inbound/Outbount, balas `y` untuk menyimpan. Jawaban lain
+menampilkan ulang ringkasan; `ubah` memulai ulang dan `batal` membatalkan.
+Konfirmasi default From/To dan konfirmasi Tinjau adalah langkah terpisah.
+
+Barang Masuk/Keluar dibaca per 500 baris untuk mencari baris tersedia, berhenti
+segera saat ditemukan sehingga seluruh tab tidak dimuat sekaligus.
+Jika penyimpanan gagal sebelum menulis transaksi, bot mempertahankan draft dan
+menawarkan `ulang`: nilai SKU, From, To, qty dan PIC tidak perlu diisi ulang.
+Percobaan ulang memakai klaim session atomik dan memeriksa stok/izin kembali.
+Jika penulisan sudah dicoba dan hasilnya belum pasti, `ulang` diblokir untuk
+mencegah transaksi ganda; periksa WMS terlebih dahulu. Draft tetap memiliki
+masa berlaku session 15 menit. Error yang terjadi sebelum fitur ini diterapkan
+tidak memiliki draft lengkap untuk dicoba ulang.

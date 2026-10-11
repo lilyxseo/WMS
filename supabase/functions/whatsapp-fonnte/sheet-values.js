@@ -47,7 +47,7 @@ export async function readSheetValues({ id, range, label, render = 'FORMATTED_VA
 }
 
 // Extend only the row capacity when the selected transaction row is outside the grid.
-export async function readTransactionRow({ id, sheet, rowNumber, label, headers, fetchFn }) {
+async function readTransactionRowInternal({ id, sheet, rowNumber, label, headers, fetchFn }) {
   const range = `'${sheet}'!A${rowNumber}:I${rowNumber}`;
   const read = () => readSheetValues({ id, range, label, render: 'FORMATTED_VALUE', headers, fetchFn });
   try { return await read(); }
@@ -68,5 +68,50 @@ export async function readTransactionRow({ id, sheet, rowNumber, label, headers,
       if (!response.ok) throw await googleResponseError(response, false, label);
     }
     return await read();
+  }
+}
+
+// Find the first available transaction row without reading the entire history at once.
+async function findTransactionSlotInternal({ id, sheet, label, headers, fetchFn }) {
+  const batchSize = 500;
+  let header = [], gridRows;
+  for (let start = 1; ; start += batchSize) {
+    if (gridRows && start > gridRows) return { header, rowNumber: start };
+    let end = Math.min(start + batchSize - 1, gridRows || Infinity);
+    const read = () => readSheetValues({ id, range: `'${sheet}'!A${start}:I${end}`, label, headers, fetchFn });
+    let rows;
+    try { rows = await read(); }
+    catch (error) {
+      if (!(error instanceof GoogleAccessError) || error.code !== 'SHEETS_GRID_LIMIT') throw error;
+      const response = await fetchFn(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}?fields=sheets.properties(title,gridProperties)`, { headers, signal: AbortSignal.timeout(15000) });
+      if (!response.ok) throw await googleResponseError(response, false, label);
+      const properties = (await response.json()).sheets?.find(tab => tab.properties?.title === sheet)?.properties;
+      if (!Number.isInteger(properties?.gridProperties?.rowCount) || properties.gridProperties.rowCount < 1 || properties.gridProperties.columnCount < 9) throw error;
+      gridRows = properties.gridProperties.rowCount;
+      if (start > gridRows) return { header, rowNumber: start };
+      end = Math.min(end, gridRows); rows = await read();
+    }
+    if (start === 1) header = rows[0] || [];
+    for (let index = start === 1 ? 1 : 0; index < rows.length; index++) {
+      const row = rows[index] || [];
+      if (String(row[0] ?? '').trim() === '' && String(row[3] ?? '').trim() === '') return { header, rowNumber: start + index };
+    }
+    if (rows.length < end - start + 1) return { header, rowNumber: Math.max(2, start + rows.length) };
+    if (gridRows && end === gridRows) return { header, rowNumber: gridRows + 1 };
+  }
+}
+
+export async function readTransactionRow(options) {
+  try { return await readTransactionRowInternal(options); }
+  catch (error) {
+    if (error instanceof GoogleAccessError) throw error;
+    throw new GoogleAccessError('SHEETS_ROW_CHECK_FAILED', `Pemeriksaan baris ${options.sheet} belum berhasil. Coba ulang nanti.`, false);
+  }
+}
+export async function findTransactionSlot(options) {
+  try { return await findTransactionSlotInternal(options); }
+  catch (error) {
+    if (error instanceof GoogleAccessError) throw error;
+    throw new GoogleAccessError('SHEETS_SLOT_CHECK_FAILED', `Pemeriksaan baris tersedia ${options.sheet} belum berhasil. Coba ulang nanti.`, false);
   }
 }

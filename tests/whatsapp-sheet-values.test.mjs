@@ -64,3 +64,27 @@ test('denied row expansion stops before any transaction values are written', asy
  } }), error => error.code === 'SHEETS_PERMISSION_DENIED' && error.writeAttempted === false);
  assert.equal(valueReads, 1);
 });
+
+test('transaction slot scan stops at the first blank Tanggal/SKU and never reads unbounded columns', async () => {
+ const { findTransactionSlot } = await import('../supabase/functions/whatsapp-fonnte/sheet-values.js');
+ let calls = 0;
+ const result = await findTransactionSlot({ id: 'transactions', sheet: 'Barang Masuk', label: 'SHEET_ID_2026', headers: {}, fetchFn: async url => {
+  calls++; const decoded = decodeURIComponent(url);
+  if (calls === 1) {
+   assert.match(decoded, /!A1:I500/);
+   return Response.json({ values: [['TANGGAL'], ...Array.from({ length: 499 }, () => ['date', '', '', 'SKU'])] });
+  }
+  assert.match(decoded, /!A501:I1000/);
+  return Response.json({ values: [['date', '', '', 'SKU'], ['', 'template'], ['later', '', '', 'LATER']] });
+ } });
+ assert.equal(calls, 2); assert.equal(result.rowNumber, 502);
+});
+test('short transaction grids are clamped before finding the first row', async () => {
+ const { findTransactionSlot } = await import('../supabase/functions/whatsapp-fonnte/sheet-values.js');
+ const result = await findTransactionSlot({ id: 'transactions', sheet: 'Barang Masuk', label: 'SHEET_ID_2026', headers: {}, fetchFn: async url => {
+  if (url.includes('?fields=')) return Response.json({ sheets: [{ properties: { title: 'Barang Masuk', gridProperties: { rowCount: 3, columnCount: 9 } } }] });
+  if (decodeURIComponent(url).includes('!A1:I500')) return Response.json({ error: { message: 'Range exceeds grid limits' } }, { status: 400 });
+  assert.match(decodeURIComponent(url), /!A1:I3/); return Response.json({ values: [['TANGGAL'], ['date', '', '', 'SKU'], ['date', '', '', 'SKU']] });
+ } });
+ assert.equal(result.rowNumber, 4);
+});

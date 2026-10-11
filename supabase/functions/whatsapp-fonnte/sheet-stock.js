@@ -1,4 +1,4 @@
-import { readSheetValues, readTransactionRow } from './sheet-values.js';
+import { readSheetValues, readTransactionRow, findTransactionSlot } from './sheet-values.js';
 import { parseKartuStockHeader, stockHeaderFailure } from './kartu-stok-header.js';
 import { readKartuStock } from './kartu-stok-source.js';
 import { GoogleAccessError, googleResponseError } from './google-errors.js';
@@ -29,8 +29,8 @@ export async function commitStock(env, state, fetchFn) {
   const inbound = state.direction === 'in';
   const sheet = inbound ? 'Barang Masuk' : 'Barang KeIuar';
   const expected = ['TANGGAL', 'FROM', 'TO', 'SKU', 'NAMABARANG', 'QTY', 'STATUS', 'PIC', 'KETERANGAN'];
-  const destination = await read(`'${sheet}'!A:I`, 'FORMATTED_VALUE');
-  const destinationHeaders = destination[0] || [];
+  const destination = await findTransactionSlot({ id: env.SHEET_ID_2026, sheet, label: 'SHEET_ID_2026', headers, fetchFn });
+  const destinationHeaders = destination.header;
   if (expected.some((name, i) => String(destinationHeaders[i] || '').toUpperCase().replace(/\s/g, '') !== name)) return 'Kolom transaksi tidak sesuai WMS. Stock in/out tidak disimpan.';
   const dates = movementDates(new Date(), env.BUSINESS_TIME_ZONE || 'Asia/Jakarta');
   const status = inbound ? 'Barang Masuk' : 'Barang Keluar';
@@ -41,8 +41,7 @@ export async function commitStock(env, state, fetchFn) {
   // Use displayed values so formulas returning blank do not make template rows occupied.
   // Only A:I is written; auxiliary columns, chips and links remain untouched.
   const empty = row => normalizeText(row[0]) === '' && normalizeText(row[3]) === '';
-  const emptyIndex = destination.findIndex((row, index) => index > 0 && empty(row || []));
-  const rowNumber = emptyIndex >= 0 ? emptyIndex + 1 : Math.max(2, destination.length + 1);
+  const rowNumber = destination.rowNumber;
   const range = `'${sheet}'!A${rowNumber}:I${rowNumber}`;
   const current = await readTransactionRow({ id: env.SHEET_ID_2026, sheet, rowNumber, label: 'SHEET_ID_2026', headers, fetchFn });
   if (!empty(current[0] || [])) return 'Baris tujuan sudah diisi oleh transaksi lain. Transaksi tidak disimpan. Mulai ulang setelah memeriksa WMS.';
