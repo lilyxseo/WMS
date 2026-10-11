@@ -387,3 +387,19 @@ https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/use
 Gunakan OAuth client yang sama dan simpan refresh token hasilnya di Supabase Secrets. Scope email
 hanya untuk membaca identitas akun; tanpa scope ini transaksi tetap dapat berjalan tetapi bot
 tidak dapat memastikan email Google yang terotorisasi. Pemeriksaan tidak mengubah version history.
+
+## Spreadsheet transaksi dan sumber Kartu Stock terpisah
+
+`SHEET_ID_2026` adalah tujuan **Barang Masuk** dan **Barang KeIuar**; tab Kartu Stock tidak
+wajib berada di spreadsheet transaksi. `SHEET_ID_INVENTORY` digunakan untuk riwayat Movement
+serta pencarian sumber Kartu Stock Google. Jika tab Kartu Stock tidak ditemukan di Inventory,
+bot mencoba spreadsheet transaksi untuk kompatibilitas konfigurasi lama. Error izin/auth
+bukan alasan untuk berpindah sumber secara otomatis.
+
+Opsional **`SHEET_ID_KARTU_STOK`**: ID spreadsheet sumber Kartu Stock yang sama dengan sumber
+sinkronisasi WMS. Jika diisi, hanya sumber tersebut yang dipakai dan tidak ada fallback.
+Gunakan ini jika Kartu Stock berada di spreadsheet ketiga, atau untuk memastikan sumber stok
+secara eksplisit ketika lebih dari satu spreadsheet mempunyai tab Kartu Stock.
+`cek google` melaporkan spreadsheet yang dipilih untuk sumber Kartu Stock, terpisah dari
+pemeriksaan tab transaksi dan Movement. Pemeriksaan/penulisan inbound, outbount dan movement
+menggunakan pemilihan sumber yang sama. Pencarian chat tetap membaca mirror Supabase.

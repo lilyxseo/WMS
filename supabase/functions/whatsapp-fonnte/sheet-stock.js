@@ -1,3 +1,4 @@
+import { readKartuStock } from './kartu-stok-source.js';
 import { GoogleAccessError, googleResponseError } from './google-errors.js';
 import { googleToken } from './sheet-edit.js';
 import { movementDates } from './sheet-movement.js';
@@ -5,23 +6,23 @@ import { displayText } from './menu.js';
 import { normalizeLocation, normalizeSku, normalizeText, normalizeNumber } from './sheet-normalization.js';
 
 export async function commitStock(env, state, fetchFn) {
-  if (!['in', 'out'].includes(state.direction) || !Number.isFinite(state.qty) || state.qty <= 0 || !state.profile?.id || !normalizeText(state.profile.full_name) || !normalizeLocation(state.location) || !normalizeText(state.pic) || (state.direction === 'in' && (!normalizeLocation(state.from) || !normalizeLocation(state.to))) || !normalizeSku(state.row?.sku)) throw new Error('Invalid stock draft');
+  if (!['in', 'out'].includes(state.direction) || !Number.isFinite(state.qty) || state.qty <= 0 || !state.profile?.id || !normalizeLocation(state.location) || !normalizeText(state.pic) || (state.direction === 'in' && (!normalizeLocation(state.from) || !normalizeLocation(state.to))) || !normalizeSku(state.row?.sku)) throw new Error('Invalid stock draft');
   let access;
   try { access = await googleToken(env, fetchFn); }
   catch (error) { if (error instanceof GoogleAccessError) throw error; throw new GoogleAccessError('GOOGLE_AUTH_FAILED', 'Autentikasi Google gagal. Periksa kredensial Google pada Supabase Secrets.', false); }
   const base = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(env.SHEET_ID_2026)}`;
   const headers = { Authorization: `Bearer ${access}`, 'Content-Type': 'application/json' };
-  const read = async (range, render = 'FORMATTED_VALUE') => {
+  const read = async (range, render = 'FORMATTED_VALUE', sheetId = env.SHEET_ID_2026, secret = 'SHEET_ID_2026') => {
     let response;
-    try { response = await fetchFn(`${base}/values/${encodeURIComponent(range)}?valueRenderOption=${render}`, { headers, signal: AbortSignal.timeout(15000) }); }
+    try { response = await fetchFn(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId)}/values/${encodeURIComponent(range)}?valueRenderOption=${render}`, { headers, signal: AbortSignal.timeout(15000) }); }
     catch { throw new GoogleAccessError('SHEETS_READ_CONNECTION_FAILED', 'Koneksi baca Google Sheets gagal. Coba cek google kembali nanti.', false); }
-    if (!response.ok) throw await googleResponseError(response);
+    if (!response.ok) throw await googleResponseError(response, false, secret);
     let payload;
     try { payload = await response.json(); }
     catch { throw new GoogleAccessError('SHEETS_INVALID_RESPONSE', 'Respons baca Google Sheets tidak valid. Coba cek google kembali nanti.', false); }
     return payload.values || [];
   };
-  const stock = await read("'Kartu Stock'!A:Z");
+  const stock = await readKartuStock(env, (id, range, label) => read(range, 'FORMATTED_VALUE', id, label));
   const header = (stock[0] || []).map(value => String(value).toUpperCase().replace(/\s/g, ''));
   const [locationIndex, skuIndex, nameIndex, qtyIndex] = ['LOKASIBULKY', 'SKU', 'NAMABARANG', 'STOKAKHIR'].map(name => header.indexOf(name));
   if ([locationIndex, skuIndex, nameIndex, qtyIndex].some(index => index < 0)) return 'Kolom Kartu Stok tidak sesuai WMS. Stock in/out tidak disimpan.';

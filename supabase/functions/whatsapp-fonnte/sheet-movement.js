@@ -1,3 +1,5 @@
+import { readKartuStock } from './kartu-stok-source.js';
+import { googleResponseError } from './google-errors.js';
 import { displayText } from './menu.js';
 import { googleToken } from './sheet-edit.js';
 import { normalizeLocation, normalizeSku, normalizeNumber } from './sheet-normalization.js';
@@ -12,13 +14,13 @@ export async function commitMovement(env, state, fetchFn) {
   const access = await googleToken(env, fetchFn);
   const headers = { Authorization: `Bearer ${access}`, 'Content-Type': 'application/json' };
   const base = id => `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}`;
-  const read = async (id, range) => {
+  const read = async (id, range, label = 'SHEET_ID_2026') => {
     const response = await fetchFn(`${base(id)}/values/${encodeURIComponent(range)}?valueRenderOption=FORMATTED_VALUE`, { headers, signal: AbortSignal.timeout(15000) });
-    if (!response.ok) throw new Error('Movement sheet read failed');
+    if (!response.ok) throw await googleResponseError(response, false, label);
     return (await response.json()).values || [];
   };
   // Re-read the authoritative stock sheet, rather than trusting the sync snapshot.
-  const stock = await read(env.SHEET_ID_2026, "'Kartu Stock'!A:Z");
+  const stock = await readKartuStock(env, read);
   const normalizedHeaders = (stock[0] || []).map(value => String(value).toUpperCase().replace(/\s/g, ''));
   const indices = ['LOKASIBULKY', 'SKU', 'NAMABARANG', 'STOKAKHIR'].map(name => normalizedHeaders.indexOf(name));
   if (indices.some(index => index < 0)) return 'Kolom Kartu Stok tidak sesuai WMS. Movement tidak disimpan.';

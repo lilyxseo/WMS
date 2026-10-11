@@ -46,7 +46,7 @@ test('diagnostics report missing tabs and a wrong spreadsheet ID without pretend
   if (url.includes('/transactions?')) return Response.json({ sheets: [{ properties: { title: 'Barang Masuk' } }] });
   return Response.json({ error: { message: 'private details' } }, { status: 404 });
  });
- assert.match(reply, /Tab belum ditemukan: Kartu Stock, Barang KeIuar/); assert.match(reply, /SPREADSHEET_NOT_FOUND/); assert.doesNotMatch(reply, /private details/);
+ assert.match(reply, /Tab belum ditemukan: Barang KeIuar/); assert.match(reply, /SPREADSHEET_NOT_FOUND/); assert.doesNotMatch(reply, /private details/);
 });
 test('diagnostic command works in the webhook while preserving an active transaction draft', async () => {
  let sent, writes = 0;
