@@ -9,6 +9,8 @@ import { BOT_HELP, CommandError, parseAdvancedCommand, searchAdvancedInventory, 
 import { resolveMenu, displayText } from './menu.js';
 import { formatTransactionRow } from './transactions.js';
 import { loadSearch, saveSearch } from './sessions.js';
+import { handleStock } from './stock.js';
+import { findPhoneProfile, normalizePhone } from './profiles.js';
 import { handleMovement } from './movement.js';
 import { handleEdit, canEdit } from './edit.js';
 
@@ -21,7 +23,7 @@ const HELP = BOT_HELP;
 const json = (body, status = 200) => new Response(JSON.stringify(body), {
   status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
 });
-const phone = value => String(value ?? '').replace(/\D/g, '').replace(/^0/, '62');
+const phone = normalizePhone;
 
 export function parseInventoryMessage(message) {
   const input = String(message ?? '').trim();
@@ -67,7 +69,7 @@ export async function handleFonnteWebhook({ request, env }, fetchFn = fetch) {
   if (request.method !== 'POST') return json({ success: false, message: 'Method not allowed' }, 405);
   const secret = String(env.FONNTE_WEBHOOK_SECRET || '');
   const allowed = String(env.WHATSAPP_ALLOWED_NUMBERS || '').split(',').map(phone).filter(Boolean);
-  if (!secret || !allowed.length || !env.FONNTE_TOKEN) return json({ success: false, message: 'Bot belum dikonfigurasi' }, 503);
+  if (!secret || !env.FONNTE_TOKEN) return json({ success: false, message: 'Bot belum dikonfigurasi' }, 503);
   const received = request.headers.get('X-Webhook-Secret') || new URL(request.url).searchParams.get('secret');
   if (received !== secret) return json({ success: false }, 401);
   let payload;
@@ -76,16 +78,22 @@ export async function handleFonnteWebhook({ request, env }, fetchFn = fetch) {
     else payload = Object.fromEntries(await request.formData());
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('Invalid payload');
   } catch { return json({ success: false, message: 'Payload tidak valid' }, 400); }
-  // Ignore groups, outbound/status callbacks and senders outside the allowlist.
+  // Ignore groups, outbound/status callbacks and invalid sender identities.
   const sender = String(payload.sender || '');
-  if (sender.includes('@') || payload.isGroup === true || payload.isGroup === 'true'
+  if (!/^62\d{8,13}$/.test(phone(sender)) || sender.includes('@') || payload.isGroup === true || payload.isGroup === 'true'
     || payload.fromMe === true || payload.fromMe === 'true'
-    || !allowed.includes(phone(sender)) || typeof payload.message !== 'string') {
+    || typeof payload.message !== 'string') {
     return json({ success: true, ignored: true });
+  }
+  if (!allowed.includes(phone(sender))) {
+    try {
+      if (!await findPhoneProfile(getDatabaseConfig(env), phone(sender), fetchFn)) return json({ success: true, ignored: true });
+    } catch { return json({ success: false, message: 'Profil WhatsApp belum dapat diverifikasi' }, 503); }
   }
   let reply;
   try {
-    const movementReply = await handleMovement(payload.message, phone(sender), env, getDatabaseConfig(env), fetchFn);
+    const stockReply = await handleStock(payload.message, phone(sender), env, getDatabaseConfig(env), fetchFn);
+    const movementReply = stockReply !== undefined ? stockReply : await handleMovement(payload.message, phone(sender), env, getDatabaseConfig(env), fetchFn);
     const editReply = movementReply !== undefined ? movementReply : await handleEdit(payload.message, phone(sender), env, getDatabaseConfig(env), fetchFn);
     if (editReply !== undefined) reply = editReply;
     else {

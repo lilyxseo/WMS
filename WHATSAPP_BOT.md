@@ -1,12 +1,11 @@
 # Bot WhatsApp WMS (Fonnte)
 
 Webhook Supabase Edge Function: `POST /functions/v1/whatsapp-fonnte`.
-Bot mencari data Supabase pada `inventory_kartu_stok`, `inventory_rpl`, dan
-`inventory_bulky`, serta transaksi `inventory_barang_masuk` dan
+Bot mencari data Supabase pada `inventory_kartu_stok`, serta transaksi `inventory_barang_masuk` dan
 `inventory_barang_keluar`, lalu mengirim balasan lewat `https://api.fonnte.com/send`.
-Pencarian hanya membaca data. Wizard edit menulis perubahan yang dikonfirmasi
-ke Google Sheets lalu mencerminkannya ke Supabase; webhook tidak memicu
-sinkronisasi inventory seluruh sumber.
+Pencarian hanya membaca data. Wizard edit mencerminkan perubahan Google Sheets ke Supabase;
+movement dan stock in/out menulis transaksi baru ke Google Sheets setelah konfirmasi.
+Webhook tidak memicu sinkronisasi inventory seluruh sumber.
 
 ## Konfigurasi
 
@@ -14,11 +13,12 @@ Atur nilai berikut melalui Supabase Dashboard → Edge Functions → Secrets:
 
 - `FONNTE_TOKEN`: token perangkat Fonnte; simpan sebagai secret.
 - `FONNTE_WEBHOOK_SECRET`: secret acak yang kuat; simpan sebagai secret.
-- `WHATSAPP_ALLOWED_NUMBERS`: nomor yang boleh mencari inventory, dipisahkan
+- `WHATSAPP_ALLOWED_NUMBERS`: allowlist pencarian lama yang opsional; nomor yang
+  terdaftar di `users.phone_number` juga boleh membaca data. Allowlist dipisahkan
   koma, misalnya `6281234567890,6289876543210`. Nomor berawalan `0` dinormalisasi
   menjadi `62`. Semua nomor harus memakai format Indonesia/internasional.
 - `SUPABASE_URL` dan `SUPABASE_SERVICE_ROLE_KEY` tersedia otomatis pada runtime
-  Supabase Edge Functions. Bot memakai key server ini hanya untuk membaca stok.
+  Supabase Edge Functions. Bot memakai key server ini untuk membaca stok/profil dan menyimpan session bot.
 - Opsional: `WMS_SUPABASE_SECRET_KEY` untuk menggunakan secret key baru
   (`sb_secret_...`) milik proyek WMS sebagai pengganti service-role bawaan.
   Nama ini memakai prefiks WMS karena custom secret berprefiks SUPABASE
@@ -29,7 +29,7 @@ Daftarkan URL webhook pada perangkat Fonnte:
 Perlakukan URL lengkap sebagai rahasia; jangan masukkan ke Git atau log.
 Header `X-Webhook-Secret` juga didukung jika pengirim webhook dapat mengaturnya.
 Secret ini adalah pemeriksaan akses aplikasi, bukan tanda tangan resmi Fonnte.
-Nomor di luar allowlist dan pesan grup diabaikan. Tanpa konfigurasi wajib,
+Nomor di luar allowlist yang tidak terdaftar di profil dan pesan grup diabaikan. Tanpa konfigurasi wajib,
 webhook mengembalikan 503 dan tidak membaca database.
 
 Deploy dari root repositori, setelah login CLI Supabase:
@@ -41,7 +41,7 @@ supabase functions deploy whatsapp-fonnte --project-ref <project-ref> --no-verif
 Gunakan project ref Supabase WMS yang tabel inventory-nya sudah tersedia.
 Konfigurasi `supabase/config.toml` menonaktifkan verifikasi JWT hanya untuk
 fungsi ini, karena webhook Fonnte tidak membawa JWT pengguna Supabase.
-Secret webhook dan allowlist nomor tetap wajib diperiksa di handler.
+Secret webhook tetap wajib. Handler memverifikasi nomor lewat allowlist lama atau profil `users.phone_number`.
 Endpoint Cloudflare bot sebelumnya sudah dihapus; API WMS lainnya tetap ada.
 
 Untuk menjalankan lokal dengan CLI Supabase dan Docker:
@@ -65,7 +65,8 @@ dan hostname proyek Supabase untuk pengembangan di lingkungan cloud.
 ## Pencarian dan menu
 
 Ketik `menu`, `bantuan`, atau `halo`. Menu memiliki empat fitur: pencarian global,
-barang masuk, barang keluar, dan edit transaksi. Nomor 1–4 membuka panduan, bukan memilih hasil.
+barang masuk, barang keluar, edit transaksi, movement, stock in, dan stock out.
+Nomor 1–7 membuka panduan, bukan memilih hasil saat wizard tidak aktif.
 Menu utama ditampilkan ringkas: empat pilihan, contoh, dan satu baris navigasi.
 Panduan singkat per fitur tersedia saat nomor menu dikirim.
 Menu dan panduan dihasilkan dari `SEARCH_MENU` di `menu.js`; fitur baru wajib
@@ -190,7 +191,7 @@ terakhir; tidak sama dengan nomor baris spreadsheet. Draft kedaluwarsa setelah
 Konfigurasi tambahan di Supabase Edge Function Secrets:
 
 - `WHATSAPP_EDITOR_NUMBERS`: nomor editor yang disetujui, dipisahkan koma.
-  Nomor juga harus masuk `WHATSAPP_ALLOWED_NUMBERS`. Default kosong berarti
+  Nomor juga harus masuk allowlist pencarian atau terdaftar di `users.phone_number`. Default kosong berarti
   tidak ada nomor yang dapat mengedit; izin pencarian tidak otomatis memberi izin edit.
 - `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY`: service account Google yang sama
   dengan WMS; spreadsheet harus dibagikan dengan izin editor ke service account.
@@ -229,7 +230,8 @@ Bot mencari Kartu Stok dengan stok positif, 10 hasil per halaman. Pilih nomor ba
 ringkasan; hanya `simpan` pada tahap konfirmasi yang menulis data. `ubah` memulai ulang draft,
 `batal` membatalkan, dan `menu` keluar ke menu utama. Draft berlaku 15 menit.
 
-Akses menggunakan `WHATSAPP_EDITOR_NUMBERS` dan tetap harus masuk `WHATSAPP_ALLOWED_NUMBERS`.
+Akses movement menggunakan `WHATSAPP_EDITOR_NUMBERS`; nomor harus masuk allowlist pencarian
+atau terdaftar di `users.phone_number`. Stock in/out menggunakan role profil seperti dijelaskan di bawah.
 Selain konfigurasi Google untuk edit, tambahkan **`SHEET_ID_INVENTORY`** di Supabase Secrets,
 berisi spreadsheet yang mempunyai tab `Movement`. Service account harus mempunyai akses Editor
 ke spreadsheet tersebut dan `SHEET_ID_2026`. `BUSINESS_TIME_ZONE` opsional, default `Asia/Jakarta`.
@@ -254,3 +256,49 @@ tersebut dan referensi untuk pemeriksaan admin. Jangan mengulang transaksi yang 
 Pemeriksaan stok lalu penulisan Google Sheets bukan lock stok lintas pengguna maupun aplikasi WMS;
 hindari menjalankan perpindahan bersamaan untuk SKU/lokasi yang sama. Setelah menyimpan, periksa
 sinkronisasi sebelum membuat perpindahan berikutnya pada stok yang sama.
+
+## Stock in/out dengan profil nomor WhatsApp
+
+Menu `6` dan `7` menampilkan panduan. Kirim `stock in`, `stock out`, atau langsung
+`stock out merlyn a20-1`. Alias `stok in`, `stok out`, `stock-in`, dan `stock-out` juga diterima.
+Alur: cari SKU/nama → pilih nomor barang → isi lokasi → qty → `simpan`.
+Balas `sama` pada tahap lokasi untuk memakai lokasi hasil pencarian. Tidak ada pertanyaan
+PIC, tanggal, status, atau keterangan. `ubah` memulai ulang draft; `batal` dan `menu` membatalkan.
+Pencarian dipaginasi 10 hasil; gunakan `lanjut` / `sebelumnya`.
+Stock in menampilkan juga barang stok 0 dan boleh menggunakan lokasi tujuan baru.
+Stock out hanya menampilkan stok positif, lalu memeriksa stok SKU pada lokasi asal yang dipilih.
+Saat ini pemilihan barang menggunakan katalog Kartu Stok; pembuatan SKU baru belum didukung.
+
+Profil dibaca dari `public.users` berdasarkan `phone_number`, mengambil `id`, `full_name`,
+`username`, `email`, dan `role`. Isi nomor dalam format teks `628xxxxxxxxxx` tanpa pemisah,
+satu nomor untuk satu profil. Lookup juga menerima nilai tersimpan `08xxxxxxxxxx` dan `+628xxxxxxxxxx`.
+Normalisasi nomor pengirim mendukung tanda `+`, spasi, dan tanda hubung. Nilai nomor di kolom
+profil sebaiknya tetap disimpan tanpa pemisah. Jika lookup menemukan dua profil, transaksi ditolak.
+Nama lengkap wajib; PIC transaksi menggunakan `full_name`, bukan input chat.
+
+Role PIC (sesuai pemeriksaan role aplikasi) atau `Developer` dapat membuat stock in/out.
+Role lain hanya boleh membaca. Nomor tidak perlu ditambahkan ke `WHATSAPP_EDITOR_NUMBERS`
+untuk stock in/out. Profil dibaca kembali pada setiap langkah; perubahan user ID, nomor,
+atau pencabutan izin sebelum konfirmasi mencegah penyimpanan. Jika nama PIC berubah setelah
+preview, bot menampilkan preview baru dan meminta `simpan` lagi. User terdaftar juga dapat
+mengakses pencarian tanpa allowlist statis. Nomor lama di allowlist masih dapat mencari,
+tetapi tidak dapat membuat stock in/out tanpa profil yang cocok dan memiliki izin.
+
+Data otomatis: tanggal M/D/YYYY mengikuti zona bisnis Asia/Jakarta (atau `BUSINESS_TIME_ZONE`),
+status `Barang Masuk` / `Barang Keluar`, PIC dari profil, serta keterangan berisi jenis transaksi,
+referensi UUID draft, dan ID user. Stock in menulis lokasi ke kolom `TO` pada `Barang Masuk`;
+stock out menulis lokasi ke `FROM` pada `Barang KeIuar`. Lokasi pihak luar pada kolom pasangannya
+dibiarkan kosong karena tidak diminta user dan tidak tersedia di struktur profil saat ini.
+Kolom bisnis lainnya mengikuti nilai kosong/default spreadsheet, tidak dikarang dari profil.
+
+Google Sheets tetap menjadi sumber transaksi. Bot memakai `RAW` agar SKU dengan nol di depan
+terjaga dan teks tidak dijalankan sebagai formula. Sebelum penulisan, bot memeriksa ulang SKU/nama
+pada Kartu Stock sumber, stok asal untuk stock out, dan header sheet tujuan. Stock out ditolak
+jika stok berubah, kurang, atau SKU/lokasi memiliki baris ganda. Konfirmasi memakai nonce dan klaim
+session bersyarat untuk mencegah penulisan ulang draft yang sama. Pemeriksaan stok dan penulisan
+Google Sheets belum merupakan transaksi atomik lintas aplikasi; hindari pengeluaran bersamaan
+untuk SKU/lokasi yang sama. Jalankan sinkronisasi WMS agar data pencarian Supabase diperbarui.
+Untuk kegagalan yang belum terkonfirmasi, bot memberikan referensi dan tidak mencoba menulis ulang.
+
+Kolom nomor telepon ditambahkan oleh admin di luar deploy ini. Deploy tidak mengubah struktur
+atau isi tabel `users`, dan tes menggunakan profil serta Sheets tiruan tanpa transaksi produksi.
