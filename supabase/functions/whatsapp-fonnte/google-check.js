@@ -1,3 +1,4 @@
+import { displayText } from './menu.js';
 import { googleToken, hasGoogleCredentials } from './sheet-edit.js';
 import { GoogleAccessError, googleResponseError } from './google-errors.js';
 
@@ -11,6 +12,13 @@ export async function handleGoogleCheck(message, env, fetchFn) {
   try { access = await googleToken(env, fetchFn); }
   catch (error) { return `*Cek Google • ${mode}*\n${error instanceof GoogleAccessError ? error.userMessage + '\nKode: ' + error.code : 'Autentikasi Google gagal. Periksa kredensial di Supabase Secrets.'}\nTidak ada transaksi ditulis.`; }
   const lines = [`*Cek Google • ${mode}*`, 'Autentikasi: berhasil.'];
+  if (oauth) {
+    try {
+      const identity = await fetchFn('https://www.googleapis.com/oauth2/v2/userinfo', { headers: { Authorization: `Bearer ${access}` }, signal: AbortSignal.timeout(10000) });
+      const user = await identity.json();
+      lines.push(identity.ok && typeof user.email === 'string' ? `Akun OAuth: ${displayText(user.email)}.` : 'Akun OAuth: email belum terverifikasi; otorisasi dengan scope userinfo.email untuk memeriksanya.');
+    } catch { lines.push('Akun OAuth: email belum dapat diperiksa.'); }
+  } else lines.push(`Akun Google: ${displayText(env.GOOGLE_CLIENT_EMAIL)}.`);
   const targets = [[env.SHEET_ID_2026, 'SHEET_ID_2026', ['Kartu Stock', 'Barang Masuk', 'Barang KeIuar']], [env.SHEET_ID_INVENTORY, 'SHEET_ID_INVENTORY', ['Movement']]];
   for (const [id, label, required] of targets) {
     if (!id) { lines.push(`${label}: belum diisi (diperlukan untuk movement).`); continue; }

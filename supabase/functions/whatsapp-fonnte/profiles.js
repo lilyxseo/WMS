@@ -31,6 +31,5 @@ export async function requireStockProfile(config, sender, fetchFn) {
   const profile = await findPhoneProfile(config, sender, fetchFn);
   if (!profile) throw new ProfileError('Nomor WhatsApp belum terdaftar di profil WMS. Admin perlu mengisi users.phone_number.');
   if (!canWriteStock(profile)) throw new ProfileError('Akses read-only. Hanya role PIC atau Developer yang dapat menyimpan stock in/out.');
-  if (!String(profile.full_name || '').trim()) throw new ProfileError('Nama lengkap profil belum diisi. Admin perlu melengkapi users.full_name untuk PIC transaksi.');
   return profile;
 }

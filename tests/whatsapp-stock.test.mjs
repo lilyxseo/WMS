@@ -1,17 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { handleFonnteWebhook } from '../supabase/functions/whatsapp-fonnte/handler.js';
+import { APP_CONFIG } from '../assets/js/config.js';
+import { PIC_BY_ROLE, resolvePic } from '../assets/js/pic-config.js';
 import { normalizePhone, findPhoneProfile } from '../supabase/functions/whatsapp-fonnte/profiles.js';
 const pair = await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1,0,1]), hash: 'SHA-256' }, true, ['sign', 'verify']);
 const privateKey = '-----BEGIN PRIVATE KEY-----\n' + Buffer.from(await crypto.subtle.exportKey('pkcs8', pair.privateKey)).toString('base64') + '\n-----END PRIVATE KEY-----';
 const item = { sku: '00123', nama_barang: 'Merlyn Green Gold', lokasi_bulky: 'A20-1', stok_akhir: 12, source_row_number: 2 };
 const user = { id: 'user-id', full_name: 'Andi', username: 'andi', email: 'andi@test.invalid', role: 'PIC Inventory', phone_number: '6281234567890' };
-function fixture({ profiles = [{ ...user }], allowlisted = true, claimFail = false, liveStock = 12, headerFail = false, writeFail = false, many = false, profileReadFail = false } = {}) {
+function fixture({ profiles = [{ ...user }], allowlisted = true, claimFail = false, liveStock = 12, headerFail = false, writeFail = false, many = false, profileReadFail = false, auditFail = false, occupiedBeforeWrite = false, sheetRows } = {}) {
  const env = { SUPABASE_URL: 'https://test.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'test-role', FONNTE_TOKEN: 'test', FONNTE_WEBHOOK_SECRET: 'secret', WHATSAPP_ALLOWED_NUMBERS: allowlisted ? '6281234567890' : '', GOOGLE_CLIENT_EMAIL: 'test@example.com', GOOGLE_PRIVATE_KEY: privateKey, SHEET_ID_2026: 'transactions' };
- let session; const replies = [], writes = [], queries = [];
+ let session; const replies = [], writes = [], queries = [], audits = [];
  const fetchFn = async (url, options = {}) => {
   const q = new URL(url).searchParams;
   if (url.endsWith('/send')) { replies.push(options.body.get('message')); return Response.json({ status: true }); }
+  if (url.includes('/activity_logs')) { audits.push(JSON.parse(options.body)); return new Response(null, { status: auditFail ? 500 : 201 }); }
   if (url.includes('/users?')) {
    queries.push(url); if (profileReadFail) return Response.json({}, { status: 400 }); return Response.json(profiles);
   }
@@ -31,31 +34,36 @@ function fixture({ profiles = [{ ...user }], allowlisted = true, claimFail = fal
   }
   if (url === 'https://oauth2.googleapis.com/token') return Response.json({ access_token: 'test' });
   if (url.includes('sheets.googleapis.com')) {
-   if (options.method === 'POST') { writes.push({ url, body: JSON.parse(options.body) }); return Response.json({}, { status: writeFail ? 500 : 200 }); }
+   if (options.method === 'PUT') { writes.push({ url, body: JSON.parse(options.body) }); return Response.json({}, { status: writeFail ? 500 : 200 }); }
    const decoded = decodeURIComponent(url);
    if (decoded.includes('Kartu Stock')) return Response.json({ values: [['LOKASI BULKY','SKU','NAMA BARANG','STOK AKHIR'], ['A20-1','00123','Merlyn Green Gold',String(liveStock)]] });
-   return Response.json({ values: [headerFail ? ['wrong'] : ['TANGGAL','FROM','TO','SKU','NAMA BARANG','QTY','STATUS','PIC','KETERANGAN']] });
+   if (/!A\d+:I\d+/.test(decoded)) return Response.json({ values: occupiedBeforeWrite ? [['existing']] : [] });
+   const header = headerFail ? ['wrong'] : ['TANGGAL','FROM','TO','SKU','NAMA BARANG','QTY','STATUS','PIC','KETERANGAN'];
+   return Response.json({ values: [header, ...(sheetRows || [['date','old','old','OLD','Old',1,'Barang Masuk','ABI','RECEIPT'], [], ['date','later','later','LATER','Later',1,'Barang Masuk','ABI','RECEIPT']])] });
   }
   throw new Error('Unexpected URL: ' + url);
  };
  const request = message => new Request('https://test/functions/v1/whatsapp-fonnte?secret=secret', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sender: '6281234567890', message }) });
  const send = async message => { assert.equal((await handleFonnteWebhook({ request: request(message), env }, fetchFn)).status, 200); return replies.at(-1); };
- return { send, env, profiles, replies, writes, queries, fetchFn, request, get session() { return session; } };
+ return { send, env, profiles, replies, writes, queries, audits, fetchFn, request, get session() { return session; } };
 }
 async function preview(f, direction = 'out', location = 'sama', command = `stock ${direction}`) {
  assert.match(await f.send(`${command} merlyn a20-1`), /Pilih barang/);
- assert.match(await f.send('1'), /Lokasi/);
+ assert.match(await f.send('1'), direction === 'in' ? /From/ : /Lokasi/);
+ if (direction === 'in') assert.match(await f.send('iwt e-com'), /To/);
  assert.match(await f.send(location), /Qty (Inbound|Outbount)/);
  assert.match(await f.send('5'), /Tinjau (Inbound|Outbount)/);
  assert.equal(f.session.phase, 'confirm'); assert.equal(f.writes.length, 0);
 }
-test('stock in/out require only item, location and quantity; use trusted profile and WMS sheet statuses', async () => {
+test('inbound asks From and To; both flows use configured PIC and WMS sheet statuses', async () => {
  for (const direction of ['in','out']) {
   const f = fixture(); await preview(f, direction, direction === 'in' ? 'b01' : 'sama');
   assert.match(await f.send('simpan'), /tersimpan/); assert.equal(f.writes.length, 1);
   const values = f.writes[0].body.values[0];
-  assert.deepEqual(values.slice(1,8), direction === 'in' ? ['', 'B01','00123','Merlyn Green Gold',5,'Barang Masuk','Andi'] : ['A20-1','','00123','Merlyn Green Gold',5,'Barang Keluar','Andi']);
-  assert.match(values[0], /^\d{1,2}\/\d{1,2}\/\d{4}$/); assert.match(values[8], /WA:.*USER:user-id/);
+  assert.deepEqual(values.slice(1,8), direction === 'in' ? ['IWT E-COM', 'B01','00123','Merlyn Green Gold',5,'Barang Masuk','ABI'] : ['A20-1','','00123','Merlyn Green Gold',5,'Barang Keluar','ABI']);
+  assert.match(values[0], /^\d{1,2}\/\d{1,2}\/\d{4}$/); assert.equal(values[8], direction === 'in' ? 'RECEIPT' : 'STOCK OUT WHATSAPP');
+  assert.equal(f.audits[0].user_name, 'andi@test.invalid'); assert.equal(f.audits[0].user_id, 'user-id');
+  assert.match(decodeURIComponent(f.writes[0].url), /!A3:I3/); assert.doesNotMatch(f.writes[0].url, /:append/);
   assert.equal(new URL(f.writes[0].url).searchParams.get('valueInputOption'), 'RAW');
   assert.match(decodeURIComponent(f.writes[0].url), direction === 'in' ? /Barang Masuk/ : /Barang KeIuar/);
   assert.match(await f.send('simpan'), /sudah diproses/); assert.equal(f.writes.length, 1);
@@ -68,8 +76,8 @@ test('profile-based authorization permits a registered user without static allow
  const q = new URL(f.queries.find(url => url.includes('/users?'))).searchParams;
  assert.equal(q.get('phone_number'), 'in.("6281234567890","+6281234567890","081234567890")');
 });
-test('missing, duplicate, unnamed, and read-only profiles cannot start transactions', async () => {
- for (const [profiles, pattern] of [[[], /belum terdaftar/], [[user,user], /lebih dari satu/], [[{ ...user, full_name: '' }], /Nama lengkap/], [[{ ...user, role: 'Warga KST' }], /read-only/]]) {
+test('missing, duplicate, and read-only profiles cannot start transactions', async () => {
+ for (const [profiles, pattern] of [[[], /belum terdaftar/], [[user,user], /lebih dari satu/], [[{ ...user, role: 'Warga KST' }], /read-only/]]) {
   const f = fixture({ profiles }); assert.match(await f.send('stock in'), pattern); assert.equal(f.writes.length, 0);
  }
  const f = fixture({ profileReadFail: true }); assert.match(await f.send('stock out'), /Profil user belum dapat dibaca/);
@@ -80,9 +88,15 @@ test('profile is revalidated before saving; revoked roles or changed user identi
  }
  const f = fixture(); await preview(f); f.profiles.splice(0); assert.match(await f.send('simpan'), /belum terdaftar/); assert.equal(f.writes.length, 0);
 });
-test('changed profile name requires renewed review instead of silently changing PIC', async () => {
- const f = fixture(); await preview(f); f.profiles[0].full_name = 'Budi'; assert.match(await f.send('simpan'), /Nama PIC profil berubah/); assert.equal(f.writes.length, 0);
- await f.send('simpan'); assert.equal(f.writes[0].body.values[0][7], 'Budi');
+test('PIC comes from shared role config and role changes require a fresh review', async () => {
+ const f = fixture({ profiles: [{ ...user, role: 'PIC Inbound' }] }); await preview(f, 'in');
+ assert.equal(f.session.pic, 'ENGGAL'); f.profiles[0].role = 'PIC Outbound';
+ assert.match(await f.send('simpan'), /PIC konfigurasi berubah/); assert.equal(f.writes.length, 0);
+ await f.send('simpan'); assert.equal(f.writes[0].body.values[0][7], 'EPRIL');
+});
+test('profile name changes do not override configured PIC', async () => {
+ const f = fixture(); await preview(f); f.profiles[0].full_name = 'Budi'; await f.send('simpan');
+ assert.equal(f.writes[0].body.values[0][7], 'ABI'); assert.equal(f.audits[0].metadata.actor_name, 'Budi');
 });
 test('stock out rejects nonexistent locations and invalid quantities', async () => {
  const f = fixture(); await f.send('stock out merlyn'); await f.send('1');
@@ -126,4 +140,23 @@ test('inbound, outbount and outbound prompts select the correct stock flow', asy
   assert.equal(f.session.direction, direction); await f.send('simpan');
   assert.equal(f.writes[0].body.values[0][6], direction === 'in' ? 'Barang Masuk' : 'Barang Keluar');
  }
+});
+
+test('first empty row selection skips partial rows and preserves formulas outside transaction columns', async () => {
+ const f = fixture({ sheetRows: [['','','','PARTIAL'], ['','','','','','','','','','=IF(A3="","",1)'], ['date','','','LATE']] });
+ await preview(f, 'in'); await f.send('simpan'); assert.match(decodeURIComponent(f.writes[0].url), /!A3:I3/);
+ assert.equal(f.writes[0].body.values[0][8], 'RECEIPT');
+});
+test('a row filled by another writer is rejected before mutation', async () => {
+ const f = fixture({ occupiedBeforeWrite: true }); await preview(f, 'in');
+ assert.match(await f.send('simpan'), /Baris tujuan sudah diisi/); assert.equal(f.writes.length, 0); assert.equal(f.audits.length, 0);
+});
+test('audit failure does not retry a transaction that already succeeded', async () => {
+ const f = fixture({ auditFail: true }); await preview(f, 'in');
+ assert.match(await f.send('simpan'), /History WMS belum tercatat/); await f.send('simpan'); assert.equal(f.writes.length, 1);
+});
+
+test('bot and WMS share PIC config for inbound, outbound, inventory, picker and developer roles', () => {
+ assert.equal(APP_CONFIG.PIC_BY_ROLE, PIC_BY_ROLE);
+ for (const [role, expected] of [['PIC Inbound', 'ENGGAL'], ['PIC Outbound', 'EPRIL'], ['PIC Inventory', 'ABI'], ['PIC Picker', 'WINDI'], ['Developer', 'ABI']]) assert.equal(resolvePic(role), expected);
 });

@@ -5,15 +5,15 @@ import { displayText } from './menu.js';
 import { normalizeLocation, normalizeSku, normalizeText, normalizeNumber } from './sheet-normalization.js';
 
 export async function commitStock(env, state, fetchFn) {
-  if (!['in', 'out'].includes(state.direction) || !Number.isFinite(state.qty) || state.qty <= 0 || !state.profile?.id || !normalizeText(state.profile.full_name) || !normalizeLocation(state.location) || !normalizeSku(state.row?.sku)) throw new Error('Invalid stock draft');
+  if (!['in', 'out'].includes(state.direction) || !Number.isFinite(state.qty) || state.qty <= 0 || !state.profile?.id || !normalizeText(state.profile.full_name) || !normalizeLocation(state.location) || !normalizeText(state.pic) || (state.direction === 'in' && (!normalizeLocation(state.from) || !normalizeLocation(state.to))) || !normalizeSku(state.row?.sku)) throw new Error('Invalid stock draft');
   let access;
   try { access = await googleToken(env, fetchFn); }
   catch (error) { if (error instanceof GoogleAccessError) throw error; throw new GoogleAccessError('GOOGLE_AUTH_FAILED', 'Autentikasi Google gagal. Periksa kredensial Google pada Supabase Secrets.', false); }
   const base = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(env.SHEET_ID_2026)}`;
   const headers = { Authorization: `Bearer ${access}`, 'Content-Type': 'application/json' };
-  const read = async range => {
+  const read = async (range, render = 'FORMATTED_VALUE') => {
     let response;
-    try { response = await fetchFn(`${base}/values/${encodeURIComponent(range)}?valueRenderOption=FORMATTED_VALUE`, { headers, signal: AbortSignal.timeout(15000) }); }
+    try { response = await fetchFn(`${base}/values/${encodeURIComponent(range)}?valueRenderOption=${render}`, { headers, signal: AbortSignal.timeout(15000) }); }
     catch { throw new GoogleAccessError('SHEETS_READ_CONNECTION_FAILED', 'Koneksi baca Google Sheets gagal. Coba cek google kembali nanti.', false); }
     if (!response.ok) throw await googleResponseError(response);
     let payload;
@@ -35,13 +35,22 @@ export async function commitStock(env, state, fetchFn) {
   const inbound = state.direction === 'in';
   const sheet = inbound ? 'Barang Masuk' : 'Barang KeIuar';
   const expected = ['TANGGAL', 'FROM', 'TO', 'SKU', 'NAMABARANG', 'QTY', 'STATUS', 'PIC', 'KETERANGAN'];
-  const destinationHeaders = (await read(`'${sheet}'!A1:I1`))[0] || [];
+  const destination = await read(`'${sheet}'!A:${inbound ? 'O' : 'P'}`, 'FORMULA');
+  const destinationHeaders = destination[0] || [];
   if (expected.some((name, i) => String(destinationHeaders[i] || '').toUpperCase().replace(/\s/g, '') !== name)) return 'Kolom transaksi tidak sesuai WMS. Stock in/out tidak disimpan.';
   const dates = movementDates(new Date(), env.BUSINESS_TIME_ZONE || 'Asia/Jakarta');
   const status = inbound ? 'Barang Masuk' : 'Barang Keluar';
-  // Only the warehouse location is requested. Counterparty locations remain blank.
-  const values = [dates.sheetDate, inbound ? '' : state.location, inbound ? state.location : '', state.row.sku, state.row.nama_barang, state.qty, status, normalizeText(state.profile.full_name), `STOCK ${state.direction.toUpperCase()} WHATSAPP | WA:${state.nonce} | USER:${state.profile.id}`];
-  const response = await fetchFn(`${base}/values/${encodeURIComponent(`'${sheet}'!A:I`)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, { method: 'POST', headers, body: JSON.stringify({ values: [values] }), signal: AbortSignal.timeout(15000) });
+  const from = inbound ? state.from : state.location, to = inbound ? state.to : '';
+  const keterangan = inbound ? 'RECEIPT' : 'STOCK OUT WHATSAPP';
+  const values = [dates.sheetDate, from, to, state.row.sku, state.row.nama_barang, state.qty, status, state.pic, keterangan];
+  // Never overwrite a partially populated transaction. Formulas outside A:I are preserved.
+  const empty = row => row.slice(0, 9).every(value => normalizeText(value) === '') && row.slice(9).every(value => normalizeText(value) === '' || String(value).startsWith('='));
+  const emptyIndex = destination.findIndex((row, index) => index > 0 && empty(row || []));
+  const rowNumber = emptyIndex >= 0 ? emptyIndex + 1 : Math.max(2, destination.length + 1);
+  const range = `'${sheet}'!A${rowNumber}:I${rowNumber}`;
+  const current = await read(range, 'FORMULA');
+  if (current[0]?.some(value => normalizeText(value) !== '')) return 'Baris tujuan sudah diisi oleh transaksi lain. Transaksi tidak disimpan. Mulai ulang setelah memeriksa WMS.';
+  const response = await fetchFn(`${base}/values/${encodeURIComponent(range)}?valueInputOption=RAW`, { method: 'PUT', headers, body: JSON.stringify({ values: [values] }), signal: AbortSignal.timeout(15000) });
   if (!response.ok) throw await googleResponseError(response, true);
-  return `✅ *Stock ${inbound ? 'In' : 'Out'} tersimpan*\nSKU: ${displayText(state.row.sku)}\nBarang: ${displayText(state.row.nama_barang)}\nLokasi: ${displayText(state.location)}\nQty: ${state.qty}\nPIC: ${displayText(state.profile.full_name)}\nTanggal: ${dates.date}\n\nSinkronkan WMS untuk memperbarui pencarian Supabase.\nReferensi: ${state.nonce}`;
+  return { saved: true, rowNumber, from, to, keterangan, reply: `✅ *${inbound ? 'Inbound' : 'Outbount'} tersimpan*\nSKU: ${displayText(state.row.sku)}\nBarang: ${displayText(state.row.nama_barang)}\nFrom: ${displayText(from)}${inbound ? `\nTo: ${displayText(to)}` : ''}\nQty: ${state.qty}\nPIC: ${displayText(state.pic)}\nTanggal: ${dates.date}\n\nSinkronkan WMS untuk memperbarui pencarian Supabase.\nReferensi: ${state.nonce}` };
 }

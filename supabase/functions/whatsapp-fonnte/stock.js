@@ -1,3 +1,5 @@
+import { resolvePic } from '../../../assets/js/pic-config.js';
+import { writeStockAudit } from './stock-audit.js';
 import { formatGoogleFailure } from './google-errors.js';
 import { hasGoogleCredentials } from './sheet-edit.js';
 import { loadSearch, saveSearch } from './sessions.js';
@@ -9,7 +11,7 @@ import { commitStock } from './sheet-stock.js';
 
 const headers = config => ({ apikey: config.key, Authorization: `Bearer ${config.key}` });
 const label = state => state.direction === 'in' ? 'Inbound' : 'Outbount';
-const review = state => `📦 *Tinjau ${label(state)}*\nBarang: ${displayText(state.row.nama_barang)}\nSKU: ${displayText(state.row.sku)}\nLokasi ${state.direction === 'in' ? 'tujuan' : 'asal'}: ${displayText(state.location)}\nQty: ${state.qty}\nPIC: ${displayText(state.profile.full_name)}\n\nTanggal dan status diisi otomatis saat disimpan.\nBalas simpan, ubah untuk mulai ulang, atau batal.`;
+const review = state => `📦 *Tinjau ${label(state)}*\nBarang: ${displayText(state.row.nama_barang)}\nSKU: ${displayText(state.row.sku)}${state.direction === 'in' ? `\nFrom: ${displayText(state.from)}\nTo: ${displayText(state.to)}` : `\nFrom: ${displayText(state.location)}`}\nQty: ${state.qty}\nPIC: ${displayText(state.pic)}\n\nTanggal dan status diisi otomatis saat disimpan.\nBalas simpan, ubah untuk mulai ulang, atau batal.`;
 const prompt = state => `*${label(state)}*\nKirim SKU atau nama barang. Bisa digabung lokasi.\nContoh: merlyn a20-1\n\nKetik batal untuk keluar.`;
 
 export async function handleStock(message, sender, env, config, fetchFn) {
@@ -36,7 +38,7 @@ export async function handleStock(message, sender, env, config, fetchFn) {
   if (!hasGoogleCredentials(env) || !env.SHEET_ID_2026) return 'Stock in/out belum dikonfigurasi. Admin perlu mengisi kredensial Google OAuth atau Service Account dan SHEET_ID_2026 di Supabase Secrets.';
   if (active && !start && state.profile.id !== profile.id) return 'Profil nomor WhatsApp sudah berubah. Batalkan draft lalu mulai stock in/out baru.';
   if (start || lower === 'ubah') {
-    state = { kind: 'stock', direction: start ? start[1].toLowerCase() : state.direction, phase: 'query', page: 1, nonce: crypto.randomUUID(), profile: { id: profile.id, full_name: normalizeText(profile.full_name), role: profile.role } };
+    state = { kind: 'stock', direction: start ? start[1].toLowerCase() : state.direction, phase: 'query', page: 1, nonce: crypto.randomUUID(), pic: resolvePic(profile.role), profile: { id: profile.id, full_name: normalizeText(profile.full_name), email: profile.email, role: profile.role } };
     await saveSearch(config, sender, state, fetchFn);
     if (!start?.[2]) return prompt(state);
   }
@@ -44,8 +46,9 @@ export async function handleStock(message, sender, env, config, fetchFn) {
     if (state.phase === 'select' && /^\d+$/.test(input)) {
       const row = state.rows[Number(input) - 1];
       if (!row) return 'Nomor barang tidak tersedia. Pilih nomor hasil atau kirim pencarian baru.';
-      state = { ...state, row, rows: undefined, phase: 'location' };
+      state = { ...state, row, rows: undefined, phase: state.direction === 'in' ? 'from' : 'location' };
       await saveSearch(config, sender, state, fetchFn);
+      if (state.direction === 'in') return `*From • Inbound*\nBarang: ${displayText(row.nama_barang)}\nSKU: ${displayText(row.sku)}\n\nKirim From (asal), misalnya IWT E-COM.`;
       return `*Lokasi ${state.direction === 'in' ? 'tujuan' : 'asal'}*\nBarang: ${displayText(row.nama_barang)}\nSKU: ${displayText(row.sku)}\nLokasi hasil: ${displayText(row.lokasi_bulky)}\n\nKirim lokasi atau balas sama untuk memakai lokasi hasil.`;
     }
     if (state.phase === 'select' && /^(lanjut|berikutnya|sebelumnya)$/.test(lower)) {
@@ -65,7 +68,13 @@ export async function handleStock(message, sender, env, config, fetchFn) {
     if (!rows.length) return `Barang${state.direction === 'out' ? ' dengan stok tersedia' : ''} tidak ditemukan. Kirim pencarian lain.`;
     return `*${label(state)} • Pilih barang*\n\n` + state.rows.map((row, i) => `*${i + 1}. ${displayText(row.nama_barang)}*\nSKU: ${displayText(row.sku)}\nLokasi: ${displayText(row.lokasi_bulky)} • Stok: ${displayText(row.stok_akhir)}`).join('\n\n') + `\n\nHalaman ${state.page}. Balas nomor barang.` + (state.hasMore ? '\nBalas lanjut untuk hasil lainnya.' : '') + (state.page > 1 ? '\nBalas sebelumnya untuk kembali.' : '');
   }
-  if (state.phase === 'location') {
+  if (state.phase === 'from') {
+    const from = normalizeLocation(input);
+    if (!from || from.length > 100 || /[\r\n\u0000-\u001f]/.test(input)) return 'Kirim From yang valid, maksimal 100 karakter.';
+    state.from = from; state.phase = 'to'; await saveSearch(config, sender, state, fetchFn);
+    return `*To • Inbound*\nFrom: ${displayText(from)}\nKirim To (tujuan), misalnya MASIH DI INBOUND. Balas sama untuk lokasi hasil.`;
+  }
+  if (state.phase === 'location' || state.phase === 'to') {
     const location = normalizeLocation(lower === 'sama' ? state.row.lokasi_bulky : input);
     if (!location || location.length > 100 || /[\r\n\u0000-\u001f]/.test(input)) return 'Kirim lokasi yang valid, maksimal 100 karakter.';
     // Validate the location belongs to this SKU; stock in can use a new location.
@@ -76,26 +85,33 @@ export async function handleStock(message, sender, env, config, fetchFn) {
       if (rows.length !== 1 || !Number.isFinite(Number(rows[0].stok_akhir)) || Number(rows[0].stok_akhir) <= 0) return 'SKU tidak memiliki satu baris stok positif di lokasi tersebut. Kirim lokasi asal lain.';
       state.available = Number(rows[0].stok_akhir);
     }
-    state.location = location; state.phase = 'quantity'; await saveSearch(config, sender, state, fetchFn);
+    state.location = location; if (state.direction === 'in') state.to = location; state.phase = 'quantity'; await saveSearch(config, sender, state, fetchFn);
     return `*Qty ${label(state)}*\nKirim jumlah lebih dari 0${state.direction === 'out' ? `, maksimal ${state.available}` : ''}.`;
   }
   if (state.phase === 'quantity') {
     const qty = Number(input);
     if (!/^\d+(?:\.\d+)?$/.test(input) || !Number.isFinite(qty) || qty <= 0 || (state.direction === 'out' && qty > state.available)) return `Qty harus lebih dari 0${state.direction === 'out' ? ` dan maksimal ${state.available}` : ''}. Kirim jumlah yang benar.`;
-    state.qty = qty; state.profile = { id: profile.id, full_name: normalizeText(profile.full_name), role: profile.role }; state.phase = 'confirm';
+    state.qty = qty; state.profile = { id: profile.id, full_name: normalizeText(profile.full_name), email: profile.email, role: profile.role }; state.pic = resolvePic(profile.role); state.phase = 'confirm';
     await saveSearch(config, sender, state, fetchFn); return review(state);
   }
   if (lower !== 'simpan') return review(state);
-  if (state.profile.full_name !== normalizeText(profile.full_name)) {
-    state.profile.full_name = normalizeText(profile.full_name); state.profile.role = profile.role;
+  if (state.pic !== resolvePic(profile.role)) {
+    state.pic = resolvePic(profile.role); state.profile = { id: profile.id, full_name: normalizeText(profile.full_name), email: profile.email, role: profile.role };
     await saveSearch(config, sender, state, fetchFn);
-    return 'Nama PIC profil berubah. Periksa ringkasan terbaru sebelum menyimpan.\n\n' + review(state);
+    return 'PIC konfigurasi berubah mengikuti role. Periksa ringkasan terbaru sebelum menyimpan.\n\n' + review(state);
   }
   const claim = await fetchFn(`${config.url}/rest/v1/whatsapp_search_sessions?sender=eq.${encodeURIComponent(sender)}&search->>nonce=eq.${state.nonce}&search->>phase=eq.confirm&expires_at=gt.${encodeURIComponent(new Date().toISOString())}`, { method: 'PATCH', headers: { ...headers(config), 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify({ search: { ...state, phase: 'saving' } }), signal: AbortSignal.timeout(10000) });
   if (!claim.ok) return 'Penyimpanan belum dapat dimulai. Coba lagi.';
   if (!(await claim.json()).length) return 'Konfirmasi sudah diproses atau kedaluwarsa. Periksa WMS.';
   let reply;
-  try { reply = await commitStock(env, state, fetchFn); }
+  try {
+    const result = await commitStock(env, state, fetchFn);
+    reply = typeof result === 'string' ? result : result.reply;
+    if (result.saved) {
+      try { await writeStockAudit(config, profile, state, result, fetchFn); }
+      catch { reply += '\nHistory WMS belum tercatat. Transaksi sudah tersimpan; jangan ulang transaksi.'; }
+    }
+  }
   catch (error) {
     console.error('[WHATSAPP_STOCK_GOOGLE_FAILED]', JSON.stringify({ reference: state.nonce, code: error.code || 'UNKNOWN', writeAttempted: error.writeAttempted ?? true }));
     reply = formatGoogleFailure(error, state.nonce, `Barang ${state.direction === 'in' ? 'Masuk' : 'Keluar'}`);

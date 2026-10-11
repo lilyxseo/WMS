@@ -11,13 +11,14 @@ test('Google diagnostics authenticate and check required tabs without writing sp
   calls.push({ url, options });
   if (url === 'https://oauth2.googleapis.com/token') return Response.json({ access_token: 'private-access-token' });
   assert.equal(options.method, undefined);
+  if (url.endsWith('/userinfo')) return Response.json({ email: 'gmail@test.invalid' });
   const titles = url.includes('/transactions?') ? ['Kartu Stock','Barang Masuk','Barang KeIuar'] : ['Movement'];
   return Response.json({ sheets: titles.map(title => ({ properties: { title } })) });
  };
  const reply = await handleGoogleCheck('cek google', env, fetchFn);
- assert.match(reply, /OAuth Gmail/); assert.match(reply, /Autentikasi: berhasil/); assert.match(reply, /Tab wajib: tersedia/);
+ assert.match(reply, /OAuth Gmail/); assert.match(reply, /Akun OAuth: gmail@test.invalid/); assert.match(reply, /Autentikasi: berhasil/); assert.match(reply, /Tab wajib: tersedia/);
  assert.match(reply, /Tidak ada transaksi ditulis/); assert.match(reply, /Izin Editor\/proteksi tab belum diuji/);
- assert.doesNotMatch(reply, /private-client|private-refresh|private-access/); assert.equal(calls.length, 3);
+ assert.doesNotMatch(reply, /private-client|private-refresh|private-access/); assert.equal(calls.length, 4);
 });
 test('missing configuration and invalid grants produce actionable errors without writing or exposing raw Google responses', async () => {
  const noFetch = () => { throw new Error('Should not fetch'); };

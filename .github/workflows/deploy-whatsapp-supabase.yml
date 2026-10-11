@@ -8,6 +8,7 @@ on:
       - 'supabase/config.toml'
       - 'supabase/migrations/20261011070000_whatsapp_search_sessions.sql'
       - 'tests/**'
+      - 'assets/js/pic-config.js'
       - '.github/workflows/deploy-whatsapp-supabase.yml'
   workflow_dispatch:
 

@@ -257,52 +257,53 @@ Pemeriksaan stok lalu penulisan Google Sheets bukan lock stok lintas pengguna ma
 hindari menjalankan perpindahan bersamaan untuk SKU/lokasi yang sama. Setelah menyimpan, periksa
 sinkronisasi sebelum membuat perpindahan berikutnya pada stok yang sama.
 
-## Stock in/out dengan profil nomor WhatsApp
+## Inbound/outbount dengan profil nomor WhatsApp
 
-Menu `6` (Inbound) dan `7` (Outbount) menampilkan panduan. Kirim `inbound`, `outbount`,
-atau langsung `outbount merlyn a20-1`. Alias `outbound`, `stock in`, `stock out`,
-`stok in`, `stok out`, `stock-in`, dan `stock-out` juga diterima.
-Alur: cari SKU/nama → pilih nomor barang → isi lokasi → qty → `simpan`.
-Balas `sama` pada tahap lokasi untuk memakai lokasi hasil pencarian. Tidak ada pertanyaan
-PIC, tanggal, status, atau keterangan. `ubah` memulai ulang draft; `batal` dan `menu` membatalkan.
-Pencarian dipaginasi 10 hasil; gunakan `lanjut` / `sebelumnya`.
-Stock in menampilkan juga barang stok 0 dan boleh menggunakan lokasi tujuan baru.
-Stock out hanya menampilkan stok positif, lalu memeriksa stok SKU pada lokasi asal yang dipilih.
-Saat ini pemilihan barang menggunakan katalog Kartu Stok; pembuatan SKU baru belum didukung.
+Menu `6` (Inbound) dan `7` (Outbount). Kirim `inbound`, `outbount`, atau pencarian langsung
+`inbound merlyn`. Alias `outbound`, `stock in/out`, `stok in/out`, dan `stock-in/out` tetap berlaku.
+Inbound: cari SKU/nama → pilih barang → isi **From** → isi **To** → qty → konfirmasi `simpan`.
+Outbount: cari SKU/nama → pilih barang → lokasi From → qty → konfirmasi `simpan`.
+Balas `sama` pada To/lokasi untuk memakai lokasi hasil. `ubah` memulai ulang; `batal`/`menu`
+membatalkan. Navigasi pencarian `lanjut`/`sebelumnya`, 10 hasil per halaman. Inbound boleh memilih
+barang stok 0 dan tujuan baru; outbount hanya memilih stok positif dan memeriksa stok lokasi asal.
+Barang harus tersedia dalam katalog Kartu Stok; pembuatan SKU baru belum didukung.
 
-Profil dibaca dari `public.users` berdasarkan `phone_number`, mengambil `id`, `full_name`,
-`username`, `email`, dan `role`. Isi nomor dalam format teks `628xxxxxxxxxx` tanpa pemisah,
-satu nomor untuk satu profil. Lookup juga menerima nilai tersimpan `08xxxxxxxxxx` dan `+628xxxxxxxxxx`.
-Normalisasi nomor pengirim mendukung tanda `+`, spasi, dan tanda hubung. Nilai nomor di kolom
-profil sebaiknya tetap disimpan tanpa pemisah. Jika lookup menemukan dua profil, transaksi ditolak.
-Nama lengkap wajib; PIC transaksi menggunakan `full_name`, bukan input chat.
+Akses melalui `public.users.phone_number` dengan role PIC atau Developer. Isi nomor teks
+`628xxxxxxxxxx` tanpa pemisah, unik per profil. Bentuk tersimpan `08xxxxxxxxxx` dan `+628xxxxxxxxxx`
+juga diterima. Dua profil dengan nomor sama ditolak. Profil/role diperiksa ulang sebelum simpan;
+nomor terdaftar dapat mencari tanpa allowlist statis. `WHATSAPP_EDITOR_NUMBERS` tidak diperlukan
+untuk inbound/outbount. User lama di allowlist tanpa profil tetap hanya dapat mencari.
 
-Role PIC (sesuai pemeriksaan role aplikasi) atau `Developer` dapat membuat stock in/out.
-Role lain hanya boleh membaca. Nomor tidak perlu ditambahkan ke `WHATSAPP_EDITOR_NUMBERS`
-untuk stock in/out. Profil dibaca kembali pada setiap langkah; perubahan user ID, nomor,
-atau pencabutan izin sebelum konfirmasi mencegah penyimpanan. Jika nama PIC berubah setelah
-preview, bot menampilkan preview baru dan meminta `simpan` lagi. User terdaftar juga dapat
-mengakses pencarian tanpa allowlist statis. Nomor lama di allowlist masih dapat mencari,
-tetapi tidak dapat membuat stock in/out tanpa profil yang cocok dan memiliki izin.
+**PIC mengikuti konfigurasi WMS, bukan nama user.** Aplikasi dan bot memakai mapping bersama
+`assets/js/pic-config.js` (`APP_CONFIG.PIC_BY_ROLE`): Inventory/Developer → ABI, Inbound → ENGGAL,
+Outbound → EPRIL, Picker → WINDI. Role tak terpetakan mengikuti fallback Inventory seperti aplikasi.
+Jika role berubah dan menghasilkan PIC berbeda setelah preview, bot meminta konfirmasi ulang.
+Perubahan mapping bersama juga memicu deploy bot melalui GitHub Actions.
 
-Data otomatis: tanggal M/D/YYYY mengikuti zona bisnis Asia/Jakarta (atau `BUSINESS_TIME_ZONE`),
-status `Barang Masuk` / `Barang Keluar`, PIC dari profil, serta keterangan berisi jenis transaksi,
-referensi UUID draft, dan ID user. Stock in menulis lokasi ke kolom `TO` pada `Barang Masuk`;
-stock out menulis lokasi ke `FROM` pada `Barang KeIuar`. Lokasi pihak luar pada kolom pasangannya
-dibiarkan kosong karena tidak diminta user dan tidak tersedia di struktur profil saat ini.
-Kolom bisnis lainnya mengikuti nilai kosong/default spreadsheet, tidak dikarang dari profil.
+Tanggal otomatis zona bisnis Asia/Jakarta (atau `BUSINESS_TIME_ZONE`), format Sheets M/D/YYYY.
+Inbound menulis From dan To yang diisi user, status `Barang Masuk`, PIC konfigurasi, dan Keterangan
+persis **`RECEIPT`**. Outbount memakai From lokasi stok, status `Barang Keluar`, PIC konfigurasi,
+dan Keterangan `STOCK OUT WHATSAPP`. Kolom bisnis tambahan tidak dikarang dari profil.
 
-Google Sheets tetap menjadi sumber transaksi. Bot memakai `RAW` agar SKU dengan nol di depan
-terjaga dan teks tidak dijalankan sebagai formula. Sebelum penulisan, bot memeriksa ulang SKU/nama
-pada Kartu Stock sumber, stok asal untuk stock out, dan header sheet tujuan. Stock out ditolak
-jika stok berubah, kurang, atau SKU/lokasi memiliki baris ganda. Konfirmasi memakai nonce dan klaim
-session bersyarat untuk mencegah penulisan ulang draft yang sama. Pemeriksaan stok dan penulisan
-Google Sheets belum merupakan transaksi atomik lintas aplikasi; hindari pengeluaran bersamaan
-untuk SKU/lokasi yang sama. Jalankan sinkronisasi WMS agar data pencarian Supabase diperbarui.
-Untuk kegagalan yang belum terkonfirmasi, bot memberikan referensi dan tidak mencoba menulis ulang.
+Penulisan memilih baris kosong paling awal mulai baris 2 dengan A:I kosong. Baris sebagian terisi
+atau memiliki data literal pada kolom bisnis J:O/P dilewati; formula di luar A:I tetap dipertahankan.
+Bot memeriksa ulang A:I baris terpilih sebelum PUT RAW pada range baris tersebut, tanpa append
+atau menyisipkan baris baru. RAW menjaga SKU nol di depan dan mencegah teks dianggap formula.
+Jika baris terlanjur diisi proses lain, transaksi ditolak. Pemeriksaan dan PUT bukan transaksi atomik
+Google Sheets lintas aplikasi, sehingga proses lain masih bisa menulis setelah pemeriksaan terakhir.
+Konfirmasi nonce session tetap mencegah pengulangan draft yang sama. Sinkronkan WMS setelah simpan.
 
-Kolom nomor telepon ditambahkan oleh admin di luar deploy ini. Deploy tidak mengubah struktur
-atau isi tabel `users`, dan tes menggunakan profil serta Sheets tiruan tanpa transaksi produksi.
+Setelah penulisan berhasil, bot mencatat activity_logs WMS dengan ID/email profil pengirim,
+role, referensi draft, nomor baris sheet, SKU, qty, From, To, PIC dan Keterangan. Nama profil hanya
+untuk identitas audit/welcome, bukan kolom PIC. Jika audit gagal, bot menyebut transaksi sudah
+tersimpan dan jangan diulang. Referensi UUID tidak lagi dicampurkan ke kolom Keterangan inbound.
+
+History Google Sheets adalah catatan terpisah yang dikendalikan Google. Bot tidak dapat mengisi
+nama editor/history Google dengan nama profil WMS. OAuth menentukan akun yang dipakai untuk API;
+penampilan identitas editor pada version/edit history tetap mengikuti perilaku Google Sheets.
+Gunakan `cek google` untuk memeriksa email akun OAuth jika scope userinfo.email telah diberikan.
+Kolom nomor telepon dibuat admin; deploy ini tidak mengubah isi/struktur tabel users atau memperbaiki
+baris transaksi lama secara otomatis. Tes tidak membuat transaksi produksi.
 
 ## Sapaan welcome
 
@@ -325,7 +326,8 @@ data aslinya tetap tersimpan dan dapat digunakan untuk pencarian atau edit.
 
 Bot mendukung OAuth akun Google pribadi untuk semua operasi Google Sheets (edit, movement,
 inbound, dan outbount). Email Gmail dan password saja bukan kredensial API. Pemilik akun harus
-mengotorisasi scope `https://www.googleapis.com/auth/spreadsheets`, lalu menyimpan refresh token
+mengotorisasi scope `https://www.googleapis.com/auth/spreadsheets` (dan opsional
+`https://www.googleapis.com/auth/userinfo.email` untuk memverifikasi akun), lalu menyimpan refresh token
 untuk bot. Akun Gmail tersebut harus memiliki akses Editor ke spreadsheet tujuan.
 
 Langkah konfigurasi:
@@ -374,3 +376,14 @@ tidak ditemukan, akses ditolak, dan batas request Google. Log hanya menyimpan re
 kode error, dan apakah penulisan sudah dicoba; token dan respons mentah Google tidak dicetak.
 Untuk error lama yang belum terkonfirmasi, periksa keterangan `WA:<referensi>` pada Barang Masuk/Keluar
 sebelum mengulang transaksi.
+
+Untuk memverifikasi Gmail OAuth melalui `cek google`, authorize ulang di OAuth Playground
+menggunakan kedua scope berikut (pisahkan dengan spasi):
+
+```text
+https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email
+```
+
+Gunakan OAuth client yang sama dan simpan refresh token hasilnya di Supabase Secrets. Scope email
+hanya untuk membaca identitas akun; tanpa scope ini transaksi tetap dapat berjalan tetapi bot
+tidak dapat memastikan email Google yang terotorisasi. Pemeriksaan tidak mengubah version history.
