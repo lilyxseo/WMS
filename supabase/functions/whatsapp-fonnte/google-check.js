@@ -1,3 +1,4 @@
+import { parseKartuStockHeader, stockHeaderFailure } from './kartu-stok-header.js';
 import { kartuStokCandidates } from './kartu-stok-source.js';
 import { displayText } from './menu.js';
 import { googleToken, hasGoogleCredentials } from './sheet-edit.js';
@@ -39,13 +40,24 @@ export async function handleGoogleCheck(message, env, fetchFn) {
       lines.push(missing.length ? `Tab belum ditemukan: ${missing.join(', ')}.` : 'Tab wajib: tersedia.');
     } catch (error) { lines.push(`${label}: ${error instanceof GoogleAccessError ? error.userMessage + '\nKode: ' + error.code : 'Pemeriksaan koneksi belum berhasil.'}`); }
   }
-  let stockSource, unchecked = false;
+  let stockSource, stockId, unchecked = false;
   for (const candidate of kartuStokCandidates(env)) {
     const titles = checked.get(candidate.id);
     if (!titles) { unchecked = true; break; }
-    if (titles.includes('Kartu Stock')) { stockSource = candidate.label; break; }
+    if (titles.includes('Kartu Stock')) { stockSource = candidate.label; stockId = candidate.id; break; }
   }
   lines.push(stockSource ? `Kartu Stock: tersedia di ${stockSource}.` : unchecked ? 'Kartu Stock: sumber belum dapat diperiksa; perbaiki akses spreadsheet di atas.' : 'Kartu Stock: belum ditemukan. Isi SHEET_ID_KARTU_STOK dengan ID spreadsheet sumber stok.');
+  if (stockId) {
+    try {
+      const range = "'Kartu Stock'!A1:AZ50";
+      const response = await fetchFn(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(stockId)}/values/${encodeURIComponent(range)}?valueRenderOption=FORMATTED_VALUE`, { headers: { Authorization: `Bearer ${access}` }, signal: AbortSignal.timeout(15000) });
+      if (!response.ok) throw await googleResponseError(response, false, stockSource);
+      const values = (await response.json()).values || [];
+      const parsed = parseKartuStockHeader(values);
+      lines.push(parsed.missing.length ? stockHeaderFailure(parsed) : `Header Kartu Stock: sesuai, baris ${parsed.headerIndex + 1}.`);
+      if (parsed.headerIndex >= 0) lines.push(`Kolom terbaca: ${values[parsed.headerIndex].map(displayText).filter(Boolean).join(' | ')}.`);
+    } catch (error) { lines.push(`Header Kartu Stock: ${error instanceof GoogleAccessError ? error.userMessage : 'belum dapat diperiksa.'}`); }
+  }
   lines.push('', 'Tidak ada transaksi ditulis. Izin Editor/proteksi tab belum diuji lewat penulisan.');
   return lines.join('\n');
 }

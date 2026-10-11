@@ -12,7 +12,7 @@ export function kartuStokCandidates(env) {
 
 export async function readKartuStock(env, read) {
   for (const { id, label } of kartuStokCandidates(env)) {
-    try { return await read(id, "'Kartu Stock'!A:Z", label); }
+    try { return await read(id, "'Kartu Stock'!A:AZ", label); }
     catch (error) {
       // Only a missing tab permits legacy fallback; permission/auth failures must remain visible.
       if (!(error instanceof GoogleAccessError) || error.code !== 'SHEET_TAB_MISSING') throw error;

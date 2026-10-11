@@ -1,3 +1,4 @@
+import { parseKartuStockHeader, stockHeaderFailure } from './kartu-stok-header.js';
 import { readKartuStock } from './kartu-stok-source.js';
 import { googleResponseError } from './google-errors.js';
 import { displayText } from './menu.js';
@@ -21,10 +22,10 @@ export async function commitMovement(env, state, fetchFn) {
   };
   // Re-read the authoritative stock sheet, rather than trusting the sync snapshot.
   const stock = await readKartuStock(env, read);
-  const normalizedHeaders = (stock[0] || []).map(value => String(value).toUpperCase().replace(/\s/g, ''));
-  const indices = ['LOKASIBULKY', 'SKU', 'NAMABARANG', 'STOKAKHIR'].map(name => normalizedHeaders.indexOf(name));
-  if (indices.some(index => index < 0)) return 'Kolom Kartu Stok tidak sesuai WMS. Movement tidak disimpan.';
-  const matching = stock.slice(1).filter(row => normalizeSku(row[indices[1]]) === normalizeSku(state.row.sku) && normalizeLocation(row[indices[0]]) === normalizeLocation(state.row.lokasi_bulky));
+  const parsed = parseKartuStockHeader(stock);
+  if (parsed.missing.length) return `${stockHeaderFailure(parsed)}\nMovement tidak disimpan.`;
+  const indices = parsed.indices;
+  const matching = stock.slice(parsed.headerIndex + 1).filter(row => normalizeSku(row[indices[1]]) === normalizeSku(state.row.sku) && normalizeLocation(row[indices[0]]) === normalizeLocation(state.row.lokasi_bulky));
   if (matching.length !== 1) return 'Barang/lokasi asal berubah atau memiliki baris ganda. Movement tidak disimpan. Cari ulang setelah sinkronisasi.';
   const available = normalizeNumber(matching[0][indices[3]]).value;
   if (!Number.isFinite(available) || available < state.qty || available !== Number(state.row.stok_akhir)) return 'Stok asal sudah berubah atau tidak mencukupi. Movement tidak disimpan. Sinkronkan WMS lalu mulai ulang.';

@@ -8,7 +8,7 @@ const env = { SHEET_ID_2026: 'transactions', SHEET_ID_INVENTORY: 'inventory', GO
 
 test('inventory stock source is independent of the transaction destination with a legacy fallback', async () => {
  const seen = [];
- const rows = await readKartuStock(env, async (id, range) => { seen.push(id); assert.equal(range, "'Kartu Stock'!A:Z"); return [['stock']]; });
+ const rows = await readKartuStock(env, async (id, range) => { seen.push(id); assert.equal(range, "'Kartu Stock'!A:AZ"); return [['stock']]; });
  assert.deepEqual(seen, ['inventory']); assert.deepEqual(rows, [['stock']]);
  const fallback = [];
  await readKartuStock(env, async id => { fallback.push(id); if (id === 'inventory') throw new GoogleAccessError('SHEET_TAB_MISSING', 'Missing'); return []; });
@@ -42,7 +42,7 @@ test('outbound checks Inventory stock but writes only to the transactions spread
   const decoded = decodeURIComponent(url);
   if (options.method === 'PUT') { writes.push(url); return Response.json({}); }
   reads.push(url);
-  if (decoded.includes('Kartu Stock')) { assert.match(url, /\/inventory\/values\//); return Response.json({ values: [['LOKASI BULKY','SKU','NAMA BARANG','STOK AKHIR'],['A20-1','00123','Merlyn',12]] }); }
+  if (decoded.includes('Kartu Stock')) { assert.match(url, /\/inventory\/values\//); return Response.json({ values: [['Laporan WMS'],[],['Lokasi','Kode SKU','Description','Stok Awal','Saldo Akhir'],['A20-1','00123','Merlyn',99,12]] }); }
   assert.match(url, /\/transactions\/values\//);
   if (/!A2:I2/.test(decoded)) return Response.json({ values: [] });
   return Response.json({ values: [['TANGGAL','FROM','TO','SKU','NAMA BARANG','QTY','STATUS','PIC','KETERANGAN']] });

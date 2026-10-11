@@ -1,3 +1,4 @@
+import { parseKartuStockHeader, stockHeaderFailure } from './kartu-stok-header.js';
 import { readKartuStock } from './kartu-stok-source.js';
 import { GoogleAccessError, googleResponseError } from './google-errors.js';
 import { googleToken } from './sheet-edit.js';
@@ -23,10 +24,10 @@ export async function commitStock(env, state, fetchFn) {
     return payload.values || [];
   };
   const stock = await readKartuStock(env, (id, range, label) => read(range, 'FORMATTED_VALUE', id, label));
-  const header = (stock[0] || []).map(value => String(value).toUpperCase().replace(/\s/g, ''));
-  const [locationIndex, skuIndex, nameIndex, qtyIndex] = ['LOKASIBULKY', 'SKU', 'NAMABARANG', 'STOKAKHIR'].map(name => header.indexOf(name));
-  if ([locationIndex, skuIndex, nameIndex, qtyIndex].some(index => index < 0)) return 'Kolom Kartu Stok tidak sesuai WMS. Stock in/out tidak disimpan.';
-  const skuRows = stock.slice(1).filter(row => normalizeSku(row[skuIndex]) === normalizeSku(state.row.sku));
+  const parsed = parseKartuStockHeader(stock);
+  if (parsed.missing.length) return `${stockHeaderFailure(parsed)}\nStock in/out tidak disimpan.`;
+  const [locationIndex, skuIndex, nameIndex, qtyIndex] = parsed.indices;
+  const skuRows = stock.slice(parsed.headerIndex + 1).filter(row => normalizeSku(row[skuIndex]) === normalizeSku(state.row.sku));
   if (!skuRows.length || skuRows.some(row => normalizeText(row[nameIndex]) !== normalizeText(state.row.nama_barang))) return 'SKU/nama barang berubah di WMS. Transaksi tidak disimpan. Sinkronkan WMS lalu cari ulang.';
   if (state.direction === 'out') {
     const locationRows = skuRows.filter(row => normalizeLocation(row[locationIndex]) === normalizeLocation(state.location));

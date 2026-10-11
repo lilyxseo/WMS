@@ -403,3 +403,9 @@ secara eksplisit ketika lebih dari satu spreadsheet mempunyai tab Kartu Stock.
 `cek google` melaporkan spreadsheet yang dipilih untuk sumber Kartu Stock, terpisah dari
 pemeriksaan tab transaksi dan Movement. Pemeriksaan/penulisan inbound, outbount dan movement
 menggunakan pemilihan sumber yang sama. Pencarian chat tetap membaca mirror Supabase.
+
+Pembacaan header Kartu Stock memeriksa 50 baris pertama dan kolom A:AZ, sehingga judul
+di atas tabel tidak mengganggu. Alias Lokasi/Location, Nama Barang/Description,
+dan Stok Akhir/Saldo Akhir/Ending Stock didukung. Stok Akhir diprioritaskan
+di atas Qty; Stok Awal tidak digunakan sebagai saldo tersedia. Header ganda ditolak.
+`cek google` juga melaporkan baris header dan nama kolom yang terbaca, tanpa menulis transaksi.
