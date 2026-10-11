@@ -60,83 +60,55 @@ deno run --allow-net --allow-env --env-file=/tmp/wms-bot.env supabase/functions/
 Jangan menyimpan token dalam source. Izinkan egress menuju `api.fonnte.com`
 dan hostname proyek Supabase untuk pengembangan di lingkungan cloud.
 
-## Pesan yang didukung
+## Pencarian dan menu
 
-Ketik `menu`, `bantuan`, atau `halo` untuk menu dengan tiga fitur: pencarian
-global, barang masuk, dan barang keluar. Kirim nomor menu 1–3 untuk panduan
-pilihan tersebut; nomor membuka panduan, bukan memilih baris hasil pencarian.
-Perintah tanpa nilai (`sku`, `barang`, `lokasi`, `detail`, `cari`) juga membuka
-panduan. `menu sku` atau `bantuan lokasi` membuka panduan langsung.
+Ketik `menu`, `bantuan`, atau `halo`. Menu memiliki tiga fitur: pencarian global,
+barang masuk, dan barang keluar. Nomor 1–3 membuka panduan, bukan memilih hasil.
+Menu dan panduan dihasilkan dari `SEARCH_MENU` di `menu.js`; fitur baru wajib
+menambah registry, implementasi, dan tes sekaligus.
 
-Daftar menu terpusat di `supabase/functions/whatsapp-fonnte/menu.js` melalui
-`SEARCH_MENU`. Setiap fitur pencarian baru wajib didaftarkan di sana bersamaan
-dengan parser dan tesnya. Menu utama serta panduan nomor/perintah dibangkitkan
-dari registry ini, sehingga tidak perlu menyalin daftar menu di beberapa file.
-Jangan mendaftarkan menu yang belum memiliki implementasi pencarian.
+Pencarian global **hanya membaca `inventory_kartu_stok`**. Langsung kirim:
 
-Hasil menggunakan kartu bernomor, pemisah antarbarang, konteks pencarian,
-filter aktif, jumlah baris pada halaman, dan waktu sinkronisasi. Balasan
-menyertakan perintah untuk halaman berikutnya/sebelumnya dan cara kembali ke
-menu. Jumlah baris yang tampil bukan total seluruh hasil database.
+- `merlyn green gold`: semua kata harus mengandung pada baris yang sama.
+- `merlyn 6840`: nama/SKU mengandung merlyn dan akhiran SKU mengandung 6840.
+- `merlyn a20-1`: nama/SKU mengandung merlyn dan lokasi mengandung a20-1.
+- `cari nama=merlyn; lokasi=a20-1`: filter terstruktur pada kolom tertentu.
+- `sku ABC123`, `barang merlyn`, `lokasi A20-1`, `detail ABC123`: alias tetap ada;
+  detail memakai SKU persis tanpa membedakan kapitalisasi.
 
-- `sku ABC123`: cari sebagian SKU, tanpa mengubah nol di depan.
-- `detail ABC123`: cari SKU persis (tanpa membedakan kapitalisasi).
-- `barang kabel` atau `nama barang kabel`: cari nama barang.
-- `lokasi A-01`: cari lokasi.
-- `cari kabel A-01` atau teks tanpa awalan: pencarian gabungan.
-- `ABC123`, `kabel A-01`, atau `cari kabel`: pencarian global di stok dan transaksi.
-  Pencarian stok memakai SKU, nama, dan lokasi; pencarian transaksi memakai semua
-  nilai bisnis yang dibaca, termasuk tanggal, status, PIC, dokumen, dan jumlah.
-- Pencarian global secara default menyembunyikan `stok_akhir=0` dan transaksi
-  dengan `qty=0`. Filter ini diterapkan sebelum pagination. Nilai negatif tidak
-  disembunyikan. `stok=kosong`/`stok=semua` dapat digunakan untuk pemeriksaan stok
-  nol; perintah khusus `masuk`/`keluar` tetap menampilkan jumlah nol jika cocok.
-- Semua kata memakai pencocokan **mengandung**, tidak peka kapitalisasi dan
-  tidak harus berurutan. `merlyn green gold` cocok dengan nama
-  `GOTO MERLYN GALLON PUMP GREEN GOLD`. `merlyn 6840` cocok jika nama mengandung
-  merlyn dan SKU mengandung 6840 pada baris yang sama. Ini bukan pencarian fuzzy
-  untuk salah ketik. Filter multi-kata dikirim sebagai satu pohon AND/OR agar
-  setiap kata tetap diterapkan oleh PostgREST.
-- `masuk kabel` atau `barang masuk kabel`: cari penerimaan barang.
-- `keluar ABC123` atau `barang keluar ABC123`: cari pengeluaran barang.
-- `masuk` / `keluar`: tampilkan transaksi dari baris sumber terbaru.
-- `masuk nama=kabel; lokasi=A-01; pic=andi`: filter gabungan transaksi.
-- `keluar dokumen=DO-88; jumlah=12`: filter dokumen dan jumlah. Filter jumlah
-  memakai kecocokan teks, bukan perbandingan angka (12 dapat cocok dengan 120).
-- `cari sku=ABC123; nama=kabel; lokasi=A-01; sumber=RPL; stok=ada`:
-  pencarian terstruktur. Setiap filter harus terpenuhi pada baris yang sama.
-- `barang kabel; halaman=2`: hasil berikutnya. Bot menyertakan perintah lengkap
-  yang bisa disalin untuk melanjutkan, tanpa menyimpan sesi percakapan.
-- `sumber=Kartu Stock`, `sumber=RPL`, atau `sumber=BULKY` setelah titik koma
-  membatasi sumber. `stok=ada` berarti stok > 0; `stok=kosong` berarti stok = 0;
-  default `stok=semua` turut menampilkan stok negatif jika ada.
-- `bantuan`, `help`, `menu`: petunjuk penggunaan.
+Global menampilkan **10 baris per halaman**, disertai perintah halaman berikut
+atau sebelumnya. Semua hasil dapat ditelusuri sampai batas halaman 100; jika
+masih ada lebih banyak, perjelas pencarian. Nilai negatif tetap ditampilkan.
+Default stok 0 disembunyikan. Setelah hasil, bot bertanya:
 
-Pencarian tidak peka huruf besar/kecil. Semua kata harus cocok dalam field
-pencarian yang dipilih. Balasan memuat SKU, nama, lokasi, stok akhir, dan sumber,
-maksimal 3 baris per sumber per halaman (15 baris bila semua sumber dipilih).
-Halaman 1–100 tersedia; perjelas pencarian untuk hasil yang lebih banyak.
-Stok per sumber ditampilkan terpisah dan tidak dijumlahkan
-lintas sumber. Hasil mencerminkan snapshot sinkronisasi WMS, bukan pembacaan
-langsung Google Sheets. Balasan menunjukkan waktu sinkronisasi tertua di antara
-baris hasil dalam WIB, atau menyebutkan waktu tidak tersedia. Waktu tersebut
-bukan jaminan bahwa seluruh sumber baru disinkron. Navigasi menjalankan query
-baru; hasil dapat bergeser jika database berubah di antara dua pesan.
-Perintah `lanjut`/pemilihan nomor tanpa konteks belum didukung.
+```text
+Tampilkan stok 0? y/n
+```
 
-Transaksi ditampilkan terpisah dari saldo stok: tanggal, asal, tujuan, jumlah
-transaksi, status, PIC, keterangan, dokumen, dan sumber. Urutan mengikuti
-`source_row_number` terbaru, bukan pengurutan tanggal teks campuran. Pencarian
-transaksi memeriksa maksimal 5.000 baris terbaru per sumber per request; jika
-ada baris lebih lama yang belum diperiksa, balasan menampilkan peringatan.
-Tidak ada penjumlahan qty transaksi sebagai stok tersedia. Filter `stok=ada`
-atau `stok=kosong` mengecualikan transaksi pada pencarian global; pada perintah
-masuk/keluar filter ini ditolak. Waktu sinkronisasi transaksi tidak diasumsikan
-ada karena kolom `synced_at` tidak tersedia pada semua schema WMS.
+- `y`: ulang pencarian terakhir dari halaman 1, tampilkan stok 0 serta stok lain.
+- `n`: ulang pencarian terakhir dari halaman 1, sembunyikan stok 0.
+- `stok=semua` pada perintah halaman berikut mempertahankan pilihan `y`.
 
-Tahap ini menyediakan pembacaan/pencarian barang masuk dan keluar. Operasi
-CRUD movement dan cycle count akan diimplementasikan pada tahap berikutnya;
-menu belum menawarkan operasi yang belum tersedia.
+Konteks disimpan per nomor WhatsApp dalam `whatsapp_search_sessions` dengan
+masa berlaku 15 menit. Pencarian baru menggantikan konteks sebelumnya. Perintah
+barang masuk/keluar tidak menggantikan konteks stok. Nomor lain tidak dapat
+memakai konteks pengguna. RLS aktif; hanya role server yang memperoleh akses.
+Tidak ada data hasil atau kredensial yang disimpan; hanya nomor, perintah/filter,
+dan waktu kedaluwarsa. Baris kedaluwarsa tidak dibaca; baris pengguna diperbarui
+saat pencarian berikutnya, bukan otomatis dihapus oleh scheduler.
+
+`masuk kabel` / `keluar ABC123` mencari transaksi masing-masing. `masuk` /
+`keluar` tanpa kata menampilkan transaksi baris terbaru. Hasil tetap 3 transaksi
+per halaman. Filter transaksi mendukung nama, SKU, lokasi, tanggal, PIC, status,
+dokumen, dan jumlah. Jumlah memakai pencocokan teks; 12 bisa cocok dengan 120.
+Pencarian transaksi dibatasi 5.000 baris terbaru per sumber dan memberi peringatan
+jika riwayat lama belum diperiksa. Urutan mengikuti baris sumber, bukan tanggal
+teks campuran. Jumlah transaksi tidak dijumlahkan sebagai saldo stok.
+
+Waktu sinkronisasi hasil stok ditampilkan dalam WIB. Query halaman baru bisa
+bergeser jika database berubah. Pencarian global tidak membaca RPL, BULKY,
+barang masuk, atau barang keluar. Gunakan fitur transaksi khusus untuk ledger.
+CRUD movement dan cycle count belum ditambahkan.
 
 ## Validasi
 
@@ -157,7 +129,7 @@ Pengaturan webhook Fonnte dilakukan melalui dashboard Fonnte.
 
 Workflow `.github/workflows/deploy-whatsapp-supabase.yml` men-deploy fungsi
 `whatsapp-fonnte` ke proyek WMS `udullprykzdskrxmbbkj` ketika perubahan fungsi,
-konfigurasi Supabase, tes, atau workflow di-push ke branch `work` atau `main`.
+konfigurasi Supabase, SQL konteks bot, tes, atau workflow di-push ke branch `work` atau `main`.
 Kedua branch menargetkan proyek yang sama. Tombol Run workflow juga tersedia
 setelah workflow ada di default branch. Pilih `work` atau `main` saat menjalankannya.
 
@@ -176,6 +148,10 @@ secrets bot belum lengkap. Jika pemeriksaan terakhir gagal, kode mungkin sudah
 ter-deploy; workflow tidak otomatis melakukan rollback.
 
 Secret aplikasi tetap berada di Supabase dan tidak diubah oleh workflow.
-Workflow tidak menjalankan migrasi database. Lihat status deployment melalui
+Sebelum deploy, workflow menerapkan hanya SQL additive
+`20261011070000_whatsapp_search_sessions.sql` lewat Management API Supabase,
+memakai access token yang sama. SQL dapat diulang dan hanya menyiapkan tabel
+konteks bot serta izin server. Migrasi WMS lain tidak dijalankan. Deployment
+berhenti jika pembuatan tabel gagal. Lihat status deployment melalui
 tab Actions GitHub, workflow **Deploy WhatsApp bot to Supabase**. Konfigurasi
 workflow di Git belum membuktikan deployment berhasil; pastikan run hijau.

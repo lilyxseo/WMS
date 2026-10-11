@@ -6,6 +6,7 @@ on:
     paths:
       - 'supabase/functions/whatsapp-fonnte/**'
       - 'supabase/config.toml'
+      - 'supabase/migrations/20261011070000_whatsapp_search_sessions.sql'
       - 'tests/**'
       - '.github/workflows/deploy-whatsapp-supabase.yml'
   workflow_dispatch:
@@ -39,6 +40,23 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: '2.120.0'
+      - name: Prepare bot search context table
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          node --input-type=module <<'JS'
+          import { readFile } from 'node:fs/promises';
+          if (!process.env.SUPABASE_ACCESS_TOKEN) throw new Error('Missing SUPABASE_ACCESS_TOKEN');
+          const query = await readFile('supabase/migrations/20261011070000_whatsapp_search_sessions.sql', 'utf8');
+          const response = await fetch(`https://api.supabase.com/v1/projects/${process.env.SUPABASE_PROJECT_REF}/database/query`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${process.env.SUPABASE_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query }),
+            signal: AbortSignal.timeout(60000),
+          });
+          if (!response.ok) throw new Error(`Search context table setup failed: HTTP ${response.status}`);
+          console.log('Bot search context table prepared; inventory tables unchanged.');
+          JS
       - name: Deploy Edge Function
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}

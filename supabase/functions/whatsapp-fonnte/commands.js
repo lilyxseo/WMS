@@ -59,7 +59,7 @@ export function parseAdvancedCommand(message) {
   parts.forEach(add);
   if (!filters.length && !transaction) throw new CommandError('Isi kata pencarian untuk mencari.');
   if (/^Barang (Masuk|Keluar)$/.test(options.source) && options.stock !== 'semua') throw new CommandError('Filter stok hanya untuk sumber stok, bukan jumlah transaksi.');
-  return { ...options, detail, hideZero: !transaction && !detail && !seen.has('stok'), command: input.replace(/;\s*halaman\s*=\s*\d+\s*/ig, '').trim() };
+  return { ...options, detail, hideZero: !transaction && !seen.has('stok'), command: input.replace(/;\s*halaman\s*=\s*\d+\s*/ig, '').trim() };
 }
 
 export async function searchAdvancedInventory(env, search, fetchFn, sources, config) {
@@ -70,19 +70,20 @@ export async function searchAdvancedInventory(env, search, fetchFn, sources, con
   const clauses = search.filters.filter(item => !item.exact).flatMap(item => buildInventorySearchFilters(item.query, item.fields));
   const filter = exact + (clauses.length > 1 ? `&and=(${clauses.map(clause => clause.replace(/^or=/, 'or')).join(',')})` : clauses.length ? `&${clauses[0]}` : '');
   const stock = search.stock === 'ada' ? '&stok_akhir=gt.0' : search.stock === 'kosong' ? '&stok_akhir=eq.0' : search.hideZero ? '&stok_akhir=neq.0' : '';
-  const batches = await Promise.all(sources.filter(([name]) => !search.source || name === search.source).map(async ([source, table]) => {
+  const selectedSource = search.source || 'Kartu Stock';
+  const batches = await Promise.all(sources.filter(([name]) => name === selectedSource).map(async ([source, table]) => {
     if (/^Barang (Masuk|Keluar)$/.test(source)) {
       if (search.stock !== 'semua') return { source, rows: [], hasMore: false };
       return searchTransactions(config, table, source, search, fetchFn);
     }
     if (search.filters.some(item => item.fields.some(field => !['sku', 'nama_barang', 'lokasi_bulky'].includes(field)))) return { source, rows: [], hasMore: false };
-    const response = await fetchFn(`${config.url}/rest/v1/${table}?select=sku,nama_barang,lokasi_bulky,stok_akhir,synced_at${filter}${stock}&order=sku.asc,lokasi_bulky.asc,source_row_number.asc&offset=${(search.page - 1) * 3}&limit=4`, {
+    const response = await fetchFn(`${config.url}/rest/v1/${table}?select=sku,nama_barang,lokasi_bulky,stok_akhir,synced_at${filter}${stock}&order=sku.asc,lokasi_bulky.asc,source_row_number.asc&offset=${(search.page - 1) * 10}&limit=11`, {
       headers: { apikey: config.key, Authorization: `Bearer ${config.key}` }, signal: AbortSignal.timeout(10000),
     });
     if (!response.ok) throw new Error('Inventory lookup failed');
     const rows = await response.json();
     if (!Array.isArray(rows)) throw new Error('Invalid inventory response');
-    return { source, rows: rows.slice(0, 3), hasMore: rows.length > 3 };
+    return { source, rows: rows.slice(0, 10), hasMore: rows.length > 10 };
   }));
   return { rows: batches.flatMap(batch => batch.rows.map(row => ({ ...row, source: batch.source }))), hasMore: batches.some(batch => batch.hasMore), incomplete: batches.some(batch => batch.incomplete) };
 }
@@ -95,8 +96,8 @@ export function formatAdvancedReply(result, search, formatRows) {
   const body = formatRows(result.rows, 15);
   const dates = result.rows.map(row => Date.parse(row.synced_at)).filter(Number.isFinite);
   const freshness = dates.length ? `\nSinkronisasi tertua pada hasil: ${new Date(Math.min(...dates)).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB.` : '\nWaktu sinkronisasi tidak tersedia.';
-  const scope = `Sumber: ${search.source || 'Semua'} • ${search.hideZero ? 'Stok/jumlah 0 disembunyikan' : `Filter stok: ${search.stock || 'semua'}`}`;
-  return `🔎 *Hasil Pencarian WMS*\nPencarian: ${displayText(search.command, 400)}\n${scope}\nHalaman ${search.page} • ${result.rows.length} baris ditampilkan\n(maksimal 3 baris per sumber)\n\n${body}\n\n🕒 ${freshness.trim()}`
+  const scope = `Sumber: ${search.source || 'Kartu Stock'} • ${search.hideZero ? 'Stok 0 disembunyikan' : `Filter stok: ${search.stock || 'semua'}`}`;
+  return `🔎 *Hasil Pencarian WMS*\nPencarian: ${displayText(search.command, 400)}\n${scope}\nHalaman ${search.page} • ${result.rows.length} baris ditampilkan\n\n${body}\n\n🕒 ${freshness.trim()}`
     + warning + previous + (result.hasMore && search.page < 100 ? `\n\n➡️ Berikutnya, kirim:\n${search.command}; halaman=${search.page + 1}` : result.hasMore ? '\nPerjelas pencarian untuk hasil tambahan.' : result.incomplete ? '\nAkhir hasil dalam batas pencarian.' : '\n\n✅ Akhir hasil pencarian.')
     + '\n\nKetik menu untuk pencarian lainnya.';
 }

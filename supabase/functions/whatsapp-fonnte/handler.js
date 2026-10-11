@@ -8,11 +8,10 @@ import { buildInventorySearchQuery, normalizeSearchQuery } from './inventory-sea
 import { BOT_HELP, CommandError, parseAdvancedCommand, searchAdvancedInventory, formatAdvancedReply } from './commands.js';
 import { resolveMenu, displayText } from './menu.js';
 import { formatTransactionRow } from './transactions.js';
+import { loadSearch, saveSearch } from './sessions.js';
 
 const SOURCES = [
   ['Kartu Stock', 'inventory_kartu_stok'],
-  ['RPL', 'inventory_rpl'],
-  ['BULKY', 'inventory_bulky'],
   ['Barang Masuk', 'inventory_barang_masuk'],
   ['Barang Keluar', 'inventory_barang_keluar'],
 ];
@@ -39,7 +38,7 @@ export function parseInventoryMessage(message) {
 export async function searchInventory(env, search, fetchFn = fetch) {
   const config = getDatabaseConfig(env);
   const filter = buildInventorySearchQuery(search.query, search.fields);
-  const batches = await Promise.all(SOURCES.slice(0, 3).map(async ([source, table]) => {
+  const batches = await Promise.all(SOURCES.slice(0, 1).map(async ([source, table]) => {
     const response = await fetchFn(`${config.url}/rest/v1/${table}?select=sku,nama_barang,lokasi_bulky,stok_akhir${filter}&order=sku.asc,lokasi_bulky.asc,source_row_number.asc&limit=11`, {
       headers: { apikey: config.key, Authorization: `Bearer ${config.key}` },
       signal: AbortSignal.timeout(10000),
@@ -84,18 +83,36 @@ export async function handleFonnteWebhook({ request, env }, fetchFn = fetch) {
   }
   let reply;
   try {
+    const answer = payload.message.trim().toLowerCase();
+    const isAnswer = ['y', 'n'].includes(answer);
+    let options;
+    if (isAnswer) {
+      options = await loadSearch(getDatabaseConfig(env), phone(sender), fetchFn);
+      if (!options) reply = 'Pencarian sebelumnya tidak tersedia atau sudah kedaluwarsa (15 menit). Kirim pencarian baru, misalnya merlyn a20-1.';
+      else {
+        options = { ...options, page: 1, stock: 'semua', hideZero: answer === 'n' };
+        options.command = options.command.replace(/;\s*stok\s*=\s*[^;]+/ig, '').trim();
+        if (answer === 'y') options.command += '; stok=semua';
+      }
+    }
     const menu = resolveMenu(payload.message);
-    const advanced = menu === undefined ? parseAdvancedCommand(payload.message) : undefined;
-    if (menu !== undefined) reply = menu;
-    else if (advanced) {
-      const result = await searchAdvancedInventory(env, advanced, fetchFn, SOURCES, getDatabaseConfig(env));
-      reply = formatAdvancedReply(result, advanced, formatInventoryReply);
-    } else {
+    const advanced = !isAnswer && menu === undefined ? parseAdvancedCommand(payload.message) : undefined;
+    if (!isAnswer && menu !== undefined) reply = menu;
+    else if (!isAnswer && advanced) options = advanced;
+    else if (!isAnswer) {
       const search = parseInventoryMessage(payload.message);
       if (!search) reply = HELP;
       else {
-        const options = { page: 1, source: '', stock: 'semua', hideZero: true, filters: [search], command: payload.message.trim() };
-        reply = formatAdvancedReply(await searchAdvancedInventory(env, options, fetchFn, SOURCES, getDatabaseConfig(env)), options, formatInventoryReply);
+        options = { page: 1, source: '', stock: 'semua', hideZero: true, filters: [search], command: payload.message.trim() };
+      }
+    }
+    if (options) {
+      if (!['', 'Kartu Stock', 'Barang Masuk', 'Barang Keluar'].includes(options.source)) throw new CommandError('Pencarian global hanya memakai Kartu Stok. Gunakan masuk/keluar untuk transaksi.');
+      const result = await searchAdvancedInventory(env, options, fetchFn, SOURCES, getDatabaseConfig(env));
+      reply = formatAdvancedReply(result, options, formatInventoryReply);
+      if (!options.source || options.source === 'Kartu Stock') {
+        await saveSearch(getDatabaseConfig(env), phone(sender), options, fetchFn);
+        reply += '\n\n*Tampilkan stok 0? y/n*\ny = stok 0 dan stok yang masih ada\nn = sembunyikan stok 0\nPilihan berlaku untuk pencarian ini selama 15 menit.';
       }
     }
   } catch (error) {
