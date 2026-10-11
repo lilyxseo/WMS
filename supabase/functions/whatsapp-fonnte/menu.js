@@ -8,8 +8,7 @@ export const SEARCH_MENU = Object.freeze([
   { id: '6', command: 'inbound', title: 'Inbound', description: 'Pilih SKU, gunakan y untuk From IWT E-COM dan To MASIH DI INBOUND, atau kirim nilai pengganti, isi qty, lalu balas y pada Tinjau. PIC otomatis dari konfigurasi role.', example: 'inbound merlyn', extra: 'inbound' },
   { id: '7', command: 'outbount', title: 'Outbount', description: 'Pilih SKU, pilih nomor lokasi yang memiliki stok, isi qty, lalu balas y pada Tinjau. Stok diperiksa dan PIC otomatis dari konfigurasi role.', example: 'outbount merlyn a20-1', extra: 'outbount' },
   { id: '8', command: 'cek google', title: 'Cek Google', description: 'Periksa autentikasi dan akses spreadsheet tanpa membuat transaksi.', example: 'cek google' },
-  { id: '9', command: 'import pdf', title: 'Import PDF', description: 'Kirim PDF transfer, tinjau preview, lalu balas y untuk membuat sheet baru di Inventory. Jika file belum terbaca, gunakan cek pdf. Khusus PIC/Developer.', example: 'import pdf', extra: 'cek pdf' },
-  { id: '10', command: 'ringkasan', title: 'Ringkasan harian', description: 'Total transaksi, qty dan SKU Barang Masuk, Barang Keluar dan Movement. Tanggal memakai waktu Jakarta.', example: 'ringkasan', extra: 'ringkasan kemarin\nringkasan 2026-10-11' },
+  { id: '9', command: 'ringkasan', title: 'Ringkasan harian', description: 'Total transaksi, qty dan SKU Barang Masuk, Barang Keluar dan Movement. Tanggal memakai waktu Jakarta.', example: 'ringkasan', extra: 'ringkasan kemarin\nringkasan 2026-10-11' },
 ]);
 
 export function renderMenu(entries = SEARCH_MENU) {

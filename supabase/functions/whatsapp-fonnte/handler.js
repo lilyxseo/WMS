@@ -15,8 +15,6 @@ import { handleStock } from './stock.js';
 import { findPhoneProfile, normalizePhone } from './profiles.js';
 import { handleMovement } from './movement.js';
 import { handleEdit, canEdit } from './edit.js';
-import { handlePdfImport } from './pdf-import.js';
-import { pdfAttachment, isDocumentPayload } from './pdf-document.js';
 import { handleDailySummary } from './daily-summary.js';
 import { handleScheduledSummary } from './summary-scheduler.js';
 
@@ -71,7 +69,7 @@ export function formatInventoryReply(rows, limit = 10) {
     + (rows.length > limit ? `\n\nDitampilkan ${limit} baris pertama. Perjelas pencarian untuk hasil lainnya.` : '');
 }
 
-export async function handleFonnteWebhook({ request, env, extractPdf }, fetchFn = fetch) {
+export async function handleFonnteWebhook({ request, env }, fetchFn = fetch) {
   if (request.method !== 'POST') return json({ success: false, message: 'Method not allowed' }, 405);
   if (request.headers.get('X-WMS-Action') === 'daily-summary') {
     try { return await handleScheduledSummary(request, env, getDatabaseConfig(env), fetchFn); }
@@ -92,7 +90,7 @@ export async function handleFonnteWebhook({ request, env, extractPdf }, fetchFn 
   const sender = String(payload.sender || '');
   if (!/^62\d{8,13}$/.test(phone(sender)) || sender.includes('@') || payload.isGroup === true || payload.isGroup === 'true'
     || payload.fromMe === true || payload.fromMe === 'true'
-    || typeof payload.message !== 'string' && !pdfAttachment(payload) && !isDocumentPayload(payload)) {
+    || typeof payload.message !== 'string') {
     return json({ success: true, ignored: true });
   }
   if (typeof payload.message !== 'string') payload.message = '';
@@ -105,9 +103,14 @@ export async function handleFonnteWebhook({ request, env, extractPdf }, fetchFn 
   }
   let reply;
   try {
-    const googleReply = !pdfAttachment(payload) && !isDocumentPayload(payload) ? await handleGoogleCheck(payload.message, env, fetchFn) : undefined;
-    const pdfReply = googleReply !== undefined ? googleReply : await handlePdfImport(payload, phone(sender), env, getDatabaseConfig(env), fetchFn, extractPdf || (async bytes => (await import('./pdf-runtime.js')).extractPdf(bytes)));
-    const summaryReply = pdfReply !== undefined ? pdfReply : await handleDailySummary(payload.message, env, getDatabaseConfig(env), fetchFn);
+    const retiredCommand = /^(?:import\s+pdf|cek\s+pdf|pdf)$/i.test(payload.message.trim());
+    const googleReply = retiredCommand ? 'Fitur import PDF di bot sudah dihapus. Ketik menu untuk fitur yang tersedia.' : await handleGoogleCheck(payload.message, env, fetchFn);
+    if (googleReply === undefined) {
+      // Retire unfinished PDF drafts so they cannot block stock or movement input.
+      const previous = await loadSearch(getDatabaseConfig(env), phone(sender), fetchFn);
+      if (previous?.kind === 'pdf-import') await saveSearch(getDatabaseConfig(env), phone(sender), {}, fetchFn);
+    }
+    const summaryReply = googleReply !== undefined ? googleReply : await handleDailySummary(payload.message, env, getDatabaseConfig(env), fetchFn);
     const stockReply = summaryReply !== undefined ? summaryReply : await handleStock(payload.message, phone(sender), env, getDatabaseConfig(env), fetchFn);
     const movementReply = stockReply !== undefined ? stockReply : await handleMovement(payload.message, phone(sender), env, getDatabaseConfig(env), fetchFn);
     const editReply = movementReply !== undefined ? movementReply : await handleEdit(payload.message, phone(sender), env, getDatabaseConfig(env), fetchFn);

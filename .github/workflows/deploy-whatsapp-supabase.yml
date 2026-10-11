@@ -45,8 +45,6 @@ jobs:
         run: node --test tests/*.test.mjs
       - name: Check Edge Function
         run: deno check --config supabase/functions/whatsapp-fonnte/deno.json supabase/functions/whatsapp-fonnte/index.ts
-      - name: Test PDF runtime
-        run: deno test --config supabase/functions/whatsapp-fonnte/deno.json tests/whatsapp-pdf-runtime.deno.ts
       - uses: supabase/setup-cli@v1
         with:
           version: '2.120.0'

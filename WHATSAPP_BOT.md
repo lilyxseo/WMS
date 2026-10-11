@@ -121,59 +121,6 @@ dapat membutuhkan lebih banyak waktu; kegagalan dibalas sebagai kegagalan,
 bukan hasil kosong. Urutan mengikuti baris sumber, bukan tanggal
 teks campuran. Jumlah transaksi tidak dijumlahkan sebagai saldo stok.
 
-### Import PDF lewat WhatsApp
-
-Ketik `import pdf`, lalu kirim PDF transfer **sebagai dokumen WhatsApp**, atau langsung
-kirim dokumen PDF. Fonnte harus meneruskan `url` dan identitas PDF (`extension=pdf`,
-nama file `.pdf`, atau MIME `application/pdf`) ke webhook. Caption boleh kosong.
-URL dokumen bertanda `type=document/file`, URL tanpa ekstensi, variasi MIME seperti
-`mimetype`, dan field link file juga dikenali; isi unduhan tetap wajib lolos pemeriksaan PDF.
-Nama `.pdf` yang diteruskan sebagai teks pesan diarahkan ke import, termasuk setelah
-pencarian stok. Jika pesan hanya memuat nama file, bot menjelaskan link belum tersedia
-dan menyimpan status untuk `cek pdf`, tanpa melakukan pencarian stok atau menulis sheet.
-URL HTTPS berakhiran `.pdf` di pesan juga dapat diproses dengan pemeriksaan host yang
-sama. Pencarian eksplisit seperti `cari transfer.pdf` / `masuk transfer.pdf` tetap pencarian.
-Jika bot terus meminta PDF, kirim dokumen lalu ketik **`cek pdf`** untuk mengetahui
-apakah webhook menyertakan URL unduhan dan metadata dokumen. Pemeriksaan menyebutkan
-keberadaan link, nama file, ekstensi, dan nama field media tanpa menampilkan nilainya.
-Tidak ada pengaturan Fonnte khusus yang diasumsikan tersedia. Tanpa URL file, bot
-menjelaskan link unduhan belum diterima dan mempertahankan draft; nama file atau
-caption saja tidak dapat digunakan untuk membaca isi PDF. Hasil `cek pdf` membantu
-memastikan payload aktual sebelum menentukan konfigurasi atau dukungan media yang
-perlu diperiksa bersama Fonnte. Tidak perlu mengetik `import pdf` lagi.
-Log `WHATSAPP_PDF_MEDIA` hanya mencatat keberadaan metadata, tanpa isi pesan, nomor,
-nama file, atau URL dokumen, untuk membantu pemeriksaan webhook.
-Role PIC/Developer dan nomor profil yang valid wajib tersedia, termasuk saat konfirmasi.
-
-Bot membaca tabel memakai PDF.js dengan pemetaan kolom yang diadaptasi dari import
-aplikasi. Header dan item ditampilkan dalam preview 10 item per halaman. Gunakan
-`lanjut` / `sebelumnya`, `nomor #T-007894`, `from IWT E-COM`, `to GOTO`,
-`referensi REF-01`, atau `edit 1 qty 10` untuk koreksi. Kolom item yang bisa diedit:
-`sku`, `nama`, `qty`, `catatan`. Nomor item bersifat global untuk seluruh PDF.
-Nomor transfer yang tidak terdeteksi akan ditanyakan. Balas `y` untuk import atau
-`batal` untuk membatalkan. Draft berlaku 15 menit.
-
-Tujuan selalu **SHEET_ID_INVENTORY**; nama tab baru mengikuti nomor transfer persis
-seperti aplikasi. Susunan sheet: Nomor Transfer, Dari, Kepada, Nomor Referensi,
-baris kosong, lalu SKU/Nama Produk/Jumlah/Diterima/Batal/Tolak/Catatan.
-Import ini tidak membuat transaksi Barang Masuk/Keluar. Tab yang sudah tersedia
-tidak ditimpa. Penambahan tab dan semua nilai dilakukan dalam satu batch atomik
-Google; nilai teks dipertahankan sebagai teks, termasuk SKU dengan nol di depan.
-Header diberi warna dan enam baris pertama dibekukan. Aktivitas import tercatat
-menggunakan profil pengirim.
-
-Kredensial OAuth Gmail yang sudah ada dipakai kembali. Tidak perlu service account
-baru. Unduhan hanya mengizinkan HTTPS domain Fonnte; jika Fonnte memakai host media
-lain, tambahkan **nama host saja** pada `WHATSAPP_PDF_ALLOWED_HOSTS`, dipisahkan koma.
-Setiap redirect diperiksa dan secret bot tidak dikirim ke URL dokumen.
-Batas saat ini: 8 MB, 40 halaman, 1.000 item. PDF scan membutuhkan OCR yang belum
-didukung bot; dokumen rusak/terkunci dan baris yang gagal dibaca akan ditolak sebelum
-penulisan. Koreksi yang lebih besar bisa dilakukan di preview aplikasi.
-
-Jika pembacaan Google gagal sebelum menulis, `ulang` mencoba preview yang sama.
-Jika hasil penulisan tidak terkonfirmasi, bot melarang retry otomatis dan meminta
-pemeriksaan Inventory agar tidak mengimpor dua kali.
-
 ### Ringkasan harian dan notifikasi otomatis
 
 Ketik `ringkasan` untuk hari ini, `ringkasan kemarin`, atau

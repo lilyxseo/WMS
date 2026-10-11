@@ -22,15 +22,19 @@ test('welcome sanitizes profile formatting and handles missing profiles without 
 });
 test('webhook welcomes the verified phone profile and preserves menu features', async () => {
  const env = { SUPABASE_URL: 'https://test.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'test', FONNTE_TOKEN: 'test', FONNTE_WEBHOOK_SECRET: 'secret' };
- let reply, profileReads = 0;
+ let reply, profileReads = 0, clearedDraft = false;
  const fetchFn = async (url, options = {}) => {
   if (url.includes('/users?')) { profileReads++; return Response.json([profile]); }
-  if (url.includes('whatsapp_search_sessions')) return Response.json([]);
+  if (url.includes('whatsapp_search_sessions')) {
+   if (options.method === 'POST') { clearedDraft = true; assert.deepEqual(JSON.parse(options.body).search, {}); return new Response(null, { status: 204 }); }
+   return Response.json(clearedDraft ? [] : [{ search: { kind: 'pdf-import', phase: 'confirm', profileId: profile.id } }]);
+  }
   if (url.endsWith('/send')) { reply = options.body.get('message'); return Response.json({ status: true }); }
   throw new Error('Unexpected fetch');
  };
  const request = new Request('https://test/?secret=secret', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sender: profile.phone_number, message: 'halo' }) });
  assert.equal((await handleFonnteWebhook({ request, env }, fetchFn)).status, 200);
  assert.match(reply, /Andi!/); assert.match(reply, /Role: \*PIC Inventory\*/); assert.match(reply, /Selamat datang di \*Bot WMS\*/); assert.match(reply, /7\. Outbount/);
- assert.equal(profileReads, 1);
+ assert.equal(profileReads, 1); assert.equal(clearedDraft, true);
+ assert.match(reply, /9\. Ringkasan harian/); assert.doesNotMatch(reply, /Import PDF/);
 });
