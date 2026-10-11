@@ -7,10 +7,17 @@ on:
       - 'supabase/functions/whatsapp-fonnte/**'
       - 'supabase/config.toml'
       - 'supabase/migrations/20261011070000_whatsapp_search_sessions.sql'
+      - 'supabase/migrations/20261011160000_whatsapp_daily_deliveries.sql'
+      - 'scripts/setup-whatsapp-summary.mjs'
       - 'tests/**'
       - 'assets/js/pic-config.js'
       - '.github/workflows/deploy-whatsapp-supabase.yml'
   workflow_dispatch:
+    inputs:
+      daily_summary_numbers:
+        description: 'Optional daily summary recipients (62..., comma-separated); blank retains existing Supabase schedule'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -37,7 +44,9 @@ jobs:
       - name: Test repository
         run: node --test tests/*.test.mjs
       - name: Check Edge Function
-        run: deno check supabase/functions/whatsapp-fonnte/index.ts
+        run: deno check --config supabase/functions/whatsapp-fonnte/deno.json supabase/functions/whatsapp-fonnte/index.ts
+      - name: Test PDF runtime
+        run: deno test --config supabase/functions/whatsapp-fonnte/deno.json tests/whatsapp-pdf-runtime.deno.ts
       - uses: supabase/setup-cli@v1
         with:
           version: '2.120.0'
@@ -58,6 +67,11 @@ jobs:
           if (!response.ok) throw new Error(`Search context table setup failed: HTTP ${response.status}`);
           console.log('Bot search context table prepared; inventory tables unchanged.');
           JS
+      - name: Configure daily WhatsApp summary
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          WHATSAPP_DAILY_SUMMARY_NUMBERS: ${{ inputs.daily_summary_numbers || vars.WHATSAPP_DAILY_SUMMARY_NUMBERS }}
+        run: node scripts/setup-whatsapp-summary.mjs
       - name: Deploy Edge Function
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}

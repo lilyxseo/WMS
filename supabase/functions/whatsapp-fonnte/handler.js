@@ -15,6 +15,10 @@ import { handleStock } from './stock.js';
 import { findPhoneProfile, normalizePhone } from './profiles.js';
 import { handleMovement } from './movement.js';
 import { handleEdit, canEdit } from './edit.js';
+import { handlePdfImport } from './pdf-import.js';
+import { pdfAttachment } from './pdf-document.js';
+import { handleDailySummary } from './daily-summary.js';
+import { handleScheduledSummary } from './summary-scheduler.js';
 
 const SOURCES = [
   ['Kartu Stock', 'inventory_kartu_stok'],
@@ -67,8 +71,12 @@ export function formatInventoryReply(rows, limit = 10) {
     + (rows.length > limit ? `\n\nDitampilkan ${limit} baris pertama. Perjelas pencarian untuk hasil lainnya.` : '');
 }
 
-export async function handleFonnteWebhook({ request, env }, fetchFn = fetch) {
+export async function handleFonnteWebhook({ request, env, extractPdf }, fetchFn = fetch) {
   if (request.method !== 'POST') return json({ success: false, message: 'Method not allowed' }, 405);
+  if (request.headers.get('X-WMS-Action') === 'daily-summary') {
+    try { return await handleScheduledSummary(request, env, getDatabaseConfig(env), fetchFn); }
+    catch { return json({ success: false, message: 'Scheduled summary unavailable' }, 503); }
+  }
   const secret = String(env.FONNTE_WEBHOOK_SECRET || '');
   const allowed = String(env.WHATSAPP_ALLOWED_NUMBERS || '').split(',').map(phone).filter(Boolean);
   if (!secret || !env.FONNTE_TOKEN) return json({ success: false, message: 'Bot belum dikonfigurasi' }, 503);
@@ -84,9 +92,10 @@ export async function handleFonnteWebhook({ request, env }, fetchFn = fetch) {
   const sender = String(payload.sender || '');
   if (!/^62\d{8,13}$/.test(phone(sender)) || sender.includes('@') || payload.isGroup === true || payload.isGroup === 'true'
     || payload.fromMe === true || payload.fromMe === 'true'
-    || typeof payload.message !== 'string') {
+    || typeof payload.message !== 'string' && !pdfAttachment(payload)) {
     return json({ success: true, ignored: true });
   }
+  if (typeof payload.message !== 'string') payload.message = '';
   let verifiedProfile;
   if (!allowed.includes(phone(sender))) {
     try {
@@ -96,8 +105,10 @@ export async function handleFonnteWebhook({ request, env }, fetchFn = fetch) {
   }
   let reply;
   try {
-    const googleReply = await handleGoogleCheck(payload.message, env, fetchFn);
-    const stockReply = googleReply !== undefined ? googleReply : await handleStock(payload.message, phone(sender), env, getDatabaseConfig(env), fetchFn);
+    const googleReply = !pdfAttachment(payload) ? await handleGoogleCheck(payload.message, env, fetchFn) : undefined;
+    const pdfReply = googleReply !== undefined ? googleReply : await handlePdfImport(payload, phone(sender), env, getDatabaseConfig(env), fetchFn, extractPdf || (async bytes => (await import('./pdf-runtime.js')).extractPdf(bytes)));
+    const summaryReply = pdfReply !== undefined ? pdfReply : await handleDailySummary(payload.message, env, getDatabaseConfig(env), fetchFn);
+    const stockReply = summaryReply !== undefined ? summaryReply : await handleStock(payload.message, phone(sender), env, getDatabaseConfig(env), fetchFn);
     const movementReply = stockReply !== undefined ? stockReply : await handleMovement(payload.message, phone(sender), env, getDatabaseConfig(env), fetchFn);
     const editReply = movementReply !== undefined ? movementReply : await handleEdit(payload.message, phone(sender), env, getDatabaseConfig(env), fetchFn);
     if (editReply !== undefined) reply = editReply;

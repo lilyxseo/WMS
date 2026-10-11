@@ -1,7 +1,9 @@
 import { handleFonnteWebhook } from './handler.js';
+import { extractPdf } from './pdf-runtime.js';
 
 Deno.serve((request: Request) => handleFonnteWebhook({
   request,
+  extractPdf,
   env: {
     SUPABASE_URL: Deno.env.get('SUPABASE_URL'),
     SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
@@ -10,6 +12,8 @@ Deno.serve((request: Request) => handleFonnteWebhook({
     FONNTE_WEBHOOK_SECRET: Deno.env.get('FONNTE_WEBHOOK_SECRET'),
     WHATSAPP_ALLOWED_NUMBERS: Deno.env.get('WHATSAPP_ALLOWED_NUMBERS'),
     WHATSAPP_EDITOR_NUMBERS: Deno.env.get('WHATSAPP_EDITOR_NUMBERS'),
+    WHATSAPP_PDF_ALLOWED_HOSTS: Deno.env.get('WHATSAPP_PDF_ALLOWED_HOSTS'),
+    WHATSAPP_SUMMARY_SCHEDULER_SECRET: Deno.env.get('WHATSAPP_SUMMARY_SCHEDULER_SECRET'),
     GOOGLE_OAUTH_CLIENT_ID: Deno.env.get('GOOGLE_OAUTH_CLIENT_ID'),
     GOOGLE_OAUTH_CLIENT_SECRET: Deno.env.get('GOOGLE_OAUTH_CLIENT_SECRET'),
     GOOGLE_OAUTH_REFRESH_TOKEN: Deno.env.get('GOOGLE_OAUTH_REFRESH_TOKEN'),

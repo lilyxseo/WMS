@@ -115,11 +115,81 @@ atau beberapa nomor dipisahkan koma. Filter khusus tersedia seperti `keluar isel
 Metadata database tidak ikut dicari. Jumlah memakai pencocokan teks; 12 bisa cocok dengan 120.
 Pencarian transaksi tidak dibatasi 5.000 baris. Database dibaca dalam batch
 1.000 baris hingga halaman dan satu hasil berikutnya ditemukan atau data habis.
-Hanya empat hasil transaksi ditahan dalam memori. Query tanpa kata pencarian
+Hanya satu halaman beserta satu hasil berikutnya ditahan dalam memori. Query tanpa kata pencarian
 membaca halaman langsung dengan offset. Pencarian langka pada riwayat besar
 dapat membutuhkan lebih banyak waktu; kegagalan dibalas sebagai kegagalan,
 bukan hasil kosong. Urutan mengikuti baris sumber, bukan tanggal
 teks campuran. Jumlah transaksi tidak dijumlahkan sebagai saldo stok.
+
+### Import PDF lewat WhatsApp
+
+Ketik `import pdf`, lalu kirim PDF transfer **sebagai dokumen WhatsApp**, atau langsung
+kirim dokumen PDF. Fonnte harus meneruskan `url` dan identitas PDF (`extension=pdf`,
+nama file `.pdf`, atau MIME `application/pdf`) ke webhook. Caption boleh kosong.
+Role PIC/Developer dan nomor profil yang valid wajib tersedia, termasuk saat konfirmasi.
+
+Bot membaca tabel memakai PDF.js dengan pemetaan kolom yang diadaptasi dari import
+aplikasi. Header dan item ditampilkan dalam preview 10 item per halaman. Gunakan
+`lanjut` / `sebelumnya`, `nomor #T-007894`, `from IWT E-COM`, `to GOTO`,
+`referensi REF-01`, atau `edit 1 qty 10` untuk koreksi. Kolom item yang bisa diedit:
+`sku`, `nama`, `qty`, `catatan`. Nomor item bersifat global untuk seluruh PDF.
+Nomor transfer yang tidak terdeteksi akan ditanyakan. Balas `y` untuk import atau
+`batal` untuk membatalkan. Draft berlaku 15 menit.
+
+Tujuan selalu **SHEET_ID_INVENTORY**; nama tab baru mengikuti nomor transfer persis
+seperti aplikasi. Susunan sheet: Nomor Transfer, Dari, Kepada, Nomor Referensi,
+baris kosong, lalu SKU/Nama Produk/Jumlah/Diterima/Batal/Tolak/Catatan.
+Import ini tidak membuat transaksi Barang Masuk/Keluar. Tab yang sudah tersedia
+tidak ditimpa. Penambahan tab dan semua nilai dilakukan dalam satu batch atomik
+Google; nilai teks dipertahankan sebagai teks, termasuk SKU dengan nol di depan.
+Header diberi warna dan enam baris pertama dibekukan. Aktivitas import tercatat
+menggunakan profil pengirim.
+
+Kredensial OAuth Gmail yang sudah ada dipakai kembali. Tidak perlu service account
+baru. Unduhan hanya mengizinkan HTTPS domain Fonnte; jika Fonnte memakai host media
+lain, tambahkan **nama host saja** pada `WHATSAPP_PDF_ALLOWED_HOSTS`, dipisahkan koma.
+Setiap redirect diperiksa dan secret bot tidak dikirim ke URL dokumen.
+Batas saat ini: 8 MB, 40 halaman, 1.000 item. PDF scan membutuhkan OCR yang belum
+didukung bot; dokumen rusak/terkunci dan baris yang gagal dibaca akan ditolak sebelum
+penulisan. Koreksi yang lebih besar bisa dilakukan di preview aplikasi.
+
+Jika pembacaan Google gagal sebelum menulis, `ulang` mencoba preview yang sama.
+Jika hasil penulisan tidak terkonfirmasi, bot melarang retry otomatis dan meminta
+pemeriksaan Inventory agar tidak mengimpor dua kali.
+
+### Ringkasan harian dan notifikasi otomatis
+
+Ketik `ringkasan` untuk hari ini, `ringkasan kemarin`, atau
+`ringkasan 2026-10-11`. Ringkasan berisi jumlah transaksi, total qty, jumlah SKU unik,
+dan tiga PIC dengan transaksi terbanyak untuk Barang Masuk, Barang Keluar, dan Movement.
+Movement dihitung sekali dari ledger Barang Masuk (status Movement atau keterangan
+INTERNAL STOCK TRANSFER), terpisah dari penerimaan/pengeluaran biasa. Total qty
+merupakan qty transaksi, bukan saldo stok. Qty kosong/tidak valid ditandai dan
+tidak dimasukkan ke total. Tanggal memakai `BUSINESS_TIME_ZONE` (default Asia/Jakarta).
+
+Data diambil dari tabel transaksi WMS di Supabase yang sudah dinormalisasi tanggalnya
+ke YYYY-MM-DD oleh sinkronisasi aplikasi. Ringkasan mengikuti data yang sudah masuk
+ke database; transaksi yang baru ditulis di Google Sheets baru termasuk setelah
+sinkronisasi aplikasi. Seluruh transaksi pada tanggal terpilih dibaca per 1.000 baris
+tanpa batas 5.000. Kegagalan satu batch membatalkan ringkasan, bukan menampilkan total parsial.
+
+Deployment mengatur **Supabase Cron setiap hari 15.45 WIB** (`45 8 * * *` UTC).
+Penerima hanya nomor yang dikonfigurasi, bukan seluruh user. Atur lewat input
+`daily_summary_numbers` saat menjalankan workflow deployment secara manual, atau
+repository variable GitHub `WHATSAPP_DAILY_SUMMARY_NUMBERS` (format 62..., beberapa
+nomor dipisahkan koma). Input kosong mempertahankan jadwal/penerima yang sudah
+tersimpan di Supabase Cron. Nomor tidak ditulis ke source code.
+Workflow membuat tabel server-only `whatsapp_daily_deliveries` dan secret scheduler
+di Supabase serta Vault. Job cron mengirim permintaan `X-WMS-Action: daily-summary`
+dengan autentikasi terpisah, bukan secret webhook publik. Tidak bergantung pada
+GitHub scheduled workflow/default branch atau aplikasi yang sedang dibuka.
+
+Klaim tanggal+nomor penerima mencegah pengiriman ganda oleh pemanggilan bersamaan.
+Jika respons Fonnte tidak pasti, status menjadi `uncertain` dan tidak diulang otomatis.
+Periksa job `wms-whatsapp-daily-summary` di Supabase Cron dan hasil HTTP di `net._http_response`;
+status pengiriman ada pada `whatsapp_daily_deliveries`. Batas operasional jaringan
+dapat membuat pesan tiba setelah waktu jadwal. Pengujian lokal memakai mock dan
+PDF fixture; tidak mengirim notifikasi percobaan ke nomor pengguna.
 
 Balasan tidak menampilkan kolom Dokumen (link) atau label Sumber pada kartu
 maupun ringkasan hasil. Dokumen tetap dapat dipakai sebagai kata/filter pencarian.
