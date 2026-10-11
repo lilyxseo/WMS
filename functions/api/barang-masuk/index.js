@@ -1,12 +1,13 @@
 import { getSecretSupabaseConfig } from '../_supabase-config.js';
 import { escapeLike, supabaseRows, transactionPage, transactionSort, transactionSummary } from '../_transaction-read.js';
-import { buildInventorySearchFilters, normalizeSearchQuery } from '../_inventory-search.js';
+import { normalizeSearchQuery } from '../_inventory-search.js';
 
 const TABLE = 'inventory_barang_masuk';
 // Keep reads compatible with the deployed table schema. In particular, synced_at is
 // optional metadata and must not make the whole endpoint fail when it is not present.
 export const BARANG_MASUK_COLUMNS = Object.freeze(['tanggal', 'from', 'to', 'sku', 'namaBarang', 'qty', 'status', 'pic', 'keterangan', 'no_iseller', 'netsuite', 'keterangan_lainnya', 'lokasi_surat_jalan', 'stockout', 'dokumen']);
 const COLUMNS = 'tanggal,from_location,to_location,sku,nama_barang,qty,status,pic,keterangan,no_iseller,netsuite,keterangan_lainnya,lokasi_surat_jalan,stockout,dokumen,source_row_number';
+const SEARCH_COLUMNS = COLUMNS.split(',').filter(column => column !== 'source_row_number');
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 50;
 const ERROR_REASON = 'BARANG_MASUK_FETCH_FAILED';
@@ -82,7 +83,6 @@ export async function handleBarangMasukRequest({ request, env }) {
     console.info('[BarangMasukAPI] params', { page, limit, sort: sort.name, hasSearch: Boolean(search), hasDateRange: Boolean(startDate || endDate) });
 
     if (sku) filters.push(`sku=ilike.${encodeURIComponent(`%${escapeLike(sku)}%`)}`);
-    filters.push(...buildInventorySearchFilters(search, ['sku', 'nama_barang', 'from_location', 'to_location']));
     if (from) filters.push(`from_location=eq.${encodeURIComponent(from)}`);
     if (to) filters.push(`to_location=eq.${encodeURIComponent(to)}`);
     if (status) filters.push(`status=eq.${encodeURIComponent(status)}`);
@@ -93,7 +93,7 @@ export async function handleBarangMasukRequest({ request, env }) {
     let total = 0;
     console.info('[BarangMasukAPI] query-start');
     const rowsStartedAt = Date.now();
-    const result = await transactionPage(supabaseConfig, TABLE, { columns: COLUMNS, filterQuery, startDate, endDate, page, limit, sort: sort.name, bounded: true });
+    const result = await transactionPage(supabaseConfig, TABLE, { columns: COLUMNS, filterQuery, startDate, endDate, page, limit, sort: sort.name, bounded: true, search, searchFields: SEARCH_COLUMNS });
     rawRows = result.rows;
     total = result.total;
     const rowsMs = Date.now() - rowsStartedAt;

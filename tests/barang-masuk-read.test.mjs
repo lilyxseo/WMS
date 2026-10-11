@@ -32,7 +32,7 @@ test('endpoint normalizes dates before pagination while applying non-date filter
     assert.equal(new URL(dataUrl).searchParams.get('select'), 'tanggal,from_location,to_location,sku,nama_barang,qty,status,pic,keterangan,no_iseller,netsuite,keterangan_lainnya,lokasi_surat_jalan,stockout,dokumen,source_row_number');
     assert.match(dataUrl, /offset=0&limit=1000/);
     assert.match(dataUrl, /sku=ilike/);
-    assert.match(dataUrl, /or=\(sku\.ilike.*nama_barang\.ilike/);
+    assert.equal(new URL(dataUrl).searchParams.has('or'), false);
     assert.match(dataUrl, /from_location=eq\.Receiving/);
     assert.match(dataUrl, /to_location=eq\.A-1/);
     assert.doesNotMatch(dataUrl, /tanggal=(?:gte|lte)/);
@@ -59,12 +59,12 @@ test('default page scope includes only Barang Masuk and Movement in rows, totals
     const response = await handleBarangMasukRequest({ request: request('?q=Movement&sort=qty-desc&page=1&limit=1'), env });
     const body = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(body.total, 2);
+    assert.equal(body.total, 1);
     assert.deepEqual(body.rows.map(row => row.status), ['Movement']);
-    assert.deepEqual(body.summary, { totalRows: 2, totalQty: 7, totalSku: 2, latestDate: '2026-09-03', oldestDate: '2026-09-01', invalidDateCount: 0 });
+    assert.deepEqual(body.summary, { totalRows: 1, totalQty: 5, totalSku: 1, latestDate: '2026-09-03', oldestDate: '2026-09-03', invalidDateCount: 0 });
     const dataUrl = new URL(urls[0]);
     assert.equal(dataUrl.searchParams.get('status'), 'in.(Barang Masuk,Movement)');
-    assert.match(dataUrl.searchParams.get('or'), /nama_barang\.ilike.*movement/);
+    assert.equal(dataUrl.searchParams.has('or'), false);
   } finally { globalThis.fetch = originalFetch; }
 });
 

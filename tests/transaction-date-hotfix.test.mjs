@@ -1,7 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { normalizeTransactionDate, orderTransactionRows, transactionPage, transactionSort } from '../functions/api/_transaction-read.js';
+import { normalizeTransactionDate, orderTransactionRows, transactionPage, transactionRowMatchesSearch, transactionSort } from '../functions/api/_transaction-read.js';
+
+test('global transaction search matches every visible column and every word', () => {
+  const row = {
+    tanggal: '10/05/2026', from_location: 'Receiving', to_location: 'Rack A-12', sku: 'SKU-001',
+    nama_barang: 'Sepatu Anak', qty: 24, status: 'Barang Masuk', pic: 'Dina', keterangan: 'Kotak merah',
+    no_iseller: 'IS-900', netsuite: 'NS-42', keterangan_lainnya: 'Prioritas', lokasi_surat_jalan: 'SJ-8',
+    stockout: false, dokumen: 'https://docs.example/inbound-1', source_row_number: 99,
+  };
+  const visible = Object.keys(row).filter(key => key !== 'source_row_number');
+  for (const query of ['10/05/2026', '24', 'dina', 'kotak merah', 'IS-900', 'NS-42', 'prioritas', 'SJ-8', 'inbound-1']) {
+    assert.equal(transactionRowMatchesSearch(row, query, visible), true, query);
+  }
+  assert.equal(transactionRowMatchesSearch(row, 'sepatu rack a-12', visible), true);
+  assert.equal(transactionRowMatchesSearch(row, 'sepatu tidak-ada', visible), false);
+  assert.equal(transactionRowMatchesSearch(row, '99', visible), false, 'internal row number is not searchable');
+});
 
 test('transaction parser treats slash dates as MM/DD/YYYY and rejects malformed dates', () => {
   for (const [raw, expected] of [
