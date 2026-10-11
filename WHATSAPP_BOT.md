@@ -285,8 +285,10 @@ Inbound menulis From dan To yang diisi user, status `Barang Masuk`, PIC konfigur
 persis **`RECEIPT`**. Outbount memakai From lokasi stok, status `Barang Keluar`, PIC konfigurasi,
 dan Keterangan `STOCK OUT WHATSAPP`. Kolom bisnis tambahan tidak dikarang dari profil.
 
-Penulisan memilih baris kosong paling awal mulai baris 2 dengan A:I kosong. Baris sebagian terisi
-atau memiliki data literal pada kolom bisnis J:O/P dilewati; formula di luar A:I tetap dipertahankan.
+Penulisan memilih baris tersedia paling awal mulai baris 2 berdasarkan Tanggal (A) dan SKU (D)
+yang kosong, sama seperti movement WMS. Pembacaan memakai nilai tampilan sehingga formula
+yang menghasilkan kosong tidak menghalangi pemilihan. Isian template From/To/Status/PIC/
+Keterangan diganti dengan transaksi baru; kolom J:O/P termasuk chip/link tetap dipertahankan.
 Bot memeriksa ulang A:I baris terpilih sebelum PUT RAW pada range baris tersebut, tanpa append
 atau menyisipkan baris baru. RAW menjaga SKU nol di depan dan mencegah teks dianggap formula.
 Jika baris terlanjur diisi proses lain, transaksi ditolak. Pemeriksaan dan PUT bukan transaksi atomik

@@ -8,7 +8,7 @@ const pair = await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulu
 const privateKey = '-----BEGIN PRIVATE KEY-----\n' + Buffer.from(await crypto.subtle.exportKey('pkcs8', pair.privateKey)).toString('base64') + '\n-----END PRIVATE KEY-----';
 const item = { sku: '00123', nama_barang: 'Merlyn Green Gold', lokasi_bulky: 'A20-1', stok_akhir: 12, source_row_number: 2 };
 const user = { id: 'user-id', full_name: 'Andi', username: 'andi', email: 'andi@test.invalid', role: 'PIC Inventory', phone_number: '6281234567890' };
-function fixture({ profiles = [{ ...user }], allowlisted = true, claimFail = false, liveStock = 12, headerFail = false, writeFail = false, many = false, profileReadFail = false, auditFail = false, occupiedBeforeWrite = false, sheetRows } = {}) {
+function fixture({ profiles = [{ ...user }], allowlisted = true, claimFail = false, liveStock = 12, headerFail = false, writeFail = false, many = false, profileReadFail = false, auditFail = false, occupiedBeforeWrite = false, targetRow = [], sheetRows } = {}) {
  const env = { SUPABASE_URL: 'https://test.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'test-role', FONNTE_TOKEN: 'test', FONNTE_WEBHOOK_SECRET: 'secret', WHATSAPP_ALLOWED_NUMBERS: allowlisted ? '6281234567890' : '', GOOGLE_CLIENT_EMAIL: 'test@example.com', GOOGLE_PRIVATE_KEY: privateKey, SHEET_ID_2026: 'transactions' };
  let session; const replies = [], writes = [], queries = [], audits = [];
  const fetchFn = async (url, options = {}) => {
@@ -37,7 +37,7 @@ function fixture({ profiles = [{ ...user }], allowlisted = true, claimFail = fal
    if (options.method === 'PUT') { writes.push({ url, body: JSON.parse(options.body) }); return Response.json({}, { status: writeFail ? 500 : 200 }); }
    const decoded = decodeURIComponent(url);
    if (decoded.includes('Kartu Stock')) return Response.json({ values: [['LOKASI BULKY','SKU','NAMA BARANG','STOK AKHIR'], ['A20-1','00123','Merlyn Green Gold',String(liveStock)]] });
-   if (/!A\d+:I\d+/.test(decoded)) return Response.json({ values: occupiedBeforeWrite ? [['existing']] : [] });
+   if (/!A\d+:I\d+/.test(decoded)) return Response.json({ values: occupiedBeforeWrite ? [['existing']] : [targetRow] });
    const header = headerFail ? ['wrong'] : ['TANGGAL','FROM','TO','SKU','NAMA BARANG','QTY','STATUS','PIC','KETERANGAN'];
    return Response.json({ values: [header, ...(sheetRows || [['date','old','old','OLD','Old',1,'Barang Masuk','ABI','RECEIPT'], [], ['date','later','later','LATER','Later',1,'Barang Masuk','ABI','RECEIPT']])] });
   }
@@ -142,7 +142,7 @@ test('inbound, outbount and outbound prompts select the correct stock flow', asy
  }
 });
 
-test('first empty row selection skips partial rows and preserves formulas outside transaction columns', async () => {
+test('first empty row selection skips rows with SKU and leaves auxiliary columns untouched', async () => {
  const f = fixture({ sheetRows: [['','','','PARTIAL'], ['','','','','','','','','','=IF(A3="","",1)'], ['date','','','LATE']] });
  await preview(f, 'in'); await f.send('simpan'); assert.match(decodeURIComponent(f.writes[0].url), /!A3:I3/);
  assert.equal(f.writes[0].body.values[0][8], 'RECEIPT');
@@ -159,4 +159,27 @@ test('audit failure does not retry a transaction that already succeeded', async 
 test('bot and WMS share PIC config for inbound, outbound, inventory, picker and developer roles', () => {
  assert.equal(APP_CONFIG.PIC_BY_ROLE, PIC_BY_ROLE);
  for (const [role, expected] of [['PIC Inbound', 'ENGGAL'], ['PIC Outbound', 'EPRIL'], ['PIC Inventory', 'ABI'], ['PIC Picker', 'WINDI'], ['Developer', 'ABI']]) assert.equal(resolvePic(role), expected);
+});
+
+test('inbound uses the earliest template row even when it contains defaults, a document chip or side-column data', async () => {
+ const template = ['', 'IWT E-COM', 'MASIH DI INBOUND', '', '', '', 'Barang Masuk', 'ENGGAL', 'RECEIPT', 'metadata', '', '', '', '', 'document chip'];
+ const f = fixture({ sheetRows: [template, ['date', '', '', 'LATER']], targetRow: template.slice(0, 9) });
+ await preview(f, 'in'); await f.send('simpan');
+ assert.equal(f.writes.length, 1); assert.match(decodeURIComponent(f.writes[0].url), /!A2:I2/);
+ assert.equal(f.writes[0].body.values[0].length, 9); assert.equal(f.writes[0].body.values[0][3], '00123');
+});
+test('transaction-row selection and recheck read displayed values rather than blank-returning formulas', async () => {
+ for (const direction of ['in', 'out']) {
+  const f = fixture({ sheetRows: [[], ['date', '', '', 'LATER']] });
+  const reads = [];
+  const observed = async (url, init) => { if (url.includes('sheets.googleapis.com') && !init?.method && decodeURIComponent(url).includes(direction === 'in' ? 'Barang Masuk' : 'Barang KeIuar')) reads.push(url); return f.fetchFn(url, init); };
+  await preview(f, direction);
+  assert.equal((await handleFonnteWebhook({ request: f.request('simpan'), env: f.env }, observed)).status, 200);
+  assert.equal(reads.length, 2); assert.ok(reads.every(url => new URL(url).searchParams.get('valueRenderOption') === 'FORMATTED_VALUE'));
+  assert.match(decodeURIComponent(f.writes[0].url), /!A2:I2/);
+ }
+});
+test('a SKU added to a template row before saving aborts without overwriting it', async () => {
+ const f = fixture({ sheetRows: [[]], targetRow: ['', '', '', 'ANOTHER-SKU'] });
+ await preview(f, 'in'); assert.match(await f.send('simpan'), /Baris tujuan sudah diisi/); assert.equal(f.writes.length, 0);
 });

@@ -29,7 +29,7 @@ export async function commitStock(env, state, fetchFn) {
   const inbound = state.direction === 'in';
   const sheet = inbound ? 'Barang Masuk' : 'Barang KeIuar';
   const expected = ['TANGGAL', 'FROM', 'TO', 'SKU', 'NAMABARANG', 'QTY', 'STATUS', 'PIC', 'KETERANGAN'];
-  const destination = await read(`'${sheet}'!A:${inbound ? 'O' : 'P'}`, 'FORMULA');
+  const destination = await read(`'${sheet}'!A:I`, 'FORMATTED_VALUE');
   const destinationHeaders = destination[0] || [];
   if (expected.some((name, i) => String(destinationHeaders[i] || '').toUpperCase().replace(/\s/g, '') !== name)) return 'Kolom transaksi tidak sesuai WMS. Stock in/out tidak disimpan.';
   const dates = movementDates(new Date(), env.BUSINESS_TIME_ZONE || 'Asia/Jakarta');
@@ -37,13 +37,15 @@ export async function commitStock(env, state, fetchFn) {
   const from = inbound ? state.from : state.location, to = inbound ? state.to : '';
   const keterangan = inbound ? 'RECEIPT' : 'STOCK OUT WHATSAPP';
   const values = [dates.sheetDate, from, to, state.row.sku, state.row.nama_barang, state.qty, status, state.pic, keterangan];
-  // Never overwrite a partially populated transaction. Formulas outside A:I are preserved.
-  const empty = row => row.slice(0, 9).every(value => normalizeText(value) === '') && row.slice(9).every(value => normalizeText(value) === '' || String(value).startsWith('='));
+  // Match WMS movement: Tanggal and SKU identify occupied transaction rows.
+  // Use displayed values so formulas returning blank do not make template rows occupied.
+  // Only A:I is written; auxiliary columns, chips and links remain untouched.
+  const empty = row => normalizeText(row[0]) === '' && normalizeText(row[3]) === '';
   const emptyIndex = destination.findIndex((row, index) => index > 0 && empty(row || []));
   const rowNumber = emptyIndex >= 0 ? emptyIndex + 1 : Math.max(2, destination.length + 1);
   const range = `'${sheet}'!A${rowNumber}:I${rowNumber}`;
   const current = await readTransactionRow({ id: env.SHEET_ID_2026, sheet, rowNumber, label: 'SHEET_ID_2026', headers, fetchFn });
-  if (current[0]?.some(value => normalizeText(value) !== '')) return 'Baris tujuan sudah diisi oleh transaksi lain. Transaksi tidak disimpan. Mulai ulang setelah memeriksa WMS.';
+  if (!empty(current[0] || [])) return 'Baris tujuan sudah diisi oleh transaksi lain. Transaksi tidak disimpan. Mulai ulang setelah memeriksa WMS.';
   const response = await fetchFn(`${base}/values/${encodeURIComponent(range)}?valueInputOption=RAW`, { method: 'PUT', headers, body: JSON.stringify({ values: [values] }), signal: AbortSignal.timeout(15000) });
   if (!response.ok) throw await googleResponseError(response, true);
   return { saved: true, rowNumber, from, to, keterangan, reply: `✅ *${inbound ? 'Inbound' : 'Outbount'} tersimpan*\nSKU: ${displayText(state.row.sku)}\nBarang: ${displayText(state.row.nama_barang)}\nFrom: ${displayText(from)}${inbound ? `\nTo: ${displayText(to)}` : ''}\nQty: ${state.qty}\nPIC: ${displayText(state.pic)}\nTanggal: ${dates.date}\n\nSinkronkan WMS untuk memperbarui pencarian Supabase.\nReferensi: ${state.nonce}` };

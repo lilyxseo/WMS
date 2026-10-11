@@ -49,7 +49,7 @@ export async function readSheetValues({ id, range, label, render = 'FORMATTED_VA
 // Extend only the row capacity when the selected transaction row is outside the grid.
 export async function readTransactionRow({ id, sheet, rowNumber, label, headers, fetchFn }) {
   const range = `'${sheet}'!A${rowNumber}:I${rowNumber}`;
-  const read = () => readSheetValues({ id, range, label, render: 'FORMULA', headers, fetchFn });
+  const read = () => readSheetValues({ id, range, label, render: 'FORMATTED_VALUE', headers, fetchFn });
   try { return await read(); }
   catch (error) {
     if (!(error instanceof GoogleAccessError) || error.code !== 'SHEETS_GRID_LIMIT') throw error;
