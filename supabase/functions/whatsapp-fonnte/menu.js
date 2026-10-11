@@ -4,6 +4,7 @@ export const SEARCH_MENU = Object.freeze([
   { id: '2', command: 'masuk', title: 'Barang masuk', description: 'Cari data penerimaan berdasarkan barang, lokasi, tanggal, PIC, dokumen, atau jumlah.', example: 'masuk kabel', extra: 'masuk' },
   { id: '3', command: 'keluar', title: 'Barang keluar', description: 'Cari data pengeluaran berdasarkan barang, lokasi, tanggal, PIC, dokumen, atau jumlah.', example: 'keluar ABC123', extra: 'keluar' },
   { id: '4', command: 'edit', title: 'Edit transaksi', description: 'Cari barang masuk/keluar, pilih edit 1, lalu ikuti panduan kolom dan konfirmasi simpan. Khusus nomor editor.', example: 'edit 1', extra: 'masuk merlyn' },
+  { id: '5', command: 'movement', title: 'Movement', description: 'Pindahkan barang: cari, pilih asal, isi tujuan, jumlah dan PIC, lalu konfirmasi. Khusus nomor editor.', example: 'movement merlyn a20-1', extra: 'movement' },
 ]);
 
 export function renderMenu(entries = SEARCH_MENU) {

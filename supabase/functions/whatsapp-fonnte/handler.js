@@ -9,6 +9,7 @@ import { BOT_HELP, CommandError, parseAdvancedCommand, searchAdvancedInventory, 
 import { resolveMenu, displayText } from './menu.js';
 import { formatTransactionRow } from './transactions.js';
 import { loadSearch, saveSearch } from './sessions.js';
+import { handleMovement } from './movement.js';
 import { handleEdit, canEdit } from './edit.js';
 
 const SOURCES = [
@@ -84,7 +85,8 @@ export async function handleFonnteWebhook({ request, env }, fetchFn = fetch) {
   }
   let reply;
   try {
-    const editReply = await handleEdit(payload.message, phone(sender), env, getDatabaseConfig(env), fetchFn);
+    const movementReply = await handleMovement(payload.message, phone(sender), env, getDatabaseConfig(env), fetchFn);
+    const editReply = movementReply !== undefined ? movementReply : await handleEdit(payload.message, phone(sender), env, getDatabaseConfig(env), fetchFn);
     if (editReply !== undefined) reply = editReply;
     else {
     const answer = payload.message.trim().toLowerCase();

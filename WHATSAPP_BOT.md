@@ -220,3 +220,37 @@ Konteks edit menyimpan snapshot transaksi dan draft perubahan sementara dalam
 session yang hanya dapat diakses server. Tidak ada token/private key dalam
 session. Pencarian/navigasi tetap read-only. Jangan mengedit data produksi saat
 menjalankan tes; suite menggunakan Sheets, Supabase, dan Fonnte tiruan.
+
+## Movement melalui WhatsApp
+
+Menu `5` menampilkan panduan. Kirim `movement` atau langsung `movement merlyn a20-1`.
+Bot mencari Kartu Stok dengan stok positif, 10 hasil per halaman. Pilih nomor barang/lokasi asal;
+`lanjut` dan `sebelumnya` menavigasi hasil. Isi lokasi tujuan, jumlah, dan PIC. Bot menampilkan
+ringkasan; hanya `simpan` pada tahap konfirmasi yang menulis data. `ubah` memulai ulang draft,
+`batal` membatalkan, dan `menu` keluar ke menu utama. Draft berlaku 15 menit.
+
+Akses menggunakan `WHATSAPP_EDITOR_NUMBERS` dan tetap harus masuk `WHATSAPP_ALLOWED_NUMBERS`.
+Selain konfigurasi Google untuk edit, tambahkan **`SHEET_ID_INVENTORY`** di Supabase Secrets,
+berisi spreadsheet yang mempunyai tab `Movement`. Service account harus mempunyai akses Editor
+ke spreadsheet tersebut dan `SHEET_ID_2026`. `BUSINESS_TIME_ZONE` opsional, default `Asia/Jakarta`.
+
+Sesuai alur WMS `/api/movement/in`, bot mencatat:
+
+- `Barang Masuk` pada `SHEET_ID_2026`: tanggal M/D/YYYY, asal, tujuan, SKU, nama, qty,
+  status `Movement`, PIC, keterangan `INTERNAL STOCK TRANSFER | WA:<referensi>`.
+- `Movement` pada `SHEET_ID_INVENTORY`: tanggal YYYY-MM-DD, asal, tujuan, SKU, nama,
+  stok lokasi awal, dan stok aktual (jumlah yang dipindahkan).
+
+Bot tidak membuat Barang Keluar tambahan karena alur movement WMS saat ini menggunakan
+Barang Masuk berstatus Movement. Formula Kartu Stok tetap mengikuti WMS; jalankan sinkronisasi
+WMS agar pencarian Supabase mencerminkan transaksi baru. Bot membaca ulang Kartu Stock dari
+spreadsheet sumber dan menolak stok berubah/tidak cukup, baris SKU/lokasi ganda, lokasi asal
+sama dengan tujuan, atau susunan header yang tidak sesuai sebelum menulis.
+
+Konfirmasi memakai klaim bersyarat session (nonce + tahap confirm + belum kedaluwarsa), sehingga
+konfirmasi ganda untuk draft yang sama tidak menulis ulang. Dua spreadsheet tidak dapat ditulis
+secara atomik: bila Barang Masuk tersimpan tetapi riwayat Movement gagal, bot menyebutkan kondisi
+tersebut dan referensi untuk pemeriksaan admin. Jangan mengulang transaksi yang belum terkonfirmasi.
+Pemeriksaan stok lalu penulisan Google Sheets bukan lock stok lintas pengguna maupun aplikasi WMS;
+hindari menjalankan perpindahan bersamaan untuk SKU/lokasi yang sama. Setelah menyimpan, periksa
+sinkronisasi sebelum membuat perpindahan berikutnya pada stok yang sama.
