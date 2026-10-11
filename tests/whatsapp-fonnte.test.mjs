@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { handleFonnteWebhook, parseInventoryMessage, formatInventoryReply } from '../supabase/functions/whatsapp-fonnte/handler.js';
+import { parseAdvancedCommand } from '../supabase/functions/whatsapp-fonnte/commands.js';
 
 const env = {
   FONNTE_TOKEN: 'test-token', FONNTE_WEBHOOK_SECRET: 'test-secret',
@@ -88,4 +89,87 @@ test('Edge Function uses Supabase built-in service role when no custom key is se
     return Response.json([]);
   };
   assert.equal((await handleFonnteWebhook({ request: request({ sender: '6281234567890', message: 'sku 00123' }), env: fallbackEnv }, fetchFn)).status, 200);
+});
+
+test('combined command requires each named field and validates options', () => {
+  const command = parseAdvancedCommand('cari sku=00123; nama=kabel; lokasi=A-01; sumber=RPL; stok=ada; halaman=2');
+  assert.equal(command.page, 2);
+  assert.equal(command.source, 'RPL');
+  assert.equal(command.stock, 'ada');
+  assert.deepEqual(command.filters.map(item => item.fields), [['sku'], ['nama_barang'], ['lokasi_bulky']]);
+  assert.equal(command.filters[0].query, '00123');
+  assert.doesNotMatch(command.command, /halaman=/);
+  for (const text of ['sku ABC; halaman=0', 'sku ABC; halaman=101', 'sku ABC; sumber=unknown', 'sku ABC; stok=mungkin', 'sku ABC; salah=x', 'sku ABC; halaman=2; halaman=3', 'cari sumber=RPL']) {
+    assert.throws(() => parseAdvancedCommand(text));
+  }
+});
+
+test('combined lookup scopes source, stock, offset, and every search field', async () => {
+  let queries = 0;
+  const fetchFn = async (url, options) => {
+    if (url.endsWith('/send')) {
+      const reply = options.body.get('message');
+      assert.match(reply, /Halaman 2/);
+      assert.match(reply, /halaman=3/);
+      assert.doesNotMatch(reply, /halaman=2;/);
+      assert.match(reply, /WIB/);
+      assert.match(reply, /Sumber: RPL/);
+      return Response.json({ status: true });
+    }
+    queries++;
+    assert.match(url, /inventory_rpl\?/);
+    assert.match(url, /or=\(nama_barang\.ilike/);
+    assert.match(url, /or=\(lokasi_bulky\.ilike/);
+    assert.match(url, /stok_akhir=gt\.0/);
+    assert.match(url, /offset=3&limit=4/);
+    return Response.json(Array.from({ length: 4 }, (_, i) => ({ sku: `SKU${i}`, nama_barang: 'Kabel', lokasi_bulky: 'A-01', stok_akhir: 7, synced_at: '2026-10-11T00:00:00Z' })));
+  };
+  const response = await handleFonnteWebhook({ request: request({ sender: '6281234567890', message: 'cari nama=kabel; lokasi=A-01; sumber=RPL; stok=ada; halaman=2' }), env }, fetchFn);
+  assert.equal(response.status, 200);
+  assert.equal(queries, 1);
+});
+
+test('detail lookup matches a complete SKU and escapes wildcard characters', async () => {
+  const fetchFn = async (url, options) => {
+    if (url.endsWith('/send')) {
+      assert.match(options.body.get('message'), /tidak ditemukan/);
+      return Response.json({ status: true });
+    }
+    const query = new URL(url).searchParams;
+    assert.equal(query.get('sku'), 'ilike.00\\%\\_\\*');
+    assert.equal(query.has('or'), false);
+    return Response.json([]);
+  };
+  assert.equal((await handleFonnteWebhook({ request: request({ sender: '6281234567890', message: 'detail 00%_*' }), env }, fetchFn)).status, 200);
+});
+
+test('pagination preserves all three sources without summing or skipping rows', async () => {
+  const replies = [];
+  const fetchFn = async (url, options) => {
+    if (url.endsWith('/send')) {
+      replies.push(options.body.get('message'));
+      return Response.json({ status: true });
+    }
+    const query = new URL(url).searchParams;
+    const offset = Number(query.get('offset'));
+    return Response.json(Array.from({ length: offset ? 1 : 4 }, (_, i) => ({ sku: `ITEM${offset + i}`, nama_barang: 'Kabel', lokasi_bulky: 'A-01', stok_akhir: 2 })));
+  };
+  for (const message of ['barang kabel', 'barang kabel; halaman=2']) {
+    assert.equal((await handleFonnteWebhook({ request: request({ sender: '6281234567890', message }), env }, fetchFn)).status, 200);
+  }
+  for (const reply of replies) for (const source of ['Kartu Stock', 'RPL', 'BULKY']) assert.ok(reply.includes(`Sumber: ${source}`));
+  assert.match(replies[0], /barang kabel; halaman=2/);
+  assert.doesNotMatch(replies[0], /SKU: ITEM3/);
+  assert.match(replies[1], /SKU: ITEM3/);
+  assert.match(replies[1], /Akhir hasil/);
+  assert.doesNotMatch(replies[1], /SKU: ITEM2/);
+});
+
+test('invalid advanced commands send guidance without database access', async () => {
+  const fetchFn = async (url, options) => {
+    assert.equal(url, 'https://api.fonnte.com/send');
+    assert.match(options.body.get('message'), /Halaman harus/);
+    return Response.json({ status: true });
+  };
+  assert.equal((await handleFonnteWebhook({ request: request({ sender: '6281234567890', message: 'sku ABC; halaman=-1' }), env }, fetchFn)).status, 200);
 });

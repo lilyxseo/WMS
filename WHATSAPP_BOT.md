@@ -62,16 +62,30 @@ dan hostname proyek Supabase untuk pengembangan di lingkungan cloud.
 ## Pesan yang didukung
 
 - `sku ABC123`: cari sebagian SKU, tanpa mengubah nol di depan.
+- `detail ABC123`: cari SKU persis (tanpa membedakan kapitalisasi).
 - `barang kabel` atau `nama barang kabel`: cari nama barang.
 - `lokasi A-01`: cari lokasi.
 - `cari kabel A-01` atau teks tanpa awalan: pencarian gabungan.
+- `cari sku=ABC123; nama=kabel; lokasi=A-01; sumber=RPL; stok=ada`:
+  pencarian terstruktur. Setiap filter harus terpenuhi pada baris yang sama.
+- `barang kabel; halaman=2`: hasil berikutnya. Bot menyertakan perintah lengkap
+  yang bisa disalin untuk melanjutkan, tanpa menyimpan sesi percakapan.
+- `sumber=Kartu Stock`, `sumber=RPL`, atau `sumber=BULKY` setelah titik koma
+  membatasi sumber. `stok=ada` berarti stok > 0; `stok=kosong` berarti stok = 0;
+  default `stok=semua` turut menampilkan stok negatif jika ada.
 - `bantuan`, `help`, `menu`: petunjuk penggunaan.
 
 Pencarian tidak peka huruf besar/kecil. Semua kata harus cocok dalam field
 pencarian yang dipilih. Balasan memuat SKU, nama, lokasi, stok akhir, dan sumber,
-maksimal 10 baris. Stok per sumber ditampilkan terpisah dan tidak dijumlahkan
+maksimal 3 baris per sumber per halaman (9 baris bila semua sumber dipilih).
+Halaman 1–100 tersedia; perjelas pencarian untuk hasil yang lebih banyak.
+Stok per sumber ditampilkan terpisah dan tidak dijumlahkan
 lintas sumber. Hasil mencerminkan snapshot sinkronisasi WMS, bukan pembacaan
-langsung Google Sheets. Tidak ada pagination atau percakapan bertahap saat ini.
+langsung Google Sheets. Balasan menunjukkan waktu sinkronisasi tertua di antara
+baris hasil dalam WIB, atau menyebutkan waktu tidak tersedia. Waktu tersebut
+bukan jaminan bahwa seluruh sumber baru disinkron. Navigasi menjalankan query
+baru; hasil dapat bergeser jika database berubah di antara dua pesan.
+Perintah `lanjut`/pemilihan nomor tanpa konteks belum didukung.
 
 ## Validasi
 

@@ -5,13 +5,14 @@ function getDatabaseConfig(env) {
   return { url, key };
 }
 import { buildInventorySearchQuery, normalizeSearchQuery } from './inventory-search.js';
+import { BOT_HELP, CommandError, parseAdvancedCommand, searchAdvancedInventory, formatAdvancedReply } from './commands.js';
 
 const SOURCES = [
   ['Kartu Stock', 'inventory_kartu_stok'],
   ['RPL', 'inventory_rpl'],
   ['BULKY', 'inventory_bulky'],
 ];
-const HELP = 'Cari stok WMS dengan:\nsku ABC123\nbarang kabel\nlokasi A-01\natau: cari kabel A-01\nPencarian memakai data terakhir yang tersinkron di WMS.';
+const HELP = BOT_HELP;
 const json = (body, status = 200) => new Response(JSON.stringify(body), {
   status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
 });
@@ -78,10 +79,20 @@ export async function handleFonnteWebhook({ request, env }, fetchFn = fetch) {
   }
   let reply;
   try {
-    const search = parseInventoryMessage(payload.message);
-    reply = search ? formatInventoryReply(await searchInventory(env, search, fetchFn)) : HELP;
+    const advanced = parseAdvancedCommand(payload.message);
+    if (advanced) {
+      const result = await searchAdvancedInventory(env, advanced, fetchFn, SOURCES, getDatabaseConfig(env));
+      reply = formatAdvancedReply(result, advanced, formatInventoryReply);
+    } else {
+      const search = parseInventoryMessage(payload.message);
+      if (!search) reply = HELP;
+      else {
+        const options = { page: 1, source: '', stock: 'semua', filters: [search], command: payload.message.trim() };
+        reply = formatAdvancedReply(await searchAdvancedInventory(env, options, fetchFn, SOURCES, getDatabaseConfig(env)), options, formatInventoryReply);
+      }
+    }
   } catch (error) {
-    reply = error.message.startsWith('Pencarian ') ? error.message
+    reply = error instanceof CommandError || error.message.startsWith('Pencarian ') ? error.message
       : 'Database WMS belum dapat diakses. Silakan coba lagi nanti.';
   }
   try {
