@@ -4,7 +4,9 @@ Webhook Supabase Edge Function: `POST /functions/v1/whatsapp-fonnte`.
 Bot mencari data Supabase pada `inventory_kartu_stok`, `inventory_rpl`, dan
 `inventory_bulky`, serta transaksi `inventory_barang_masuk` dan
 `inventory_barang_keluar`, lalu mengirim balasan lewat `https://api.fonnte.com/send`.
-Tidak ada penulisan database atau sinkronisasi inventory dari webhook ini.
+Pencarian hanya membaca data. Wizard edit menulis perubahan yang dikonfirmasi
+ke Google Sheets lalu mencerminkannya ke Supabase; webhook tidak memicu
+sinkronisasi inventory seluruh sumber.
 
 ## Konfigurasi
 
