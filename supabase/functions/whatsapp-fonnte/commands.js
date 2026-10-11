@@ -1,6 +1,6 @@
 import { normalizeSearchQuery, buildInventorySearchFilters, inventorySearchGroups } from './inventory-search.js';
 import { renderMenu, displayText } from './menu.js';
-import { searchTransactions } from './transactions.js';
+import { searchTransactions, searchPageSize } from './transactions.js';
 
 export const BOT_HELP = renderMenu();
 
@@ -89,12 +89,16 @@ export async function searchAdvancedInventory(env, search, fetchFn, sources, con
 }
 
 export function formatAdvancedReply(result, search, formatRows) {
-  const previous = search.page > 1 ? '\nHalaman sebelumnya: balas sebelumnya.' : '';
-  if (!result.rows.length) return (search.page > 1 ? `🔎 *Hasil Pencarian*\nTidak ada hasil pada halaman ${search.page}.` : formatRows([]))
-    + previous + '\n\n💡 Coba kata lebih singkat atau hapus filter sumber/stok.\nKetik menu untuk panduan pencarian.';
+  const navigation = [
+    ...(search.page > 1 ? ['Sebelumnya: balas sebelumnya.'] : []),
+    ...(result.hasMore ? ['Berikutnya: balas lanjut.'] : ['✅ Halaman terakhir.']),
+  ].join('\n');
+  if (!result.rows.length) return `🔎 *Hasil Pencarian*\n*Halaman ${search.page}*\n${search.page > 1 ? 'Tidak ada hasil pada halaman ini.' : formatRows([])}`
+    + `\n\n${navigation}\nKetik menu atau kirim pencarian baru.`;
   const body = formatRows(result.rows, 15);
   const scope = search.hideZero ? 'Stok 0 disembunyikan' : `Filter stok: ${search.stock || 'semua'}`;
-  return `🔎 *Hasil Pencarian WMS*\nPencarian: ${displayText(search.command, 400)}\n${scope}\nHalaman ${search.page} • ${result.rows.length} baris ditampilkan\n\n${body}`
-    + previous + (result.hasMore ? '\n\nHalaman berikutnya: balas lanjut.' : '\n\n✅ Akhir hasil pencarian.')
-    + '\n\nKetik menu untuk pencarian lainnya.';
+  const first = (search.page - 1) * searchPageSize(search.source) + 1;
+  const last = first + result.rows.length - 1;
+  return `🔎 *Hasil Pencarian WMS*\nPencarian: ${displayText(search.command, 400)}\n${scope}\n\n*Halaman ${search.page}*\nData ${first}–${last} • ${result.rows.length} baris ditampilkan\n\n${body}`
+    + `\n\n──────────\n${navigation}\nKetik menu untuk pencarian lainnya.`;
 }

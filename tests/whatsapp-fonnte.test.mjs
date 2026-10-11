@@ -99,12 +99,13 @@ test('transaction search finds matches beyond 5000 rows and scans until actual e
 
 test('plain navigation handles both transaction directions and boundaries',async()=>{
  for(const command of ['masuk','keluar']) {
-  const h=harness({transactions:Array.from({length:7},(_,i)=>({sku:`TX${i}`,qty:2}))});
+  const pageSize=command==='masuk'?10:3;
+  const h=harness({transactions:Array.from({length:pageSize*2+1},(_,i)=>({sku:`TX${i}`,qty:2}))});
   assert.match(await send(h,command),/SKU: TX0/);
-  assert.match(await send(h,'lanjut'),/SKU: TX3/);
-  assert.match(await send(h,'lanjut'),/SKU: TX6/);
+  assert.match(await send(h,'lanjut'),new RegExp(`SKU: TX${pageSize}`));
+  assert.match(await send(h,'lanjut'),new RegExp(`SKU: TX${pageSize*2}`));
   const reads=h.reads.length;assert.match(await send(h,'lanjut'),/halaman terakhir/);assert.equal(h.reads.length,reads);
-  assert.match(await send(h,'sebelumnya'),/SKU: TX3/);assert.match(await send(h,'sebelumnya'),/SKU: TX0/);
+  assert.match(await send(h,'sebelumnya'),new RegExp(`SKU: TX${pageSize}`));assert.match(await send(h,'sebelumnya'),/SKU: TX0/);
   assert.match(await send(h,'sebelumnya'),/halaman pertama/);
  }
 });
@@ -152,4 +153,28 @@ test('comma search keeps one combined page and retains alternatives during zero-
  assert.ok(h.reads.every(url => new URL(url).searchParams.get('or') === clause));
  assert.equal(new URL(h.reads[2]).searchParams.get('offset'), '10');
  assert.equal(new URL(h.reads[2]).searchParams.has('stok_akhir'), false);
+});
+
+test('inbound browsing shows ten rows, clear data ranges and available navigation', async () => {
+ const h = harness({ transactions: Array.from({ length: 12 }, (_, index) => ({ sku: `IN-${index}`, qty: index + 1 })) });
+ const first = await send(h, 'masuk');
+ assert.match(first, /\*Halaman 1\*/); assert.match(first, /Data 1–10 • 10 baris ditampilkan/);
+ assert.match(first, /SKU: IN-9\n/); assert.doesNotMatch(first, /SKU: IN-10\n/);
+ assert.match(first, /Berikutnya: balas lanjut/); assert.doesNotMatch(first, /Sebelumnya: balas sebelumnya/);
+ assert.equal(new URL(h.reads[0]).searchParams.get('limit'), '11');
+ assert.equal(h.sessions.get('6281234567890').search.rows.length, 10);
+ const second = await send(h, 'lanjut');
+ assert.match(second, /\*Halaman 2\*/); assert.match(second, /Data 11–12 • 2 baris ditampilkan/);
+ assert.match(second, /SKU: IN-10\n/); assert.doesNotMatch(second, /SKU: IN-9\n/);
+ assert.match(second, /Sebelumnya: balas sebelumnya/); assert.match(second, /Halaman terakhir/); assert.doesNotMatch(second, /Berikutnya: balas lanjut/);
+ assert.equal(new URL(h.reads[1]).searchParams.get('offset'), '10');
+});
+test('filtered inbound pages skip ten matching rows rather than ten scanned rows', async () => {
+ const data = Array.from({ length: 12 }, (_, index) => [{ sku: `OTHER-${index}` }, { sku: `MATCH-${index}` }]).flat();
+ const fetchFn = async () => Response.json(data);
+ const query = { page: 1, filters: [{ query: 'match', fields: ['sku'] }] };
+ const first = await searchTransactions({ url: 'https://test', key: 'test' }, 'inventory_barang_masuk', 'Barang Masuk', query, fetchFn);
+ assert.equal(first.rows.length, 10); assert.equal(first.hasMore, true); assert.equal(first.rows[9].sku, 'MATCH-9');
+ const second = await searchTransactions({ url: 'https://test', key: 'test' }, 'inventory_barang_masuk', 'Barang Masuk', { ...query, page: 2 }, fetchFn);
+ assert.deepEqual(second.rows.map(row => row.sku), ['MATCH-10', 'MATCH-11']); assert.equal(second.hasMore, false);
 });

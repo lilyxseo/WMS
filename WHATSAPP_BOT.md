@@ -105,8 +105,9 @@ edit. Draft edit menyimpan nilai lama dan baru; kredensial tidak disimpan. Baris
 saat pencarian berikutnya, bukan otomatis dihapus oleh scheduler.
 
 `masuk kabel` / `keluar ABC123` mencari transaksi masing-masing. `masuk` /
-`keluar` tanpa kata menampilkan transaksi baris terbaru. Hasil tetap 3 transaksi
-per halaman. Filter transaksi mendukung nama, SKU, lokasi, tanggal, PIC, status,
+`keluar` tanpa kata menampilkan transaksi baris terbaru. Barang Masuk menampilkan 10 transaksi
+per halaman; Barang Keluar tetap 3. Hasil menampilkan nomor halaman, rentang data,
+dan perintah lanjut/sebelumnya yang tersedia. Filter transaksi mendukung nama, SKU, lokasi, tanggal, PIC, status,
 dokumen, dan jumlah. Jumlah memakai pencocokan teks; 12 bisa cocok dengan 120.
 Pencarian transaksi tidak dibatasi 5.000 baris. Database dibaca dalam batch
 1.000 baris hingga halaman dan satu hasil berikutnya ditemukan atau data habis.
