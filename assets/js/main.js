@@ -41,6 +41,8 @@ function timeoutError(){const error=new Error('Gagal memuat data');error.name='T
 async function awaitPageAuth(page){const started=performance.now();let timer;try{const headers=await Promise.race([getAuthHeaders(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(timeoutError()),PAGE_REQUEST_TIMEOUT_MS);})]);pageLog(page,'authReadyMs',Math.round(performance.now()-started));if(!headers?.Authorization)throw new Error('Sesi tidak valid');return headers;}finally{clearTimeout(timer);}}
 async function fetchPageJson(page,url,options={}){const started=performance.now(),controller=new AbortController(),external=options.signal;const abort=()=>controller.abort();external?.addEventListener('abort',abort,{once:true});const timer=setTimeout(()=>controller.abort('timeout'),PAGE_REQUEST_TIMEOUT_MS);pageLog(page,'requestStart',url.split('?')[0]);try{const {res,data}=await fetchJsonSafe(url,{...options,signal:controller.signal});pageLog(page,'responseStatus',res.status);pageLog(page,'apiMs',Math.round(performance.now()-started));return {res,data};}catch(error){const normalized=controller.signal.aborted&&!external?.aborted?timeoutError():error;pageLog(page,'error',normalized?.message||String(normalized));throw normalized;}finally{clearTimeout(timer);external?.removeEventListener('abort',abort);}}
 const BALIKAN_AUTO_CHECK_KEY="balikan_auto_check_on_scan";
+const BALIKAN_ALL_TRIP_VALUE="__all_trip__";
+const BALIKAN_ALL_TRIP_CONCURRENCY=3;
 const BALIKAN_STATE={sheets:[],sheetCache:{},sheetChecksums:{},dynamicColumnCache:{},allTripLoading:false,requestId:0,requestController:null,resetInProgress:false,resetPromise:null,lastRefreshAt:0,highlightRowNumber:null,highlightSheetName:"",sortBy:"default",autoCheckOnScan:true,exactScanSku:"",selectedSkuRowNumber:null,selectedSkuSheetName:"",selectedSkuValue:"",lastCheckedRowId:null,lastCheckedSheetName:"",lastCheckedSku:"",lastCheckedVersion:0,lastCheckedFadeTimer:null,pendingEdits:{},pendingEditMeta:{},saveStatus:{},saveTimer:null,saveInProgress:false,saveRequested:false,isRendering:false,isRefreshing:false,pendingRender:false,lastRenderedChecksum:"",lastDataChecksum:"",lastRenderedHeaderKey:"",renderTimer:null,searchDebounceTimer:null,shortcutCheckPending:false};
 const PDF_TRANSFER_STATE={header:{},items:[],warnings:[],debugRows:[],rawText:"",csvText:"",csvRows:[],detectedColumns:[],failedRows:[],logs:[],isParsing:false,isImporting:false,configLoaded:false,configAvailable:false,configError:"",importResult:null,duplicate:null,lastFileName:"",selectedFile:null};
 const ACTIVITY_LOG_STATE={page:1,pageSize:25,filters:{module:"",action:"",user:"",status:"",search:"",from:"",to:""}};
@@ -2977,8 +2979,8 @@ async function loadBalikanSheets(){
     const data=await res.json();
     if(!res.ok)throw new Error(data?.message||'Gagal memuat daftar sheet');
     BALIKAN_STATE.sheets=Array.isArray(data?.sheets)?data.sheets.filter(n=>String(n||'').toUpperCase().includes('TRIP')):[];
-    balikanSheetSelect.innerHTML='<option value="">Pilih sheet TRIP</option>'+BALIKAN_STATE.sheets.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
-    if(window.currentTripSheet&&BALIKAN_STATE.sheets.includes(window.currentTripSheet))balikanSheetSelect.value=window.currentTripSheet;
+    balikanSheetSelect.innerHTML='<option value="">Pilih sheet TRIP</option><option value="'+BALIKAN_ALL_TRIP_VALUE+'">Semua Sheet TRIP</option>'+BALIKAN_STATE.sheets.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    if(window.currentTripSheet&&(window.currentTripSheet===BALIKAN_ALL_TRIP_VALUE||BALIKAN_STATE.sheets.includes(window.currentTripSheet)))balikanSheetSelect.value=window.currentTripSheet;
     if(!window.currentTripSheet){
       setBalikanDisplayRows([],[]);
       balikanSummary.textContent='Pilih satu sheet TRIP untuk mulai.';
@@ -2993,6 +2995,25 @@ async function loadBalikanSheets(){
 function tagBalikanRows(rows=[],sheetName=""){return (Array.isArray(rows)?rows:[]).map(row=>({...row,sheetName:String(row?.sheetName||sheetName||'').trim()}));}
 function getBalikanActiveSheetName(row=null){return String(row?.sheetName||window.currentTripSheet||'').trim();}
 async function fetchBalikanSheetRows(sheetName,{force=false,signal}={}){const sheet=String(sheetName||'').trim();if(!sheet)return {rows:[],dynamicColumns:[]};const cache=getBalikanRowsCache(sheet);if(cache&&!force){const rows=tagBalikanRows(cache.rows,sheet);BALIKAN_STATE.sheetCache[sheet]=rows;BALIKAN_STATE.dynamicColumnCache[sheet]=Array.isArray(cache.dynamicColumns)?cache.dynamicColumns:[];BALIKAN_STATE.sheetChecksums[sheet]=cache.checksum||checksumBalikanRows(rows,BALIKAN_STATE.dynamicColumnCache[sheet]);return {rows,dynamicColumns:BALIKAN_STATE.dynamicColumnCache[sheet],fromCache:true};}const res=await fetch(`/api/balikan-store?sheetName=${encodeURIComponent(sheet)}`,{cache:'no-store',signal});const data=await res.json();if(!res.ok)throw new Error(data?.message||`Gagal memuat data ${sheet}`);const rows=tagBalikanRows(Array.isArray(data?.rows)?data.rows:[],sheet);const dynamicColumns=Array.isArray(data?.dynamicColumns)?data.dynamicColumns:[];const checksum=checksumBalikanRows(rows,dynamicColumns);BALIKAN_STATE.sheetCache[sheet]=rows;BALIKAN_STATE.dynamicColumnCache[sheet]=dynamicColumns;BALIKAN_STATE.sheetChecksums[sheet]=checksum;setBalikanRowsCache(sheet,{rows,dynamicColumns,checksum,updatedAt:Date.now()});return {rows,dynamicColumns,fromCache:false};}
+async function fetchAllBalikanTripRows({force=false,signal,onProgress}={}){
+  const sheets=[...BALIKAN_STATE.sheets],results=new Array(sheets.length),failures=[];
+  let cursor=0,completed=0;
+  async function worker(){
+    while(cursor<sheets.length){
+      if(signal?.aborted)throw new DOMException('Aborted','AbortError');
+      const index=cursor++,sheet=sheets[index];
+      try{results[index]=await fetchBalikanSheetRows(sheet,{force,signal});}
+      catch(error){if(error?.name==='AbortError')throw error;failures.push({sheet,error});}
+      completed++;onProgress?.(completed,sheets.length,sheet);
+    }
+  }
+  await Promise.all(Array.from({length:Math.min(BALIKAN_ALL_TRIP_CONCURRENCY,sheets.length)},()=>worker()));
+  const loaded=results.filter(Boolean);
+  if(!loaded.length&&failures.length)throw failures[0].error;
+  const dynamicByKey=new Map();
+  loaded.forEach(result=>(result.dynamicColumns||[]).forEach(column=>{if(!dynamicByKey.has(column.key))dynamicByKey.set(column.key,column);}));
+  return {rows:loaded.flatMap(result=>result.rows||[]),dynamicColumns:[...dynamicByKey.values()],failures};
+}
 function setBalikanDisplayRows(rows=[],dynamicColumns=[]){window.BALIKAN_ROWS=tagBalikanRows(rows);window.BALIKAN_DYNAMIC_COLUMNS=Array.isArray(dynamicColumns)?dynamicColumns:[];BALIKAN_STATE.lastDataChecksum=checksumBalikanRows(window.BALIKAN_ROWS,window.BALIKAN_DYNAMIC_COLUMNS);BALIKAN_STATE.lastRefreshAt=Date.now();setCacheSafe(MODULE_CACHE_KEYS.balikanStore,window.BALIKAN_ROWS);applyPendingBalikanEditsToRows();renderBalikanTable(true);}
 async function selectBalikanSheet(sheetName){
   const sheet=String(sheetName||'').trim();
@@ -3021,13 +3042,19 @@ async function loadBalikanRows(options={}){
   BALIKAN_STATE.isRefreshing=true;
   balikanSheetSelect?.classList.add('is-loading');
   if(balikanSheetSelect)balikanSheetSelect.disabled=true;
-  if(!background){balikanSummary.textContent=`Memuat ${requestedSheet}...`;balikanTable.innerHTML='<div class="balikan-loading"><span class="btn-spinner-inline"></span> Mengambil data sheet...</div>';}
+  const isAllTrip=requestedSheet===BALIKAN_ALL_TRIP_VALUE;
+  BALIKAN_STATE.allTripLoading=isAllTrip;
+  if(!background){balikanSummary.textContent=isAllTrip?'Menyiapkan semua sheet TRIP...':`Memuat ${requestedSheet}...`;balikanTable.innerHTML='<div class="balikan-loading"><span class="btn-spinner-inline"></span> Mengambil data sheet...</div>';}
   try{
     if(balikanSortSelect)balikanSortSelect.value=BALIKAN_STATE.sortBy||'default';
     syncBalikanAutoCheckToggle();
-    const {rows,dynamicColumns}=await fetchBalikanSheetRows(requestedSheet,{force,signal:controller.signal});
+    const result=isAllTrip
+      ?await fetchAllBalikanTripRows({force,signal:controller.signal,onProgress:(done,total)=>{if(!background&&requestId===BALIKAN_STATE.requestId)balikanSummary.textContent=`Memuat semua sheet TRIP ${done}/${total}...`;}})
+      :await fetchBalikanSheetRows(requestedSheet,{force,signal:controller.signal});
+    const {rows,dynamicColumns}=result;
     if(requestId!==BALIKAN_STATE.requestId||requestedSheet!==window.currentTripSheet)return {skipped:true,reason:'stale-request'};
     setBalikanDisplayRows(rows,dynamicColumns);
+    if(isAllTrip&&result.failures?.length)toast(`${result.failures.length} sheet gagal dimuat. Data sheet lain tetap ditampilkan.`,'warning');
     return rows;
   }catch(err){
     if(err?.name==='AbortError'||requestId!==BALIKAN_STATE.requestId)return {skipped:true,reason:'aborted'};
@@ -3035,7 +3062,7 @@ async function loadBalikanRows(options={}){
     if(throwOnError)throw err;
     return {error:err};
   }finally{
-    if(requestId===BALIKAN_STATE.requestId){BALIKAN_STATE.isRefreshing=false;BALIKAN_STATE.requestController=null;balikanSheetSelect?.classList.remove('is-loading');if(balikanSheetSelect)balikanSheetSelect.disabled=false;}
+    if(requestId===BALIKAN_STATE.requestId){BALIKAN_STATE.isRefreshing=false;BALIKAN_STATE.allTripLoading=false;BALIKAN_STATE.requestController=null;balikanSheetSelect?.classList.remove('is-loading');if(balikanSheetSelect)balikanSheetSelect.disabled=false;}
   }
 }
 

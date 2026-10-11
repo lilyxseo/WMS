@@ -5,10 +5,19 @@ import { readFile } from 'node:fs/promises';
 const source = await readFile(new URL('../assets/js/main.js', import.meta.url), 'utf8');
 const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 
-test('Balikan Store waits for an explicit sheet choice instead of loading every TRIP sheet', () => {
+test('Balikan Store offers an explicit all-TRIP option without eagerly loading it', () => {
   assert.match(source, /Pilih satu sheet TRIP untuk mulai/);
-  assert.doesNotMatch(source, /loadAllBalikanTripRows/);
+  assert.match(source, /BALIKAN_ALL_TRIP_VALUE="__all_trip__"/);
+  assert.match(source, /Semua Sheet TRIP/);
+  assert.match(source, /requestedSheet===BALIKAN_ALL_TRIP_VALUE/);
   assert.match(source, /reason:'sheet-required'/);
+});
+
+test('all-TRIP loading is bounded, progressive, cached per sheet, and tolerates partial failure', () => {
+  assert.match(source, /BALIKAN_ALL_TRIP_CONCURRENCY=3/);
+  assert.match(source, /fetchBalikanSheetRows\(sheet,\{force,signal\}\)/);
+  assert.match(source, /onProgress\?\.\(completed,sheets\.length,sheet\)/);
+  assert.match(source, /result\.failures\?\.length/);
 });
 
 test('stale sheet requests cannot replace the currently selected sheet', () => {
@@ -17,8 +26,8 @@ test('stale sheet requests cannot replace the currently selected sheet', () => {
   assert.match(source, /signal:controller\.signal/);
 });
 
-test('sheet picker provides a labelled, focused single-sheet UI', () => {
+test('sheet picker explains single-sheet and all-sheet modes', () => {
   assert.match(html, /class="balikan-sheet-field"/);
-  assert.match(html, /aria-label="Pilih satu sheet TRIP"/);
-  assert.match(html, /Pilih satu sheet agar data dimuat lebih cepat/);
+  assert.match(html, /aria-label="Pilih sheet TRIP"/);
+  assert.match(html, /Pilih satu sheet untuk akses cepat, atau tampilkan semua sheet TRIP/);
 });
