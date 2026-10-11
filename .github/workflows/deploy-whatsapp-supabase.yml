@@ -1,0 +1,66 @@
+name: Deploy WhatsApp bot to Supabase
+
+on:
+  push:
+    branches: [main, work]
+    paths:
+      - 'supabase/functions/whatsapp-fonnte/**'
+      - 'supabase/config.toml'
+      - 'tests/**'
+      - '.github/workflows/deploy-whatsapp-supabase.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-whatsapp-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/work'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_PROJECT_REF: udullprykzdskrxmbbkj
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: '2.9.6'
+      - name: Test repository
+        run: node --test tests/*.test.mjs
+      - name: Check Edge Function
+        run: deno check supabase/functions/whatsapp-fonnte/index.ts
+      - uses: supabase/setup-cli@v1
+        with:
+          version: '2.120.0'
+      - name: Deploy Edge Function
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo 'Add SUPABASE_ACCESS_TOKEN in GitHub repository Settings > Secrets and variables > Actions.'
+            exit 1
+          fi
+          supabase functions deploy whatsapp-fonnte --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
+      - name: Verify deployed webhook
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          const url = `https://${process.env.SUPABASE_PROJECT_REF}.supabase.co/functions/v1/whatsapp-fonnte`;
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+            signal: AbortSignal.timeout(30000),
+          });
+          assert.equal(response.status, 401, `Expected configured webhook to reject missing secret with 401; received ${response.status}. Check function deployment and bot secrets in Supabase.`);
+          assert.deepEqual(await response.json(), { success: false });
+          console.log('Deployed webhook is configured and rejects unauthenticated requests.');
+          JS

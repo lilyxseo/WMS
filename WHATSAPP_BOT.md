@@ -100,4 +100,31 @@ Fonnte tidak dapat diakses dari lingkungan onboarding (HTTP 403); pastikan
 payload webhook perangkat memuat `sender` dan `message`, serta API pengiriman
 mengembalikan JSON `status: true`. Callback duplikat dapat menghasilkan balasan
 duplikat; idempotensi lintas request dan pembatasan laju belum diterapkan.
-Deploy ke Supabase dan pengaturan webhook Fonnte belum dilakukan otomatis.
+Pengaturan webhook Fonnte dilakukan melalui dashboard Fonnte.
+
+## Deploy otomatis dari GitHub
+
+Workflow `.github/workflows/deploy-whatsapp-supabase.yml` men-deploy fungsi
+`whatsapp-fonnte` ke proyek WMS `udullprykzdskrxmbbkj` ketika perubahan fungsi,
+konfigurasi Supabase, tes, atau workflow di-push ke branch `work` atau `main`.
+Kedua branch menargetkan proyek yang sama. Tombol Run workflow juga tersedia
+setelah workflow ada di default branch. Pilih `work` atau `main` saat menjalankannya.
+
+Persiapan satu kali:
+
+1. Buat personal access token di akun Supabase yang memiliki akses ke proyek WMS.
+2. Buka GitHub repositori WMS → Settings → Secrets and variables → Actions.
+3. Tambahkan repository secret `SUPABASE_ACCESS_TOKEN` dengan token tersebut.
+   Token ini berbeda dari Supabase database key maupun token Fonnte.
+4. Pastikan secrets bot sudah diatur di Supabase seperti bagian Konfigurasi.
+
+Workflow menjalankan suite tes, pemeriksaan Deno, lalu deploy lewat API Supabase
+tanpa Docker. Setelah deploy, request tanpa secret wajib ditolak dengan HTTP
+401. Pemeriksaan ini tidak mengirim pesan WhatsApp; status 503 menunjukkan
+secrets bot belum lengkap. Jika pemeriksaan terakhir gagal, kode mungkin sudah
+ter-deploy; workflow tidak otomatis melakukan rollback.
+
+Secret aplikasi tetap berada di Supabase dan tidak diubah oleh workflow.
+Workflow tidak menjalankan migrasi database. Lihat status deployment melalui
+tab Actions GitHub, workflow **Deploy WhatsApp bot to Supabase**. Konfigurasi
+workflow di Git belum membuktikan deployment berhasil; pastikan run hijau.
