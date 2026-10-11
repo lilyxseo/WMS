@@ -110,6 +110,8 @@ dapat membutuhkan lebih banyak waktu; kegagalan dibalas sebagai kegagalan,
 bukan hasil kosong. Urutan mengikuti baris sumber, bukan tanggal
 teks campuran. Jumlah transaksi tidak dijumlahkan sebagai saldo stok.
 
+Balasan tidak menampilkan kolom Dokumen (link) atau label Sumber pada kartu
+maupun ringkasan hasil. Dokumen tetap dapat dipakai sebagai kata/filter pencarian.
 Waktu sinkronisasi hasil stok ditampilkan dalam WIB. Query halaman baru bisa
 bergeser jika database berubah. Pencarian global tidak membaca RPL, BULKY,
 barang masuk, atau barang keluar. Gunakan fitur transaksi khusus untuk ledger.

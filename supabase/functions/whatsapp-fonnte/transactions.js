@@ -44,5 +44,5 @@ export async function searchTransactions(config, table, source, search, fetchFn)
 
 export function formatTransactionRow(row, index) {
   const clean = displayText;
-  return `*${index + 1}. ${clean(row.nama_barang)}*\nSKU: ${clean(row.sku)}\nTanggal: ${clean(row.tanggal)}\nAsal: ${clean(row.from_location)}\nTujuan: ${clean(row.to_location)}\nJumlah transaksi: ${clean(row.qty)}\nStatus: ${clean(row.status)}\nPIC: ${clean(row.pic)}\nKeterangan: ${clean(row.keterangan)}\nDokumen: ${clean(row.dokumen)}\nSumber: ${clean(row.source)}`;
+  return `*${index + 1}. ${clean(row.nama_barang)}*\nSKU: ${clean(row.sku)}\nTanggal: ${clean(row.tanggal)}\nAsal: ${clean(row.from_location)}\nTujuan: ${clean(row.to_location)}\nJumlah transaksi: ${clean(row.qty)}\nStatus: ${clean(row.status)}\nPIC: ${clean(row.pic)}\nKeterangan: ${clean(row.keterangan)}`;
 }

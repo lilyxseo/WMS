@@ -56,7 +56,7 @@ export function formatInventoryReply(rows, limit = 10) {
   const clean = displayText;
   const items = rows.slice(0, limit).map((row, index) =>
     /^Barang (Masuk|Keluar)$/.test(row.source) ? formatTransactionRow(row, index)
-      : `*${index + 1}. ${clean(row.nama_barang)}*\nSKU: ${clean(row.sku)}\nBarang: ${clean(row.nama_barang)}\nLokasi: ${clean(row.lokasi_bulky)}\nStok: ${clean(row.stok_akhir)}\nSumber: ${clean(row.source)}`);
+      : `*${index + 1}. ${clean(row.nama_barang)}*\nSKU: ${clean(row.sku)}\nBarang: ${clean(row.nama_barang)}\nLokasi: ${clean(row.lokasi_bulky)}\nStok: ${clean(row.stok_akhir)}`);
   return `${items.join('\n\n──────────\n\n')}`
     + (rows.length > limit ? `\n\nDitampilkan ${limit} baris pertama. Perjelas pencarian untuk hasil lainnya.` : '');
 }
