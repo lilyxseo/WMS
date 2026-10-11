@@ -16,7 +16,7 @@ import { findPhoneProfile, normalizePhone } from './profiles.js';
 import { handleMovement } from './movement.js';
 import { handleEdit, canEdit } from './edit.js';
 import { handlePdfImport } from './pdf-import.js';
-import { pdfAttachment } from './pdf-document.js';
+import { pdfAttachment, isDocumentPayload } from './pdf-document.js';
 import { handleDailySummary } from './daily-summary.js';
 import { handleScheduledSummary } from './summary-scheduler.js';
 
@@ -92,7 +92,7 @@ export async function handleFonnteWebhook({ request, env, extractPdf }, fetchFn 
   const sender = String(payload.sender || '');
   if (!/^62\d{8,13}$/.test(phone(sender)) || sender.includes('@') || payload.isGroup === true || payload.isGroup === 'true'
     || payload.fromMe === true || payload.fromMe === 'true'
-    || typeof payload.message !== 'string' && !pdfAttachment(payload)) {
+    || typeof payload.message !== 'string' && !pdfAttachment(payload) && !isDocumentPayload(payload)) {
     return json({ success: true, ignored: true });
   }
   if (typeof payload.message !== 'string') payload.message = '';
@@ -105,7 +105,7 @@ export async function handleFonnteWebhook({ request, env, extractPdf }, fetchFn 
   }
   let reply;
   try {
-    const googleReply = !pdfAttachment(payload) ? await handleGoogleCheck(payload.message, env, fetchFn) : undefined;
+    const googleReply = !pdfAttachment(payload) && !isDocumentPayload(payload) ? await handleGoogleCheck(payload.message, env, fetchFn) : undefined;
     const pdfReply = googleReply !== undefined ? googleReply : await handlePdfImport(payload, phone(sender), env, getDatabaseConfig(env), fetchFn, extractPdf || (async bytes => (await import('./pdf-runtime.js')).extractPdf(bytes)));
     const summaryReply = pdfReply !== undefined ? pdfReply : await handleDailySummary(payload.message, env, getDatabaseConfig(env), fetchFn);
     const stockReply = summaryReply !== undefined ? summaryReply : await handleStock(payload.message, phone(sender), env, getDatabaseConfig(env), fetchFn);

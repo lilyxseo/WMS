@@ -53,6 +53,34 @@ test('PDF import reads attachment without caption, previews, then atomically cre
  assert.match(await f.send('y'),/sebelumnya sudah diproses/);assert.equal(f.writes.length,1);
 });
 
+test('PDF import recognizes extensionless document URLs, MIME variants and whitespace in extension metadata',async()=>{
+ for(const payload of [
+  {url:'https://api.fonnte.com/files/opaque-token',type:'document'},
+  {url:'https://api.fonnte.com/files/opaque-token',type:'file',mimetype:'application/pdf'},
+  {url:'https://api.fonnte.com/files/opaque-token',extension:' PDF '},
+  {url:'https://api.fonnte.com/files/opaque-token'},
+  {file_url:'https://api.fonnte.com/files/opaque-token',mimeType:'application/pdf'},
+  {document:{url:'https://api.fonnte.com/files/opaque-token',fileName:'transfer.pdf'}},
+ ]) {
+  const f=fixture();assert.match(await f.send(undefined,payload),/Tinjau Import PDF/);assert.equal(f.writes.length,0);
+ }
+ assert.equal(pdfAttachment({url:'https://api.fonnte.com/files/photo',type:'image',extension:'jpg'}),undefined);
+});
+
+test('document without download URL explains Fonnte Webhook File and keeps draft ready for resend',async()=>{
+ const f=fixture();await f.send('import pdf');const nonce=f.state.nonce;
+ const reply=await f.send(undefined,{filename:'transfer.pdf',type:'document',url:''});
+ assert.match(reply,/Link PDF belum diterima/);assert.match(reply,/Webhook File/);assert.equal(f.state.nonce,nonce);assert.equal(f.state.phase,'file');assert.equal(f.writes.length,0);
+ assert.match(await f.send(undefined,{url:'https://api.fonnte.com/files/opaque-token',type:'document'}),/Tinjau Import PDF/);
+ const direct=fixture();assert.match(await direct.send(undefined,{filename:'transfer.pdf'}),/Link PDF belum diterima/);assert.equal(direct.state.phase,'file');
+ const stock=fixture();stock.state={kind:'stock',phase:'qty'};assert.match(await stock.send(undefined,{filename:'transfer.pdf'}),/Selesaikan input/);assert.equal(stock.state.phase,'qty');
+});
+
+test('plain replies while waiting for a PDF explain missing file link instead of repeating initial prompt',async()=>{
+ const f=fixture();await f.send('import pdf');const nonce=f.state.nonce;
+ assert.match(await f.send('Transfer #T-007894'),/Webhook File/);assert.equal(f.state.nonce,nonce);assert.equal(f.writes.length,0);
+});
+
 test('PDF preview supports pagination and edits to header and global item number with formula-safe strings',async()=>{
  const f=fixture({pages:transferPages({count:12})});
  assert.match(await f.send('import pdf'),/Kirim PDF/);assert.match(await f.send('',attachment),/Halaman 1\/2/);

@@ -126,6 +126,13 @@ teks campuran. Jumlah transaksi tidak dijumlahkan sebagai saldo stok.
 Ketik `import pdf`, lalu kirim PDF transfer **sebagai dokumen WhatsApp**, atau langsung
 kirim dokumen PDF. Fonnte harus meneruskan `url` dan identitas PDF (`extension=pdf`,
 nama file `.pdf`, atau MIME `application/pdf`) ke webhook. Caption boleh kosong.
+URL dokumen bertanda `type=document/file`, URL tanpa ekstensi, variasi MIME seperti
+`mimetype`, dan field link file juga dikenali; isi unduhan tetap wajib lolos pemeriksaan PDF.
+Jika bot terus meminta PDF, aktifkan **Webhook File** pada pengaturan perangkat Fonnte,
+simpan, lalu kirim ulang dokumen. Tanpa URL file, bot menjelaskan link unduhan belum
+diterima dan mempertahankan draft; tidak perlu mengetik `import pdf` lagi.
+Log `WHATSAPP_PDF_MEDIA` hanya mencatat keberadaan metadata, tanpa isi pesan, nomor,
+nama file, atau URL dokumen, untuk membantu pemeriksaan webhook.
 Role PIC/Developer dan nomor profil yang valid wajib tersedia, termasuk saat konfirmasi.
 
 Bot membaca tabel memakai PDF.js dengan pemetaan kolom yang diadaptasi dari import

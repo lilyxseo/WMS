@@ -3,7 +3,7 @@ import { requireStockProfile, ProfileError } from './profiles.js';
 import { hasGoogleCredentials } from './sheet-edit.js';
 import { GoogleAccessError } from './google-errors.js';
 import { displayText } from './menu.js';
-import { PdfError, pdfAttachment, downloadPdf, parsePdfPages, transferName, validateTransferRows } from './pdf-document.js';
+import { PdfError, pdfAttachment, isDocumentPayload, downloadPdf, parsePdfPages, transferName, validateTransferRows } from './pdf-document.js';
 import { commitPdfImport } from './sheet-pdf.js';
 
 const help = '*Import PDF*\nKirim PDF transfer sebagai dokumen WhatsApp.\nPreview diperiksa sebelum sheet baru dibuat di Inventory.\n\nKetik batal untuk keluar.';
@@ -39,14 +39,18 @@ async function audit(config, profile, state, result, fetchFn) {
 
 export async function handlePdfImport(payload, sender, env, config, fetchFn, extractPdf) {
   const input = String(payload.message || '').trim(), lower = input.toLowerCase();
-  const start = /^(?:import\s+pdf|pdf)$/i.test(input), attachment = pdfAttachment(payload);
+  const start = /^(?:import\s+pdf|pdf)$/i.test(input), document = isDocumentPayload(payload);
   let state = await loadSearch(config, sender, fetchFn);
-  if (!start && !attachment && state?.kind !== 'pdf-import') return undefined;
+  const attachment = pdfAttachment(payload, state?.kind === 'pdf-import');
+  if (!start && !attachment && !document && state?.kind !== 'pdf-import') return undefined;
+  if (attachment || document || state?.kind === 'pdf-import' && state.phase === 'file' && !start) {
+    console.info('[WHATSAPP_PDF_MEDIA]', JSON.stringify({ hasDownloadUrl: Boolean(attachment?.url), hasFilename: Boolean(attachment?.filename || payload.filename || payload.fileName), documentDetected: document, hasExtension: typeof payload.extension === 'string' && Boolean(payload.extension.trim()) }));
+  }
   if (state?.phase === 'saving') return 'Input sedang diproses atau belum terkonfirmasi. Periksa WMS sebelum mengulang.';
   // A PDF must not silently discard an unfinished stock/movement/edit transaction.
-  if ((start || attachment) && state?.kind !== 'pdf-import' && state?.phase && state.phase !== 'done') return 'Selesaikan input yang sedang berjalan atau ketik batal, lalu kirim PDF.';
-  if (!start && !attachment && state?.phase === 'done') return ['y','ulang'].includes(lower) ? 'Import sebelumnya sudah diproses atau belum terkonfirmasi. Periksa Inventory sebelum import ulang.' : undefined;
-  if (!start && !attachment && ['batal','menu'].includes(lower)) {
+  if ((start || attachment || document) && state?.kind !== 'pdf-import' && state?.phase && state.phase !== 'done') return 'Selesaikan input yang sedang berjalan atau ketik batal, lalu kirim PDF.';
+  if (!start && !attachment && !document && state?.phase === 'done') return ['y','ulang'].includes(lower) ? 'Import sebelumnya sudah diproses atau belum terkonfirmasi. Periksa Inventory sebelum import ulang.' : undefined;
+  if (!start && !attachment && !document && ['batal','menu'].includes(lower)) {
     await saveSearch(config, sender, {}, fetchFn);
     return lower === 'menu' ? undefined : 'Import PDF dibatalkan. Tidak ada sheet dibuat.';
   }
@@ -56,6 +60,10 @@ export async function handlePdfImport(payload, sender, env, config, fetchFn, ext
   if (!hasGoogleCredentials(env) || !env.SHEET_ID_INVENTORY) return 'Import PDF belum dikonfigurasi. Periksa kredensial Google dan SHEET_ID_INVENTORY.';
   if (state?.kind === 'pdf-import' && state.profileId !== profile.id && !start && !attachment) return 'Profil nomor berubah. Batalkan draft lalu kirim PDF kembali.';
   try {
+    if (document && !attachment) {
+      if (state?.kind !== 'pdf-import') await saveSearch(config, sender, { kind: 'pdf-import', phase: 'file', nonce: crypto.randomUUID(), profileId: profile.id }, fetchFn);
+      return '⚠️ *Link PDF belum diterima*\nFonnte mengirim informasi dokumen tanpa link unduhan. Aktifkan Webhook File pada pengaturan perangkat Fonnte, simpan, lalu kirim ulang PDF sebagai dokumen.\nDraft tetap tersedia; tidak perlu mengetik import pdf lagi. Tidak ada sheet dibuat.';
+    }
     if (start || attachment) {
       if (!attachment) {
         state = { kind: 'pdf-import', phase: 'file', nonce: crypto.randomUUID(), profileId: profile.id };
@@ -74,7 +82,7 @@ export async function handlePdfImport(payload, sender, env, config, fetchFn, ext
       await saveSearch(config, sender, state, fetchFn);
       return state.phase === 'number' ? `PDF terbaca: ${state.rows.length} item. Nomor transfer belum terdeteksi.\nKirim nomor transfer untuk nama sheet, misalnya #T-007894.` : pdfPreview(state);
     }
-    if (state.phase === 'file') return help;
+    if (state.phase === 'file') return '*Menunggu dokumen PDF*\nPesan ini belum memuat link file yang bisa dibaca. Jika PDF sudah dikirim, periksa Webhook File pada pengaturan perangkat Fonnte lalu kirim ulang dokumen.\nTidak perlu memulai ulang import.\n\nKetik batal untuk keluar.';
     if (state.phase === 'number') {
       state.header.transferNumber = transferName(input.replace(/^nomor\s+/i,'')); state.phase = 'confirm';
       await saveSearch(config, sender, state, fetchFn); return pdfPreview(state);

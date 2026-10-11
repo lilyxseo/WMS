@@ -2,12 +2,30 @@ import { groupPdfItemsByRows, pdfRowsToCsvRows, textRowsToTransferCsvRows, parse
 
 export class PdfError extends Error {}
 export const MAX_PDF_BYTES = 8 * 1024 * 1024;
-export function pdfAttachment(payload) {
-  const url = typeof payload.url === 'string' ? payload.url : '';
-  const filename = String(payload.filename || '').slice(0, 200);
-  const extension = String(payload.extension || '').replace(/^\./, '').toLowerCase();
-  return url && (extension === 'pdf' || /\.pdf$/i.test(filename) || /application\/pdf/i.test(String(payload.type || payload.mime || '')) || /\.pdf(?:\?|$)/i.test(url))
-    ? { url, filename } : undefined;
+function mediaInfo(payload) {
+  const string = value => typeof value === 'string' ? value.trim() : '';
+  const nested = [payload.document, payload.file, payload.media].filter(value => value && typeof value === 'object' && !Array.isArray(value));
+  const url = [payload.url, payload.file_url, payload.fileUrl, payload.media_url, ...nested.map(value => value.url), typeof payload.file === 'string' ? payload.file : ''].map(string).find(Boolean) || '';
+  const filename = [payload.filename, payload.fileName, payload.file_name, ...nested.flatMap(value => [value.filename, value.fileName])].map(string).find(Boolean) || '';
+  const extension = string(payload.extension).replace(/^\./, '').toLowerCase();
+  const types = [payload.type, payload.mime, payload.mimetype, payload.mimeType, payload.messageType, ...nested.flatMap(value => [value.type, value.mimetype, value.mimeType])].map(string);
+  const pdf = extension === 'pdf' || /\.pdf$/i.test(filename) || types.some(value => /^application\/pdf(?:\s*;|$)/i.test(value)) || /(?:\.|%2e)pdf(?:\?|#|$)/i.test(url);
+  const document = types.some(value => /^(document|file|documentMessage)$/i.test(value)) || [payload.document, payload.file].some(value => value && typeof value === 'object' && !Array.isArray(value));
+  const other = Boolean(extension && extension !== 'pdf') || /\.(?:jpe?g|png|webp|gif|mp[34]|ogg|wav|xlsx?|docx?|zip)$/i.test(filename) || types.some(value => /^(?:image|audio|video)(?:\/|$)/i.test(value));
+  return { url, filename: filename.slice(0,200), pdf, document, other };
+}
+
+export function isDocumentPayload(payload) {
+  const media = mediaInfo(payload);
+  return media.pdf || media.document;
+}
+
+export function pdfAttachment(payload, allowUnknown = false) {
+  const media = mediaInfo(payload);
+  // Fonnte may supply a signed URL without an extension or MIME metadata.
+  // This is only a candidate: downloadPdf still validates the actual PDF bytes.
+  return media.url && (media.pdf || media.document || allowUnknown || !media.other)
+    ? { url: media.url, filename: media.filename } : undefined;
 }
 
 function attachmentUrl(value, env) {
