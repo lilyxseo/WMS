@@ -128,6 +128,11 @@ kirim dokumen PDF. Fonnte harus meneruskan `url` dan identitas PDF (`extension=p
 nama file `.pdf`, atau MIME `application/pdf`) ke webhook. Caption boleh kosong.
 URL dokumen bertanda `type=document/file`, URL tanpa ekstensi, variasi MIME seperti
 `mimetype`, dan field link file juga dikenali; isi unduhan tetap wajib lolos pemeriksaan PDF.
+Nama `.pdf` yang diteruskan sebagai teks pesan diarahkan ke import, termasuk setelah
+pencarian stok. Jika pesan hanya memuat nama file, bot menjelaskan link belum tersedia
+dan menyimpan status untuk `cek pdf`, tanpa melakukan pencarian stok atau menulis sheet.
+URL HTTPS berakhiran `.pdf` di pesan juga dapat diproses dengan pemeriksaan host yang
+sama. Pencarian eksplisit seperti `cari transfer.pdf` / `masuk transfer.pdf` tetap pencarian.
 Jika bot terus meminta PDF, kirim dokumen lalu ketik **`cek pdf`** untuk mengetahui
 apakah webhook menyertakan URL unduhan dan metadata dokumen. Pemeriksaan menyebutkan
 keberadaan link, nama file, ekstensi, dan nama field media tanpa menampilkan nilainya.

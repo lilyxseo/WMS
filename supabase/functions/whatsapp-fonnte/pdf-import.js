@@ -12,7 +12,7 @@ export function pdfDiagnostic(state) {
   const media = state?.kind === 'pdf-import' ? state.lastMedia : undefined;
   if (!media) return '*Cek PDF*\nBelum ada data lampiran untuk diperiksa, atau draft sudah kedaluwarsa. Kirim PDF sebagai dokumen, lalu ketik cek pdf.';
   const yes = value => value ? 'ada' : 'tidak ada';
-  return `*Cek PDF • Webhook Fonnte*\nLink unduhan: ${yes(media.hasDownloadUrl)}\nNama file: ${yes(media.hasFilename)}\nMetadata dokumen: ${yes(media.documentDetected)}\nEkstensi: ${yes(media.hasExtension)}\nField media: ${media.fields?.join(', ') || 'tidak ada'}\n\n`
+  return `*Cek PDF • Webhook Fonnte*\nLink unduhan: ${yes(media.hasDownloadUrl)}\nNama file: ${yes(media.hasFilename)}\nReferensi PDF pada teks: ${yes(media.pdfTextHint)}\nDokumen dikenali: ${yes(media.documentDetected)}\nEkstensi: ${yes(media.hasExtension)}\nField media: ${media.fields?.join(', ') || 'tidak ada'}\n\n`
     + (media.hasDownloadUrl ? 'Link file diterima. Jika preview belum muncul, periksa balasan error terakhir dari bot.' : 'Fonnte belum meneruskan link unduhan pada pesan ini. Nama file atau caption saja belum cukup untuk membaca PDF. Salin hasil cek ini untuk pemeriksaan integrasi Fonnte.')
     + '\nPemeriksaan ini tidak membuat atau mengubah sheet.';
 }

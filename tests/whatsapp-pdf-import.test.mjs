@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { handleFonnteWebhook } from '../supabase/functions/whatsapp-fonnte/handler.js';
-import { downloadPdf, parsePdfPages, pdfAttachment, MAX_PDF_BYTES } from '../supabase/functions/whatsapp-fonnte/pdf-document.js';
+import { downloadPdf, parsePdfPages, pdfAttachment, isDocumentPayload, MAX_PDF_BYTES } from '../supabase/functions/whatsapp-fonnte/pdf-document.js';
 import { transferPages, textItem } from './fixtures/whatsapp-pdf.mjs';
 
 function fixture(options = {}) {
@@ -81,10 +81,24 @@ test('plain replies while waiting for a PDF explain missing file link instead of
  assert.match(await f.send('Transfer #T-007894'),/cek pdf/);assert.equal(f.state.nonce,nonce);assert.equal(f.writes.length,0);
 });
 
+test('PDF filename forwarded as message never falls into stock search, even with an existing search context',async()=>{
+ for(const message of ['Transfer #T-007894.pdf','transfer.PDF','Dokumen: transfer.pdf','\u200btransfer.pdf\u200b']) {
+  const f=fixture();f.state={page:1,source:'',filters:[{query:'merlyn',fields:['sku','nama_barang']}],hasMore:false};
+  assert.match(await f.send(message),/Link PDF belum diterima/);assert.equal(f.state.kind,'pdf-import');assert.equal(f.state.phase,'file');assert.equal(f.writes.length,0);
+  const report=await f.send('cek pdf');assert.match(report,/Referensi PDF pada teks: ada/);assert.match(report,/Field media: message/);assert.match(report,/Link unduhan: tidak ada/);
+ }
+ for(const message of ['cari transfer.pdf','masuk transfer.pdf','keluar transfer.pdf','merlyn gold']) assert.equal(isDocumentPayload({message}),false);
+});
+
+test('PDF download URL forwarded as message reaches PDF preview and keeps host restrictions',async()=>{
+ const f=fixture();assert.match(await f.send('https://api.fonnte.com/files/transfer.pdf?token=opaque'),/Tinjau Import PDF/);assert.equal(f.writes.length,0);
+ const blocked=fixture();assert.match(await blocked.send('https://127.0.0.1/transfer.pdf'),/Host dokumen belum diizinkan/);assert.equal(blocked.writes.length,0);
+});
+
 test('cek pdf reports observed media flags without disclosing file names, URLs, sender or tokens',async()=>{
  const f=fixture();await f.send('import pdf');await f.send(undefined,{filename:'private-transfer.pdf',type:'document',url:'',token:'sensitive'});
  const nonce=f.state.nonce, report=await f.send('cek pdf');
- assert.match(report,/Link unduhan: tidak ada/);assert.match(report,/Nama file: ada/);assert.match(report,/Metadata dokumen: ada/);
+ assert.match(report,/Link unduhan: tidak ada/);assert.match(report,/Nama file: ada/);assert.match(report,/Dokumen dikenali: ada/);
  assert.doesNotMatch(report,/private-transfer\.pdf|sensitive|6281234567890|Webhook File/);assert.equal(f.state.nonce,nonce);assert.equal(f.writes.length,0);
  await f.send(undefined,attachment);const withLink=await f.send('cek pdf');assert.match(withLink,/Link unduhan: ada/);assert.doesNotMatch(withLink,/https:\/\/api.fonnte.com|transfer\.pdf/);assert.equal(f.state.phase,'confirm');
  const empty=fixture();assert.match(await empty.send('cek pdf'),/Belum ada data lampiran/);assert.equal(empty.state,undefined);

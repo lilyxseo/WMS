@@ -2,17 +2,32 @@ import { groupPdfItemsByRows, pdfRowsToCsvRows, textRowsToTransferCsvRows, parse
 
 export class PdfError extends Error {}
 export const MAX_PDF_BYTES = 8 * 1024 * 1024;
+function pdfTextReference(payload) {
+  const text = typeof payload.message === 'string' ? payload.message.normalize('NFKC').replace(/[\u200B-\u200D\u2060\uFEFF]/g,'').trim() : '';
+  // Explicit search commands remain searches, even when their query ends in .pdf.
+  if (/^(?:cari|sku|barang|nama|lokasi|masuk|keluar|detail|ringkasan|movement|inbound|outbound|outbount|edit|import|cek)\s/i.test(text)) return undefined;
+  if (/^https:\/\/\S+$/i.test(text)) {
+    try {
+      const url = new URL(text);
+      if (/(?:\.|%2e)pdf$/i.test(url.pathname)) return { url: text };
+    } catch { /* Not a PDF link; continue checking a filename. */ }
+    return undefined;
+  }
+  const filename = text.replace(/^(?:📄\s*)?(?:dokumen|document|file)\s*:\s*/i,'').trim();
+  return filename.length <= 200 && /^[^\r\n\/\\<>]+\.pdf$/i.test(filename) ? { filename } : undefined;
+}
 function mediaInfo(payload) {
   const string = value => typeof value === 'string' ? value.trim() : '';
+  const textReference = pdfTextReference(payload);
   const nested = [payload.document, payload.file, payload.media].filter(value => value && typeof value === 'object' && !Array.isArray(value));
-  const url = [payload.url, payload.file_url, payload.fileUrl, payload.media_url, ...nested.map(value => value.url), typeof payload.file === 'string' ? payload.file : ''].map(string).find(Boolean) || '';
-  const filename = [payload.filename, payload.fileName, payload.file_name, ...nested.flatMap(value => [value.filename, value.fileName])].map(string).find(Boolean) || '';
+  const url = [payload.url, payload.file_url, payload.fileUrl, payload.media_url, ...nested.map(value => value.url), typeof payload.file === 'string' ? payload.file : '', textReference?.url].map(string).find(Boolean) || '';
+  const filename = [payload.filename, payload.fileName, payload.file_name, ...nested.flatMap(value => [value.filename, value.fileName]), textReference?.filename].map(string).find(Boolean) || '';
   const extension = string(payload.extension).replace(/^\./, '').toLowerCase();
   const types = [payload.type, payload.mime, payload.mimetype, payload.mimeType, payload.messageType, ...nested.flatMap(value => [value.type, value.mimetype, value.mimeType])].map(string);
   const pdf = extension === 'pdf' || /\.pdf$/i.test(filename) || types.some(value => /^application\/pdf(?:\s*;|$)/i.test(value)) || /(?:\.|%2e)pdf(?:\?|#|$)/i.test(url);
   const document = types.some(value => /^(document|file|documentMessage)$/i.test(value)) || [payload.document, payload.file].some(value => value && typeof value === 'object' && !Array.isArray(value));
   const other = Boolean(extension && extension !== 'pdf') || /\.(?:jpe?g|png|webp|gif|mp[34]|ogg|wav|xlsx?|docx?|zip)$/i.test(filename) || types.some(value => /^(?:image|audio|video)(?:\/|$)/i.test(value));
-  return { url, filename: filename.slice(0,200), pdf, document, other };
+  return { url, filename: filename.slice(0,200), pdf, document, other, pdfTextHint: Boolean(textReference) };
 }
 
 export function isDocumentPayload(payload) {
@@ -33,8 +48,8 @@ export function pdfMediaStatus(payload) {
   const knownFields = ['url','file_url','fileUrl','media_url','filename','fileName','file_name','extension','type','mime','mimetype','mimeType','messageType','document','file','media'];
   return {
     receivedAt: new Date().toISOString(), hasDownloadUrl: Boolean(media.url), hasFilename: Boolean(media.filename),
-    documentDetected: media.pdf || media.document, hasExtension: typeof payload.extension === 'string' && Boolean(payload.extension.trim()),
-    fields: knownFields.filter(key => Object.hasOwn(payload,key)),
+    documentDetected: media.pdf || media.document, pdfTextHint: media.pdfTextHint, hasExtension: typeof payload.extension === 'string' && Boolean(payload.extension.trim()),
+    fields: [...knownFields.filter(key => Object.hasOwn(payload,key)), ...(media.pdfTextHint ? ['message'] : [])],
   };
 }
 
