@@ -259,8 +259,9 @@ sinkronisasi sebelum membuat perpindahan berikutnya pada stok yang sama.
 
 ## Stock in/out dengan profil nomor WhatsApp
 
-Menu `6` dan `7` menampilkan panduan. Kirim `stock in`, `stock out`, atau langsung
-`stock out merlyn a20-1`. Alias `stok in`, `stok out`, `stock-in`, dan `stock-out` juga diterima.
+Menu `6` (Inbound) dan `7` (Outbount) menampilkan panduan. Kirim `inbound`, `outbount`,
+atau langsung `outbount merlyn a20-1`. Alias `outbound`, `stock in`, `stock out`,
+`stok in`, `stok out`, `stock-in`, dan `stock-out` juga diterima.
 Alur: cari SKU/nama → pilih nomor barang → isi lokasi → qty → `simpan`.
 Balas `sama` pada tahap lokasi untuk memakai lokasi hasil pencarian. Tidak ada pertanyaan
 PIC, tanggal, status, atau keterangan. `ubah` memulai ulang draft; `batal` dan `menu` membatalkan.

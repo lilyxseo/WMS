@@ -31,6 +31,6 @@ test('webhook welcomes the verified phone profile and preserves menu features', 
  };
  const request = new Request('https://test/?secret=secret', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sender: profile.phone_number, message: 'halo' }) });
  assert.equal((await handleFonnteWebhook({ request, env }, fetchFn)).status, 200);
- assert.match(reply, /Andi!/); assert.match(reply, /Role: \*PIC Inventory\*/); assert.match(reply, /Selamat datang di \*Bot WMS\*/); assert.match(reply, /7\. Stock out/);
+ assert.match(reply, /Andi!/); assert.match(reply, /Role: \*PIC Inventory\*/); assert.match(reply, /Selamat datang di \*Bot WMS\*/); assert.match(reply, /7\. Outbount/);
  assert.equal(profileReads, 1);
 });

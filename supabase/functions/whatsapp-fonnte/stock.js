@@ -6,13 +6,15 @@ import { requireStockProfile, ProfileError } from './profiles.js';
 import { commitStock } from './sheet-stock.js';
 
 const headers = config => ({ apikey: config.key, Authorization: `Bearer ${config.key}` });
-const label = state => state.direction === 'in' ? 'Stock In' : 'Stock Out';
+const label = state => state.direction === 'in' ? 'Inbound' : 'Outbount';
 const review = state => `📦 *Tinjau ${label(state)}*\nBarang: ${displayText(state.row.nama_barang)}\nSKU: ${displayText(state.row.sku)}\nLokasi ${state.direction === 'in' ? 'tujuan' : 'asal'}: ${displayText(state.location)}\nQty: ${state.qty}\nPIC: ${displayText(state.profile.full_name)}\n\nTanggal dan status diisi otomatis saat disimpan.\nBalas simpan, ubah untuk mulai ulang, atau batal.`;
 const prompt = state => `*${label(state)}*\nKirim SKU atau nama barang. Bisa digabung lokasi.\nContoh: merlyn a20-1\n\nKetik batal untuk keluar.`;
 
 export async function handleStock(message, sender, env, config, fetchFn) {
   const input = message.trim(), lower = input.toLowerCase();
-  const start = /^(?:stock|stok)[\s-]*(in|out)(?:\s+(.+))?$/i.exec(input);
+  const alias = /^(inbound|outbount|outbound)(?:\s+(.+))?$/i.exec(input);
+  const start = alias ? [alias[0], alias[1].toLowerCase() === 'inbound' ? 'in' : 'out', alias[2]]
+    : /^(?:stock|stok)[\s-]*(in|out)(?:\s+(.+))?$/i.exec(input);
   if (!start && /^(help|bantuan|halo|hai|mulai|start)$/.test(lower)) return undefined;
   let state = await loadSearch(config, sender, fetchFn);
   const active = state?.kind === 'stock';

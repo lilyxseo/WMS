@@ -42,11 +42,11 @@ function fixture({ profiles = [{ ...user }], allowlisted = true, claimFail = fal
  const send = async message => { assert.equal((await handleFonnteWebhook({ request: request(message), env }, fetchFn)).status, 200); return replies.at(-1); };
  return { send, env, profiles, replies, writes, queries, fetchFn, request, get session() { return session; } };
 }
-async function preview(f, direction = 'out', location = 'sama') {
- assert.match(await f.send(`stock ${direction} merlyn a20-1`), /Pilih barang/);
+async function preview(f, direction = 'out', location = 'sama', command = `stock ${direction}`) {
+ assert.match(await f.send(`${command} merlyn a20-1`), /Pilih barang/);
  assert.match(await f.send('1'), /Lokasi/);
- assert.match(await f.send(location), /Qty Stock/);
- assert.match(await f.send('5'), /Tinjau Stock/);
+ assert.match(await f.send(location), /Qty (Inbound|Outbount)/);
+ assert.match(await f.send('5'), /Tinjau (Inbound|Outbount)/);
  assert.equal(f.session.phase, 'confirm'); assert.equal(f.writes.length, 0);
 }
 test('stock in/out require only item, location and quantity; use trusted profile and WMS sheet statuses', async () => {
@@ -118,4 +118,12 @@ test('phone formats preserve Indonesian identity and reject mismatched returned 
  assert.equal(normalizePhone('0812-3456-7890'), '6281234567890'); assert.equal(normalizePhone('+62 812 3456 7890'), '6281234567890');
  const config = { url: 'https://test.supabase.co', key: 'test' };
  await assert.rejects(findPhoneProfile(config, '6281234567890', async () => Response.json([{ ...user, phone_number: '62800000000' }])), /tidak cocok/);
+});
+
+test('inbound, outbount and outbound prompts select the correct stock flow', async () => {
+ for (const [command, direction] of [['inbound', 'in'], ['outbount', 'out'], ['outbound', 'out']]) {
+  const f = fixture(); await preview(f, direction, 'sama', command);
+  assert.equal(f.session.direction, direction); await f.send('simpan');
+  assert.equal(f.writes[0].body.values[0][6], direction === 'in' ? 'Barang Masuk' : 'Barang Keluar');
+ }
 });
