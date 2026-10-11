@@ -37,3 +37,30 @@ test('a failed later batch aborts the read rather than returning partial stock',
  } }), error => error.code === 'SHEETS_PERMISSION_DENIED' && error.writeAttempted === false);
  assert.equal(batches, 2);
 });
+
+test('full transaction tabs gain row capacity before rechecking the target row, without writing values', async () => {
+ const { readTransactionRow } = await import('../supabase/functions/whatsapp-fonnte/sheet-values.js');
+ const calls = [];
+ let grown = false;
+ const result = await readTransactionRow({ id: 'transactions', sheet: 'Barang Masuk', rowNumber: 101, label: 'SHEET_ID_2026', headers: {}, fetchFn: async (url, init) => {
+  calls.push({ url, method: init.method });
+  if (url.includes('?fields=')) return Response.json({ sheets: [{ properties: { sheetId: 7, title: 'Barang Masuk', gridProperties: { rowCount: 100, columnCount: 15 } } }] });
+  if (url.endsWith(':batchUpdate')) {
+   assert.deepEqual(JSON.parse(init.body).requests, [{ appendDimension: { sheetId: 7, dimension: 'ROWS', length: 1 } }]); grown = true; return Response.json({});
+  }
+  assert.match(decodeURIComponent(url), /'Barang Masuk'!A101:I101/);
+  return grown ? Response.json({ values: [] }) : Response.json({ error: { message: 'Range exceeds grid limits' } }, { status: 400 });
+ } });
+ assert.deepEqual(result, []); assert.deepEqual(calls.map(call => call.method), [undefined, undefined, 'POST', undefined]);
+});
+test('denied row expansion stops before any transaction values are written', async () => {
+ const { readTransactionRow } = await import('../supabase/functions/whatsapp-fonnte/sheet-values.js');
+ let valueReads = 0;
+ await assert.rejects(readTransactionRow({ id: 'transactions', sheet: 'Barang Masuk', rowNumber: 101, label: 'SHEET_ID_2026', headers: {}, fetchFn: async (url, init) => {
+  if (url.includes('?fields=')) return Response.json({ sheets: [{ properties: { sheetId: 7, title: 'Barang Masuk', gridProperties: { rowCount: 100, columnCount: 15 } } }] });
+  if (init.method === 'POST') return Response.json({}, { status: 403 });
+  assert.equal(init.method, undefined); valueReads++;
+  return Response.json({ error: { message: 'Range exceeds grid limits' } }, { status: 400 });
+ } }), error => error.code === 'SHEETS_PERMISSION_DENIED' && error.writeAttempted === false);
+ assert.equal(valueReads, 1);
+});

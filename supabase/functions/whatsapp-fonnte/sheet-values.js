@@ -41,7 +41,32 @@ export async function readSheetValues({ id, range, label, render = 'FORMATTED_VA
     while (result.length && result[result.length - 1].every(value => value === '' || value == null)) result.pop();
     return result;
   } catch (error) {
-    if (error instanceof GoogleAccessError) error.userMessage += `\nTahap: membaca ${tab || 'range'} (${label}).`;
+    if (error instanceof GoogleAccessError) error.userMessage += `\nTahap: membaca ${tab || 'range'} (${label}), range ${range}.`;
     throw error;
+  }
+}
+
+// Extend only the row capacity when the selected transaction row is outside the grid.
+export async function readTransactionRow({ id, sheet, rowNumber, label, headers, fetchFn }) {
+  const range = `'${sheet}'!A${rowNumber}:I${rowNumber}`;
+  const read = () => readSheetValues({ id, range, label, render: 'FORMULA', headers, fetchFn });
+  try { return await read(); }
+  catch (error) {
+    if (!(error instanceof GoogleAccessError) || error.code !== 'SHEETS_GRID_LIMIT') throw error;
+    const base = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}`;
+    const metadata = await fetchFn(`${base}?fields=sheets.properties(sheetId,title,gridProperties)`, { headers, signal: AbortSignal.timeout(15000) });
+    if (!metadata.ok) throw await googleResponseError(metadata, false, label);
+    const properties = (await metadata.json()).sheets?.find(tab => tab.properties?.title === sheet)?.properties;
+    const grid = properties?.gridProperties;
+    if (!grid || !Number.isInteger(properties.sheetId) || !Number.isInteger(grid.rowCount) || grid.rowCount < 1 || grid.columnCount < 9) throw error;
+    if (rowNumber > grid.rowCount) {
+      const response = await fetchFn(`${base}:batchUpdate`, {
+        method: 'POST', headers, signal: AbortSignal.timeout(15000),
+        body: JSON.stringify({ requests: [{ appendDimension: { sheetId: properties.sheetId, dimension: 'ROWS', length: rowNumber - grid.rowCount } }] }),
+      });
+      // No transaction values have been written at this stage.
+      if (!response.ok) throw await googleResponseError(response, false, label);
+    }
+    return await read();
   }
 }

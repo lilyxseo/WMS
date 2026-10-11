@@ -415,3 +415,9 @@ bot membaca ulang dengan batas kolom aktual dan per 1.000 baris sampai akhir gri
 Baris kosong tetap dipertahankan agar pemilihan baris transaksi tidak bergeser.
 Kegagalan salah satu batch membatalkan proses sebelum menulis; data parsial tidak digunakan.
 Error pembacaan mencantumkan tahap/tab dan nama konfigurasi spreadsheet tanpa respons mentah Google.
+
+Jika baris transaksi terpilih berada di luar kapasitas tab, bot memeriksa grid tab,
+menambah kapasitas baris yang diperlukan dengan appendDimension, kemudian membaca
+ulang baris tujuan sebelum menulis nilai. Baris yang sudah terisi tetap ditolak.
+Jika penambahan kapasitas ditolak, transaksi belum ditulis. Pesan error pembacaan
+juga menyertakan range agar batas baris dan batas kolom dapat dibedakan.

@@ -1,4 +1,4 @@
-import { readSheetValues } from './sheet-values.js';
+import { readSheetValues, readTransactionRow } from './sheet-values.js';
 import { parseKartuStockHeader, stockHeaderFailure } from './kartu-stok-header.js';
 import { readKartuStock } from './kartu-stok-source.js';
 import { GoogleAccessError, googleResponseError } from './google-errors.js';
@@ -42,7 +42,7 @@ export async function commitStock(env, state, fetchFn) {
   const emptyIndex = destination.findIndex((row, index) => index > 0 && empty(row || []));
   const rowNumber = emptyIndex >= 0 ? emptyIndex + 1 : Math.max(2, destination.length + 1);
   const range = `'${sheet}'!A${rowNumber}:I${rowNumber}`;
-  const current = await read(range, 'FORMULA');
+  const current = await readTransactionRow({ id: env.SHEET_ID_2026, sheet, rowNumber, label: 'SHEET_ID_2026', headers, fetchFn });
   if (current[0]?.some(value => normalizeText(value) !== '')) return 'Baris tujuan sudah diisi oleh transaksi lain. Transaksi tidak disimpan. Mulai ulang setelah memeriksa WMS.';
   const response = await fetchFn(`${base}/values/${encodeURIComponent(range)}?valueInputOption=RAW`, { method: 'PUT', headers, body: JSON.stringify({ values: [values] }), signal: AbortSignal.timeout(15000) });
   if (!response.ok) throw await googleResponseError(response, true);
