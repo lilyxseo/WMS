@@ -1,0 +1,69 @@
+name: Deploy application Gmail authentication
+on:
+  push:
+    branches: [main, fix/gmail-crud-main]
+    paths:
+      - 'functions/api/**'
+      - 'supabase/functions/app-google-auth/**'
+      - 'supabase/config.toml'
+      - 'tests/**'
+      - '.github/workflows/deploy-app-google-auth.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: supabase-application-gmail-auth
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_PROJECT_REF: udullprykzdskrxmbbkj
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: '2.9.6'
+      - name: Test application
+        run: node --test tests/*.test.mjs
+      - name: Check Gmail Edge Function
+        run: deno check supabase/functions/app-google-auth/index.ts
+      - uses: supabase/setup-cli@v1
+        with:
+          version: '2.120.0'
+      - name: Deploy Gmail authentication
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase functions deploy app-google-auth --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
+      - name: Verify authentication without spreadsheet writes
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          const ensure = (condition, message) => { if (!condition) console.error(`::error::${message}`); assert.ok(condition, message); };
+          const project = process.env.SUPABASE_PROJECT_REF;
+          const url = `https://${project}.supabase.co/functions/v1/app-google-auth`;
+          const denied = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(30000) });
+          ensure(denied.status === 401, 'Anonymous callers must not obtain a Gmail token');
+          const keysResponse = await fetch(`https://api.supabase.com/v1/projects/${project}/api-keys?reveal=true`, {
+            headers: { Authorization: `Bearer ${process.env.SUPABASE_ACCESS_TOKEN}` }, signal: AbortSignal.timeout(30000),
+          });
+          ensure(keysResponse.ok, `Server credential lookup failed: HTTP ${keysResponse.status}`);
+          const keys = await keysResponse.json();
+          const key = keys.find(item => String(item.api_key || '').startsWith('sb_secret_'))?.api_key
+            || keys.find(item => item.name === 'service_role')?.api_key;
+          ensure(key, 'Server credential unavailable for authentication check');
+          const response = await fetch(url, {
+            method: 'POST', headers: { apikey: key, 'X-WMS-Server-Key': key }, signal: AbortSignal.timeout(30000),
+          });
+          const payload = await response.json();
+          const code = ['OAUTH_CONFIG_MISSING', 'OAUTH_AUTHENTICATION_FAILED', 'SERVER_KEY_REJECTED', 'SERVER_KEY_INVALID'].includes(payload.code) ? payload.code : 'NO_CODE';
+          ensure(response.status === 200, `Gmail authentication failed: HTTP ${response.status}, ${code}`);
+          ensure(typeof payload.access_token === 'string' && payload.access_token, 'Google access token missing');
+          console.log('Gmail OAuth verified; no spreadsheet writes performed.');
+          JS

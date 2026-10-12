@@ -1,7 +1,6 @@
+import { getGoogleAccessToken } from './_google-auth.js';
 import { requirePicRole } from './_authz.js';
 
-const TOKEN_URL = 'https://oauth2.googleapis.com/token';
-const SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
 const CONFIG_ERROR = 'Spreadsheet Import PDF belum dikonfigurasi.';
 const BATCH_SIZE = 500;
 let importInProgress = false;
@@ -28,9 +27,8 @@ export async function resolveImportPdfSpreadsheetId(env = {}) {
 }
 
 function devLog(env, message) { const mode = clean(env.CONTEXT || env.NETLIFY_CONTEXT || env.NODE_ENV).toLowerCase(); if (['dev', 'development', 'local'].includes(mode)) console.info(`[ImportPDF] ${message}`); }
-function base64Url(input) { const bytes = new TextEncoder().encode(typeof input === 'string' ? input : JSON.stringify(input)); let binary = ''; bytes.forEach(b => binary += String.fromCharCode(b)); return btoa(binary).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_'); }
-function pemToArrayBuffer(pem) { const raw = clean(pem).replace(/\\n/g, '\n').replace('-----BEGIN PRIVATE KEY-----', '').replace('-----END PRIVATE KEY-----', '').replace(/\s/g, ''); const binary = atob(raw); const bytes = new Uint8Array(binary.length); for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i); return bytes.buffer; }
-async function createAccessToken(env) { const now = Math.floor(Date.now() / 1000); const unsignedJwt = `${base64Url({ alg: 'RS256', typ: 'JWT' })}.${base64Url({ iss: env.GOOGLE_CLIENT_EMAIL, scope: SCOPE, aud: TOKEN_URL, exp: now + 3600, iat: now })}`; const key = await crypto.subtle.importKey('pkcs8', pemToArrayBuffer(env.GOOGLE_PRIVATE_KEY), { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']); const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(unsignedJwt)); let sig = ''; new Uint8Array(signature).forEach(b => sig += String.fromCharCode(b)); const jwt = `${unsignedJwt}.${btoa(sig).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')}`; const res = await fetch(TOKEN_URL, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: jwt }) }); const data = await res.json(); if (!res.ok || !data.access_token) throw Object.assign(new Error(data.error_description || data.error || 'Gagal membuat access token'), { status: res.status }); return data.access_token; }
+
+async function createAccessToken(env) { return getGoogleAccessToken(env); }
 
 async function googleRequest(url, access, options = {}) { const res = await fetch(url, { ...options, headers: { Authorization: `Bearer ${access}`, ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers } }); const data = await res.json().catch(() => ({})); if (!res.ok) throw Object.assign(new Error(data.error?.message || 'Google Sheets request gagal'), { status: res.status }); return data; }
 async function loadSheets(access, spreadsheetId) { const data = await googleRequest(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties`, access); return (data.sheets || []).map(s => s.properties); }

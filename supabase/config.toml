@@ -3,3 +3,7 @@ project_id = "wms"
 # Fonnte cannot send a Supabase user JWT. The handler validates its own secret.
 [functions.whatsapp-fonnte]
 verify_jwt = false
+
+# Server-only Gmail OAuth bridge for application CRUD.
+[functions.app-google-auth]
+verify_jwt = false
