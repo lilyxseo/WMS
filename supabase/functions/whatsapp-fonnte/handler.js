@@ -1,21 +1,33 @@
+import { handleGoogleCheck } from './google-check.js';
 function getDatabaseConfig(env) {
   const url = String(env.SUPABASE_URL || '').replace(/\/$/, '');
   const key = env.WMS_SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error('Missing database configuration');
   return { url, key };
 }
-import { buildInventorySearchQuery, normalizeSearchQuery } from './inventory-search.js';
+import { buildInventorySearchQuery, normalizeSearchQuery, inventorySearchGroups } from './inventory-search.js';
+import { BOT_HELP, CommandError, parseAdvancedCommand, searchAdvancedInventory, formatAdvancedReply } from './commands.js';
+import { resolveMenu, displayText, isMainMenu } from './menu.js';
+import { formatTransactionRow } from './transactions.js';
+import { loadSearch, saveSearch } from './sessions.js';
+import { renderWelcome } from './welcome.js';
+import { handleStock } from './stock.js';
+import { findPhoneProfile, normalizePhone } from './profiles.js';
+import { handleMovement } from './movement.js';
+import { handleEdit, canEdit } from './edit.js';
+import { handleDailySummary } from './daily-summary.js';
+import { handleScheduledSummary } from './summary-scheduler.js';
 
 const SOURCES = [
   ['Kartu Stock', 'inventory_kartu_stok'],
-  ['RPL', 'inventory_rpl'],
-  ['BULKY', 'inventory_bulky'],
+  ['Barang Masuk', 'inventory_barang_masuk'],
+  ['Barang Keluar', 'inventory_barang_keluar'],
 ];
-const HELP = 'Cari stok WMS dengan:\nsku ABC123\nbarang kabel\nlokasi A-01\natau: cari kabel A-01\nPencarian memakai data terakhir yang tersinkron di WMS.';
+const HELP = BOT_HELP;
 const json = (body, status = 200) => new Response(JSON.stringify(body), {
   status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
 });
-const phone = value => String(value ?? '').replace(/\D/g, '').replace(/^0/, '62');
+const phone = normalizePhone;
 
 export function parseInventoryMessage(message) {
   const input = String(message ?? '').trim();
@@ -24,7 +36,7 @@ export function parseInventoryMessage(message) {
   const match = /^(sku|barang|nama(?:\s+barang)?|lokasi|cari)\s*[:=]?\s+(.+)$/i.exec(input);
   const mode = match ? match[1].toLowerCase() : 'cari';
   const query = normalizeSearchQuery(match ? match[2] : input);
-  if (query.length < 2) throw new Error('Pencarian minimal 2 karakter.');
+  if (!inventorySearchGroups(query).length || inventorySearchGroups(query).some(part => part.length < 2)) throw new Error('Setiap pencarian minimal 2 karakter. Pisahkan pencarian dengan koma.');
   const fields = mode === 'sku' ? ['sku'] : mode === 'lokasi' ? ['lokasi_bulky']
     : mode === 'barang' || mode.startsWith('nama') ? ['nama_barang']
       : ['sku', 'nama_barang', 'lokasi_bulky'];
@@ -34,7 +46,7 @@ export function parseInventoryMessage(message) {
 export async function searchInventory(env, search, fetchFn = fetch) {
   const config = getDatabaseConfig(env);
   const filter = buildInventorySearchQuery(search.query, search.fields);
-  const batches = await Promise.all(SOURCES.map(async ([source, table]) => {
+  const batches = await Promise.all(SOURCES.slice(0, 1).map(async ([source, table]) => {
     const response = await fetchFn(`${config.url}/rest/v1/${table}?select=sku,nama_barang,lokasi_bulky,stok_akhir${filter}&order=sku.asc,lokasi_bulky.asc,source_row_number.asc&limit=11`, {
       headers: { apikey: config.key, Authorization: `Bearer ${config.key}` },
       signal: AbortSignal.timeout(10000),
@@ -47,20 +59,25 @@ export async function searchInventory(env, search, fetchFn = fetch) {
   return batches.flat();
 }
 
-export function formatInventoryReply(rows) {
-  if (!rows.length) return 'Data stok tidak ditemukan. Coba SKU, nama barang, atau lokasi lain.';
-  const clean = value => String(value ?? '-').replace(/[\r\n]/g, ' ').slice(0, 120);
-  const items = rows.slice(0, 10).map(row =>
-    `SKU: ${clean(row.sku)}\nBarang: ${clean(row.nama_barang)}\nLokasi: ${clean(row.lokasi_bulky)}\nStok: ${clean(row.stok_akhir)}\nSumber: ${row.source}`);
-  return `Hasil stok WMS (data terakhir tersinkron):\n\n${items.join('\n\n')}`
-    + (rows.length > 10 ? '\n\nDitampilkan 10 baris pertama. Perjelas pencarian untuk hasil lainnya.' : '');
+export function formatInventoryReply(rows, limit = 10) {
+  if (!rows.length) return 'Data tidak ditemukan. Coba SKU, nama barang, lokasi, atau kata lain.';
+  const clean = displayText;
+  const items = rows.slice(0, limit).map((row, index) =>
+    /^Barang (Masuk|Keluar)$/.test(row.source) ? formatTransactionRow(row, index)
+      : `*${index + 1}. ${clean(row.nama_barang)}*\nSKU: ${clean(row.sku)}\nBarang: ${clean(row.nama_barang)}\nLokasi: ${clean(row.lokasi_bulky)}\nStok: ${clean(row.stok_akhir)}`);
+  return `${items.join('\n\n──────────\n\n')}`
+    + (rows.length > limit ? `\n\nDitampilkan ${limit} baris pertama. Perjelas pencarian untuk hasil lainnya.` : '');
 }
 
 export async function handleFonnteWebhook({ request, env }, fetchFn = fetch) {
   if (request.method !== 'POST') return json({ success: false, message: 'Method not allowed' }, 405);
+  if (request.headers.get('X-WMS-Action') === 'daily-summary') {
+    try { return await handleScheduledSummary(request, env, getDatabaseConfig(env), fetchFn); }
+    catch { return json({ success: false, message: 'Scheduled summary unavailable' }, 503); }
+  }
   const secret = String(env.FONNTE_WEBHOOK_SECRET || '');
   const allowed = String(env.WHATSAPP_ALLOWED_NUMBERS || '').split(',').map(phone).filter(Boolean);
-  if (!secret || !allowed.length || !env.FONNTE_TOKEN) return json({ success: false, message: 'Bot belum dikonfigurasi' }, 503);
+  if (!secret || !env.FONNTE_TOKEN) return json({ success: false, message: 'Bot belum dikonfigurasi' }, 503);
   const received = request.headers.get('X-Webhook-Secret') || new URL(request.url).searchParams.get('secret');
   if (received !== secret) return json({ success: false }, 401);
   let payload;
@@ -69,20 +86,95 @@ export async function handleFonnteWebhook({ request, env }, fetchFn = fetch) {
     else payload = Object.fromEntries(await request.formData());
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('Invalid payload');
   } catch { return json({ success: false, message: 'Payload tidak valid' }, 400); }
-  // Ignore groups, outbound/status callbacks and senders outside the allowlist.
+  // Ignore groups, outbound/status callbacks and invalid sender identities.
   const sender = String(payload.sender || '');
-  if (sender.includes('@') || payload.isGroup === true || payload.isGroup === 'true'
+  if (!/^62\d{8,13}$/.test(phone(sender)) || sender.includes('@') || payload.isGroup === true || payload.isGroup === 'true'
     || payload.fromMe === true || payload.fromMe === 'true'
-    || !allowed.includes(phone(sender)) || typeof payload.message !== 'string') {
+    || typeof payload.message !== 'string') {
     return json({ success: true, ignored: true });
+  }
+  if (typeof payload.message !== 'string') payload.message = '';
+  let verifiedProfile;
+  if (!allowed.includes(phone(sender))) {
+    try {
+      verifiedProfile = await findPhoneProfile(getDatabaseConfig(env), phone(sender), fetchFn);
+      if (!verifiedProfile) return json({ success: true, ignored: true });
+    } catch { return json({ success: false, message: 'Profil WhatsApp belum dapat diverifikasi' }, 503); }
   }
   let reply;
   try {
-    const search = parseInventoryMessage(payload.message);
-    reply = search ? formatInventoryReply(await searchInventory(env, search, fetchFn)) : HELP;
+    const retiredCommand = /^(?:import\s+pdf|cek\s+pdf|pdf)$/i.test(payload.message.trim());
+    const googleReply = retiredCommand ? 'Fitur import PDF di bot sudah dihapus. Ketik menu untuk fitur yang tersedia.' : await handleGoogleCheck(payload.message, env, fetchFn);
+    if (googleReply === undefined) {
+      // Retire unfinished PDF drafts so they cannot block stock or movement input.
+      const previous = await loadSearch(getDatabaseConfig(env), phone(sender), fetchFn);
+      if (previous?.kind === 'pdf-import') await saveSearch(getDatabaseConfig(env), phone(sender), {}, fetchFn);
+    }
+    const summaryReply = googleReply !== undefined ? googleReply : await handleDailySummary(payload.message, env, getDatabaseConfig(env), fetchFn);
+    const stockReply = summaryReply !== undefined ? summaryReply : await handleStock(payload.message, phone(sender), env, getDatabaseConfig(env), fetchFn);
+    const movementReply = stockReply !== undefined ? stockReply : await handleMovement(payload.message, phone(sender), env, getDatabaseConfig(env), fetchFn);
+    const editReply = movementReply !== undefined ? movementReply : await handleEdit(payload.message, phone(sender), env, getDatabaseConfig(env), fetchFn);
+    if (editReply !== undefined) reply = editReply;
+    else {
+    const answer = payload.message.trim().toLowerCase();
+    const isAnswer = ['y', 'n'].includes(answer);
+    const navigation = ['lanjut', 'berikutnya', 'sebelumnya'].includes(answer);
+    const followup = isAnswer || navigation;
+    let options;
+    if (followup) {
+      options = await loadSearch(getDatabaseConfig(env), phone(sender), fetchFn);
+      if (!options) reply = 'Pencarian sebelumnya tidak tersedia atau sudah kedaluwarsa (15 menit). Kirim pencarian baru, misalnya merlyn a20-1.';
+      else if (navigation) {
+        if (answer !== 'sebelumnya' && options.hasMore === false) {
+          reply = 'Sudah di halaman terakhir. Balas sebelumnya untuk kembali atau kirim pencarian baru.';
+          options = undefined;
+        } else if (answer === 'sebelumnya' && options.page <= 1) {
+          reply = 'Anda sudah di halaman pertama. Balas lanjut jika masih ada hasil berikutnya.';
+          options = undefined;
+        } else options = { ...options, page: options.page + (answer === 'sebelumnya' ? -1 : 1) };
+      } else if (/^Barang (Masuk|Keluar)$/.test(options.source)) {
+        reply = 'Pilihan y/n hanya untuk stok Kartu Stok. Balas lanjut atau sebelumnya untuk navigasi transaksi.';
+        options = undefined;
+      } else {
+        options = { ...options, page: 1, stock: 'semua', hideZero: answer === 'n' };
+        options.command = options.command.replace(/;\s*stok\s*=\s*[^;]+/ig, '').trim();
+        if (answer === 'y') options.command += '; stok=semua';
+      }
+    }
+    const menu = resolveMenu(payload.message);
+    const advanced = !followup && menu === undefined ? parseAdvancedCommand(payload.message) : undefined;
+    if (!followup && menu !== undefined) {
+      if (isMainMenu(payload.message)) {
+        if (!verifiedProfile) {
+          try { verifiedProfile = await findPhoneProfile(getDatabaseConfig(env), phone(sender), fetchFn); }
+          catch { /* Existing allowed numbers may keep opening the menu without a readable profile. */ }
+        }
+        reply = `${renderWelcome(verifiedProfile, new Date(), env.BUSINESS_TIME_ZONE || 'Asia/Jakarta')}\n\n${menu}`;
+      } else reply = menu;
+    }
+    else if (!followup && advanced) options = advanced;
+    else if (!followup) {
+      const search = parseInventoryMessage(payload.message);
+      if (!search) reply = HELP;
+      else {
+        options = { page: 1, source: '', stock: 'semua', hideZero: true, filters: [search], command: payload.message.trim() };
+      }
+    }
+    if (options) {
+      if (!['', 'Kartu Stock', 'Barang Masuk', 'Barang Keluar'].includes(options.source)) throw new CommandError('Pencarian global hanya memakai Kartu Stok. Gunakan masuk/keluar untuk transaksi.');
+      const result = await searchAdvancedInventory(env, options, fetchFn, SOURCES, getDatabaseConfig(env));
+      reply = formatAdvancedReply(result, options, formatInventoryReply);
+      await saveSearch(getDatabaseConfig(env), phone(sender), { ...options, hasMore: result.hasMore, rows: /^Barang (Masuk|Keluar)$/.test(options.source) ? result.rows : undefined }, fetchFn);
+      if (/^Barang (Masuk|Keluar)$/.test(options.source) && result.rows.length && canEdit(env, phone(sender))) reply += '\n\nUntuk edit, balas edit 1 sesuai nomor transaksi.';
+      if (!options.source || options.source === 'Kartu Stock') {
+        reply += '\n\n*Tampilkan stok 0? y/n*\ny = stok 0 dan stok yang masih ada\nn = sembunyikan stok 0\nPilihan berlaku untuk pencarian ini selama 15 menit.';
+      }
+    }
+    }
   } catch (error) {
-    reply = error.message.startsWith('Pencarian ') ? error.message
-      : 'Database WMS belum dapat diakses. Silakan coba lagi nanti.';
+    reply = error instanceof CommandError || error.message.startsWith('Pencarian ')
+      ? `⚠️ *Periksa perintah pencarian*\n${error.message}\n\nKetik menu untuk contoh yang tersedia.`
+      : '⚠️ *Pencarian belum tersedia*\nDatabase WMS belum dapat diakses. Silakan coba lagi nanti.';
   }
   try {
     const response = await fetchFn('https://api.fonnte.com/send', {
