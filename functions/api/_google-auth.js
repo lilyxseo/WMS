@@ -7,7 +7,7 @@ export async function getGoogleAccessToken(env, fetchFn = fetch) {
   try {
     response = await fetchFn(`${url}/functions/v1/app-google-auth`, {
       method: 'POST', headers: { apikey: key, 'X-WMS-Server-Key': key },
-      redirect: 'error', signal: AbortSignal.timeout(20000),
+      redirect: 'manual', signal: AbortSignal.timeout(20000),
     });
   } catch {
     throw new Error('Koneksi autentikasi Gmail di Supabase gagal. Tidak ada perubahan ditulis.');

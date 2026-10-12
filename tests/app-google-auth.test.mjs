@@ -55,7 +55,7 @@ test('Pages requests a Gmail token with server credentials and never falls back 
  assert.equal(await getGoogleAccessToken(appEnv, async (url, init) => {
   assert.equal(url, `${oauth.SUPABASE_URL}/functions/v1/app-google-auth`);
   assert.equal(init.headers.apikey, appEnv.SUPABASE_SECRET_KEY);
-  assert.equal(init.redirect, 'error'); return Response.json({access_token:'gmail-access'});
+  assert.equal(init.redirect, 'manual'); return Response.json({access_token:'gmail-access'});
  }), 'gmail-access');
  let calls = 0;
  await assert.rejects(getGoogleAccessToken({...appEnv, GOOGLE_CLIENT_EMAIL:'old', GOOGLE_PRIVATE_KEY:'old'}, async () => {
@@ -142,3 +142,11 @@ test('Balikan checkbox preserves its cell when Gmail authentication fails', asyn
  const response=await onRequestPatch({request:crudRequest('PATCH',{sheetName:'TRIP 1',rowNumber:12,checked:true}),env:appEnv});
  assert.equal(response.status,500);assert.equal(calls,1);assert.match(await response.text(),/Autentikasi Gmail/);
 });
+
+ test('Pages refuses redirects without forwarding the Gmail server credential', async () => {
+  let calls=0;
+  await assert.rejects(getGoogleAccessToken(appEnv,async (url,init)=>{
+   calls++;assert.equal(init.redirect,'manual');return new Response(null,{status:302,headers:{Location:'https://other.invalid'}});
+  }),/Autentikasi Gmail/);
+  assert.equal(calls,1);
+ });
