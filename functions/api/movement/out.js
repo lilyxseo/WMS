@@ -1,5 +1,6 @@
-import { getGoogleAccessToken } from '../_google-auth.js';
 import { requirePicRole } from '../_authz.js';
+const TOKEN_URL = "https://oauth2.googleapis.com/token";
+const SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 const SHEET_BARANG_KELUAR = "Barang KeIuar";
 const PRIMARY_SHEET_RANGE = `${SHEET_BARANG_KELUAR}!A:I`;
 const FALLBACK_SHEET_RANGE = `${SHEET_BARANG_KELUAR}!A:I`;
@@ -9,6 +10,26 @@ function json(body, status = 200) {
     status,
     headers: { "Content-Type": "application/json; charset=utf-8" },
   });
+}
+
+function base64Url(input) {
+  const text = typeof input === "string" ? input : JSON.stringify(input);
+  const bytes = new TextEncoder().encode(text);
+  let binary = "";
+  bytes.forEach((b) => (binary += String.fromCharCode(b)));
+  return btoa(binary).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+}
+
+function pemToArrayBuffer(pem) {
+  const cleanPem = String(pem || "")
+    .replace(/\\n/g, "\n")
+    .replace("-----BEGIN PRIVATE KEY-----", "")
+    .replace("-----END PRIVATE KEY-----", "")
+    .replace(/\s/g, "");
+  const binary = atob(cleanPem);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
 }
 
 function sanitize(value) {
@@ -25,7 +46,45 @@ function isPermissionError(data) {
   return text.includes("permission") || text.includes("forbidden") || text.includes("insufficient") || text.includes("caller does not have permission");
 }
 
-async function createAccessToken(env) { return getGoogleAccessToken(env); }
+async function createAccessToken(env) {
+  const now = Math.floor(Date.now() / 1000);
+  const unsignedJwt = `${base64Url({ alg: "RS256", typ: "JWT" })}.${base64Url({
+    iss: env.GOOGLE_CLIENT_EMAIL,
+    scope: SCOPE,
+    aud: TOKEN_URL,
+    exp: now + 3600,
+    iat: now,
+  })}`;
+
+  const privateKey = await crypto.subtle.importKey(
+    "pkcs8",
+    pemToArrayBuffer(env.GOOGLE_PRIVATE_KEY),
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+
+  const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", privateKey, new TextEncoder().encode(unsignedJwt));
+  let binarySignature = "";
+  new Uint8Array(signature).forEach((b) => (binarySignature += String.fromCharCode(b)));
+
+  const jwt = `${unsignedJwt}.${btoa(binarySignature).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_")}`;
+
+  const tokenRes = await fetch(TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion: jwt,
+    }),
+  });
+
+  const tokenData = await tokenRes.json();
+  if (!tokenRes.ok || !tokenData.access_token) {
+    throw new Error(tokenData.error_description || tokenData.error || "Gagal membuat access token");
+  }
+  return tokenData.access_token;
+}
 
 async function readSheetValues({ accessToken, sheetId, range }) {
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}`;
@@ -77,6 +136,7 @@ export async function onRequestPost({ request, env }) {
   try {
     const spreadsheetId = sanitize(env.SHEET_ID_2026);
     if (!spreadsheetId) return json({ success: false, message: "SHEET_ID_2026 belum diset" }, 500);
+    if (!env.GOOGLE_CLIENT_EMAIL || !env.GOOGLE_PRIVATE_KEY) return json({ success: false, message: "Environment variable belum lengkap" }, 500);
 
     const body = await request.json();
     const sku = sanitize(body?.sku);
@@ -100,7 +160,7 @@ export async function onRequestPost({ request, env }) {
     const readResult = await readSheetValues({ accessToken, sheetId: spreadsheetId, range: PRIMARY_SHEET_RANGE });
     let { res, data } = readResult;
     if (!res.ok && isPermissionError(data)) {
-      return json({ success: false, message: "Akun Gmail OAuth belum punya akses Editor ke Spreadsheet 2026" }, 403);
+      return json({ success: false, message: "Service account belum punya akses Editor ke Spreadsheet 2026" }, 403);
     }
     if (!res.ok) return json({ success: false, message: data?.error?.message || "Gagal membaca Google Sheet", detail: data }, res.status);
 
@@ -112,7 +172,7 @@ export async function onRequestPost({ request, env }) {
     ({ res, data } = await updateSheetRow({ accessToken, sheetId: spreadsheetId, range: targetRange, values: row }));
 
     if (!res.ok && isPermissionError(data)) {
-      return json({ success: false, message: "Akun Gmail OAuth belum punya akses Editor ke Spreadsheet 2026" }, 403);
+      return json({ success: false, message: "Service account belum punya akses Editor ke Spreadsheet 2026" }, 403);
     }
     if (!res.ok) return json({ success: false, message: data?.error?.message || "Gagal update Google Sheet", detail: data }, res.status);
     return json({ success: true });
@@ -131,17 +191,18 @@ export async function onRequestGet({ request, env }) {
 
     const spreadsheetId = sanitize(env.SHEET_ID_2026);
     if (!spreadsheetId) return json({ success: false, message: "SHEET_ID_2026 belum diset" }, 500);
+    if (!env.GOOGLE_CLIENT_EMAIL || !env.GOOGLE_PRIVATE_KEY) return json({ success: false, message: "Environment variable belum lengkap" }, 500);
 
     const accessToken = await createAccessToken(env);
     const metadata = await readSpreadsheetMetadata({ accessToken, sheetId: spreadsheetId });
     if (!metadata.res.ok && isPermissionError(metadata.data)) {
-      return json({ success: false, message: "Akun Gmail OAuth belum punya akses Editor ke Spreadsheet 2026" }, 403);
+      return json({ success: false, message: "Service account belum punya akses Editor ke Spreadsheet 2026" }, 403);
     }
     if (!metadata.res.ok) return json({ success: false, message: metadata.data?.error?.message || "Gagal baca metadata spreadsheet", detail: metadata.data }, metadata.res.status);
 
     const sheetRead = await readSheetBarangKeluar({ accessToken, sheetId: spreadsheetId });
     if (!sheetRead.res.ok && isPermissionError(sheetRead.data)) {
-      return json({ success: false, message: "Akun Gmail OAuth belum punya akses Editor ke Spreadsheet 2026" }, 403);
+      return json({ success: false, message: "Service account belum punya akses Editor ke Spreadsheet 2026" }, 403);
     }
     if (!sheetRead.res.ok) {
       const msg = String(sheetRead.data?.error?.message || "");
@@ -155,7 +216,7 @@ export async function onRequestGet({ request, env }) {
       const dummyRow = [[new Date().toISOString(), "TEST_FROM", "TEST_TO", "TEST_SKU", "TEST_BARANG", 1, "Barang Keluar", "ABI", "INTERNAL STOCK TRANSFER"]];
       const appended = await updateSheetRow({ accessToken, sheetId: spreadsheetId, range: `${SHEET_BARANG_KELUAR}!A2:I2`, values: dummyRow });
       if (!appended.res.ok && isPermissionError(appended.data)) {
-        return json({ success: false, message: "Akun Gmail OAuth belum punya akses Editor ke Spreadsheet 2026" }, 403);
+        return json({ success: false, message: "Service account belum punya akses Editor ke Spreadsheet 2026" }, 403);
       }
       if (!appended.res.ok) return json({ success: false, message: appended.data?.error?.message || "Gagal append dummy row", detail: appended.data }, appended.res.status);
       appendResult = { skipped: false, success: true };

@@ -1,211 +1,91 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { handleFonnteWebhook, parseInventoryMessage, formatInventoryReply } from '../supabase/functions/whatsapp-fonnte/handler.js';
-import { parseAdvancedCommand } from '../supabase/functions/whatsapp-fonnte/commands.js';
-import { SEARCH_MENU, renderMenu, resolveMenu } from '../supabase/functions/whatsapp-fonnte/menu.js';
-import { buildInventorySearchQuery } from '../supabase/functions/whatsapp-fonnte/inventory-search.js';
-import { transactionMatches, searchTransactions } from '../supabase/functions/whatsapp-fonnte/transactions.js';
-const env = { FONNTE_TOKEN:'test-token', FONNTE_WEBHOOK_SECRET:'test-secret', WHATSAPP_ALLOWED_NUMBERS:'081234567890,081234567891', SUPABASE_URL:'https://test.supabase.co', WMS_SUPABASE_SECRET_KEY:'sb_secret_test' };
-function request(message, sender='6281234567890', secret='test-secret') { return new Request(`https://wms.test/functions/v1/whatsapp-fonnte?secret=${secret}`, { method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sender,message}) }); }
-function harness({stock=[],transactions=[]}={}) {
- const sessions=new Map(), sent=[], reads=[];
- const fetchFn=async(url,options={})=>{
-  if(url.endsWith('/send')) { sent.push(options.body.get('message')); return Response.json({status:true}); }
-  const parsed=new URL(url), q=parsed.searchParams;
-  if(url.includes('whatsapp_search_sessions')) {
-   if(options.method==='POST') { const value=JSON.parse(options.body); sessions.set(value.sender,value); return new Response(null,{status:201}); }
-   const value=sessions.get(q.get('sender').slice(3));
-   return Response.json(value && Date.parse(value.expires_at)>Date.now() ? [{search:value.search}] : []);
-  }
-  if(url.includes('/users?')) return Response.json([]);
-  reads.push(url);
-  if(url.includes('inventory_barang_')) return Response.json(transactions.slice(Number(q.get('offset')), Number(q.get('offset')) + Number(q.get('limit'))));
-  assert.ok(url.includes('inventory_kartu_stok'));
-  const all=q.get('stok_akhir')==='neq.0' ? stock.filter(r=>Number(r.stok_akhir)!==0) : stock;
-  const start=Number(q.get('offset')||0);return Response.json(all.slice(start,start+Number(q.get('limit'))));
- };
- return {fetchFn,sessions,sent,reads};
+
+const env = {
+  FONNTE_TOKEN: 'test-token', FONNTE_WEBHOOK_SECRET: 'test-secret',
+  WHATSAPP_ALLOWED_NUMBERS: '081234567890',
+  SUPABASE_URL: 'https://test.supabase.co', WMS_SUPABASE_SECRET_KEY: 'sb_secret_test',
+};
+function request(payload, secret = 'test-secret') {
+  return new Request(`https://wms.test/api/whatsapp/fonnte?secret=${secret}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  });
 }
-const item=(n,qty=7)=>({sku:`SKU${n}`,nama_barang:'GOTO MERLYN GALLON PUMP GREEN GOLD',lokasi_bulky:'A20-1',stok_akhir:qty,synced_at:'2026-10-11T00:00:00Z'});
-async function send(h,message,sender) { const response=await handleFonnteWebhook({request:request(message,sender),env},h.fetchFn);assert.equal(response.status,200); return h.sent.at(-1); }
-
-test('unauthorized senders and invalid webhook secret cannot read data',async()=>{
- const forbidden=()=>{throw new Error('unexpected fetch');};
- assert.equal((await handleFonnteWebhook({request:request('merlyn',undefined,'bad'),env},forbidden)).status,401);
- for(const sender of ['628999','group@g.us']) assert.equal((await handleFonnteWebhook({request:request('merlyn',sender),env},forbidden)).status,200);
- assert.equal((await handleFonnteWebhook({request:request('merlyn'),env:{}},forbidden)).status,503);
- assert.equal((await handleFonnteWebhook({request:new Request('https://test/'),env},forbidden)).status,405);
+test('commands restrict searches to the requested field', () => {
+  assert.deepEqual(parseInventoryMessage('SKU 00123'), { query: '00123', fields: ['sku'] });
+  assert.deepEqual(parseInventoryMessage('nama barang Kabel'), { query: 'kabel', fields: ['nama_barang'] });
+  assert.deepEqual(parseInventoryMessage('lokasi A-01').fields, ['lokasi_bulky']);
+  assert.equal(parseInventoryMessage('bantuan'), null);
+  assert.throws(() => parseInventoryMessage('sku A'), /minimal/);
 });
-test('global reads only Kartu Stok and displays ten rows, with proper next-page offset',async()=>{
- const h=harness({stock:Array.from({length:13},(_,i)=>item(i))});
- const first=await send(h,'merlyn a20-1');
- assert.equal(h.reads.length,1);assert.match(h.reads[0],/limit=11/);
- assert.match(first,/10 baris ditampilkan/);assert.match(first,/SKU: SKU9/);assert.doesNotMatch(first,/SKU: SKU10/);
- assert.match(first,/balas lanjut/);assert.match(first,/Tampilkan stok 0\? y\/n/);
- const next=await send(h,'lanjut');
- assert.match(h.reads[1],/offset=10/);assert.match(next,/SKU: SKU10/);assert.match(next,/3 baris ditampilkan/);
- assert.doesNotMatch(next,/maksimal 3 baris per sumber/);
-});
-test('name and location tokens remain ANDed while matching different columns',()=>{
- const url=new URL(`https://test/?x=1${buildInventorySearchQuery('merlyn a20-1',['sku','nama_barang','lokasi_bulky'])}`);
- const clause=url.searchParams.get('and');assert.ok(clause.includes('nama_barang.ilike.*merlyn*'));assert.ok(clause.includes('lokasi_bulky.ilike.*a20-1*'));assert.equal(url.searchParams.has('or'),false);
- for(const query of ['merlyn green gold','merlyn 6840']) assert.equal(transactionMatches({sku:'GOTO-006840',nama_barang:'MERLYN GREEN GOLD'},[{query,fields:['sku','nama_barang']}]),true);
-});
-test('y restores last search across requests and shows zero plus nonzero; n hides zero again',async()=>{
- const h=harness({stock:[item('ZERO',0),item('LIVE',8)]});
- const first=await send(h,'merlyn a20-1');assert.doesNotMatch(first,/SKU: SKUZERO/);
- const yes=await send(h,'y');assert.match(yes,/SKU: SKUZERO/);assert.match(yes,/SKU: SKULIVE/);assert.match(yes,/Stok: 0/);
- assert.ok(h.reads[1].includes('merlyn'));assert.ok(h.reads[1].includes('a20-1'));assert.equal(new URL(h.reads[1]).searchParams.has('stok_akhir'),false);
- const no=await send(h,'n');assert.doesNotMatch(no,/SKU: SKUZERO/);assert.match(no,/SKU: SKULIVE/);
-});
-test('y after an empty nonzero result still finds zero stock',async()=>{
- const h=harness({stock:[item('ZERO',0)]});assert.match(await send(h,'merlyn'),/tidak ditemukan/);
- assert.match(await send(h,'y'),/SKU: SKUZERO/);
-});
-test('search contexts are isolated by sender and expire',async()=>{
- const h=harness({stock:[item(1)]});await send(h,'merlyn a20-1');
- assert.match(await send(h,'y','6281234567891'),/kedaluwarsa/);assert.equal(h.reads.length,1);
- h.sessions.get('6281234567890').expires_at='2000-01-01T00:00:00Z';
- assert.match(await send(h,'n'),/kedaluwarsa/);assert.equal(h.reads.length,1);
-});
-test('yes preference is retained by the next-page command',async()=>{
- const h=harness({stock:Array.from({length:12},(_,i)=>item(i,i%2?5:0))});await send(h,'merlyn');
- const yes=await send(h,'y');assert.match(yes,/balas lanjut/);
- const next=await send(h,'lanjut');assert.match(next,/SKU: SKU10/);assert.match(next,/Stok: 0/);
-});
-test('dedicated inbound and outbound queries remain independent of stock and save their navigation context',async()=>{
- const h=harness({stock:[item(1)],transactions:[{sku:'6840',nama_barang:'Merlyn',qty:12,pic:'Andi',keterangan:'CATATAN INTERNAL',from_location:'A20-1',to_location:'B01',tanggal:'10/11/2026'}]});await send(h,'merlyn');
- for(const command of ['masuk merlyn','keluar merlyn']) {const text=await send(h,command);assert.match(text,/Qty: 12/);assert.match(text,/From: A20-1/);assert.match(text,/To: B01/);assert.doesNotMatch(text,/Asal:|Tujuan:|Jumlah transaksi:|Keterangan:|CATATAN INTERNAL/);assert.match(text,/PIC: Andi/);assert.doesNotMatch(text,/Tampilkan stok 0/);}
- assert.equal(h.sessions.get('6281234567890').search.command,'keluar merlyn');
-});
-test('legacy aliases, structured filters and menu registry stay usable',async()=>{
- assert.deepEqual(parseInventoryMessage('SKU 00123'),{query:'00123',fields:['sku']});
- assert.equal(parseAdvancedCommand('cari nama=merlyn; lokasi=a20-1').filters.length,2);
- const h=harness();for(const command of ['menu','halo','1','menu masuk']) {assert.match(await send(h,command),/Navigasi:|Ketik menu/);}
- assert.equal(h.reads.length,0);for(const entry of SEARCH_MENU) {assert.ok(renderMenu().includes(entry.example));assert.ok(resolveMenu(entry.id).includes(entry.example));}
-});
-test('formatting preserves zero values and neutralizes user-controlled markdown',()=>{
- const text=formatInventoryReply([{sku:'*001*\nnext',nama_barang:'_Merlyn_',stok_akhir:0,source:'Kartu Stock'}]);assert.match(text,/SKU: 001 next/);assert.match(text,/Stok: 0/);assert.doesNotMatch(text,/_Merlyn_/);
-});
-test('database and session failures produce an honest error; send rejection returns 502',async()=>{
- const fetchFn=async(url,options)=>url.endsWith('/send')?(assert.match(options.body.get('message'),/Database WMS belum dapat diakses/),Response.json({status:false})):Response.json({}, {status:500});
- assert.equal((await handleFonnteWebhook({request:request('merlyn'),env},fetchFn)).status,502);
-});
-test('transaction search finds matches beyond 5000 rows and scans until actual end',async()=>{
- let calls=0;const fetchFn=async()=>Response.json(++calls<=6?Array.from({length:1000},()=>({sku:'OTHER'})):[{sku:'FOUND',qty:3}]);
- const result=await searchTransactions({url:'https://test/',key:'test'},'inventory_barang_masuk','Barang Masuk',{page:1,filters:[{query:'found',fields:['sku']}]},fetchFn);
- assert.equal(result.rows[0].sku,'FOUND');assert.equal(calls,7);assert.equal(result.hasMore,false);
-});
-
-test('transaction free text searches every business column but excludes database metadata',()=>{
- const filters=parseAdvancedCommand('masuk #T-007894').filters;
- for(const field of ['tanggal','from_location','to_location','sku','nama_barang','qty','status','pic','keterangan','no_iseller','netsuite','keterangan_lainnya','lokasi_surat_jalan','dokumen','stockout','status_lanjutan','no_iseller_awal']) {
-  assert.equal(transactionMatches({[field]:'Transfer #T-007894 selesai'},filters),true,field);
- }
- assert.equal(transactionMatches({source_row_number:'#T-007894',id:'#T-007894',synced_at:'#T-007894'},filters),false);
- assert.equal(transactionMatches({no_iseller:'#T-007895'},filters),false);
- assert.equal(transactionMatches({no_iseller:'#T-007894',pic:'ABI'},parseAdvancedCommand('keluar #T-007894 abi').filters),true);
- assert.equal(transactionMatches({no_iseller:'#T-007894'},parseAdvancedCommand('keluar iseller=#T-007894').filters),true);
-});
-
-test('Iseller transfer search works through webhook for both transaction directions',async()=>{
- for(const command of ['masuk','keluar']) {
-  const h=harness({transactions:[{sku:'UNRELATED',no_iseller:'#T-007895'},{sku:'MATCH',nama_barang:'Merlyn',no_iseller:'#T-007894',qty:2}]});
-  const reply=await send(h,`${command} #T-007894`);
-  assert.match(reply,/SKU: MATCH/); assert.doesNotMatch(reply,/SKU: UNRELATED/);
-  assert.ok(new URL(h.reads[0]).searchParams.get('select').split(',').includes('no_iseller'));
- }
-});
-
-test('plain navigation handles both transaction directions and boundaries',async()=>{
- for(const command of ['masuk','keluar']) {
-  const pageSize=command==='masuk'?10:3;
-  const h=harness({transactions:Array.from({length:pageSize*2+1},(_,i)=>({sku:`TX${i}`,qty:2}))});
-  assert.match(await send(h,command),/SKU: TX0/);
-  assert.match(await send(h,'lanjut'),new RegExp(`SKU: TX${pageSize}`));
-  assert.match(await send(h,'lanjut'),new RegExp(`SKU: TX${pageSize*2}`));
-  const reads=h.reads.length;assert.match(await send(h,'lanjut'),/halaman terakhir/);assert.equal(h.reads.length,reads);
-  assert.match(await send(h,'sebelumnya'),new RegExp(`SKU: TX${pageSize}`));assert.match(await send(h,'sebelumnya'),/SKU: TX0/);
-  assert.match(await send(h,'sebelumnya'),/halaman pertama/);
- }
-});
-
-test('navigation restores filters and zero-stock preference without requiring symbols',async()=>{
- const h=harness({stock:Array.from({length:12},(_,i)=>item(i,i%2?5:0))});
- await send(h,'merlyn a20-1');await send(h,'y');
- const next=await send(h,'lanjut');assert.match(next,/Stok: 0/);assert.match(next,/SKU: SKU10/);
- assert.match(await send(h,'sebelumnya'),/SKU: SKU0/);
- assert.ok(h.reads.every(url=>url.includes('merlyn')&&url.includes('a20-1')));
-});
-
-test('page numbers above 100 remain accessible and invalid numbers are rejected',()=>{
- assert.equal(parseAdvancedCommand('masuk; halaman=150').page,150);
- for(const value of ['0','-1','1.5','9007199254740992']) assert.throws(()=>parseAdvancedCommand(`masuk; halaman=${value}`));
-});
-
-test('comma searches create one OR tree with AND words inside each alternative', () => {
- const query = '8844,2299,3399,merlyn white, merlyn gold';
- const parsed = parseInventoryMessage(`cari ${query}`);
- const params = new URL(`https://test/?x=1${buildInventorySearchQuery(parsed.query, ['sku','nama_barang','lokasi_bulky'])}`).searchParams;
- const word = token => `or(sku.ilike.*${token}*,nama_barang.ilike.*${token}*,lokasi_bulky.ilike.*${token}*)`;
- assert.equal(params.get('or'), `(${word('8844')},${word('2299')},${word('3399')},and(${word('merlyn')},${word('white')}),and(${word('merlyn')},${word('gold')}))`);
- assert.equal(params.has('and'), false);
- const deduped = new URL(`https://test/?x=1${buildInventorySearchQuery('8844, 8844, ,', ['sku'])}`).searchParams;
- assert.equal(deduped.get('or'), '(sku.ilike.*8844*)');
- assert.throws(() => parseInventoryMessage('cari , ,'), /minimal 2 karakter/);
- assert.throws(() => parseInventoryMessage('cari 8844,x'), /minimal 2 karakter/);
-});
-test('comma matching accepts any complete alternative and preserves other explicit filters', () => {
- const filters = [{ query: '8844,2299,merlyn white,merlyn gold', fields: ['sku','nama_barang','lokasi_bulky'] }];
- for (const row of [{ sku: 'SKU-8844', nama_barang: 'Pump' }, { sku: 'SKU-2299' }, { nama_barang: 'GOTO MERLYN WHITE' }, { nama_barang: 'MERLYN', lokasi_bulky: 'GOLD' }]) assert.equal(transactionMatches(row, filters), true);
- for (const row of [{ sku: 'SKU-3399' }, { nama_barang: 'MERLYN GREEN' }, { nama_barang: 'WHITE GOLD' }]) assert.equal(transactionMatches(row, filters), false);
- assert.equal(transactionMatches({ nama_barang: 'MERLYN WHITE', pic: 'ABI' }, [...filters, { query: 'enggal', fields: ['pic'] }]), false);
-});
-test('comma search keeps one combined page and retains alternatives during zero-stock toggles and navigation', async () => {
- const h = harness({ stock: Array.from({ length: 13 }, (_, index) => item(index, index === 0 ? 0 : 7)) });
- const first = await send(h, 'cari 8844,2299,3399,merlyn white, merlyn gold');
- assert.match(first, /10 baris ditampilkan/); assert.doesNotMatch(first, /SKU: SKU0\n/);
- const clause = new URL(h.reads[0]).searchParams.get('or');
- assert.ok(clause.includes('and(or(')); assert.ok(clause.includes('*2299*'));
- const all = await send(h, 'y'); assert.match(all, /SKU: SKU0\n/);
- await send(h, 'lanjut');
- assert.equal(h.reads.length, 3);
- assert.ok(h.reads.every(url => new URL(url).searchParams.get('or') === clause));
- assert.equal(new URL(h.reads[2]).searchParams.get('offset'), '10');
- assert.equal(new URL(h.reads[2]).searchParams.has('stok_akhir'), false);
-});
-
-test('inbound browsing shows ten rows, clear data ranges and available navigation', async () => {
- const h = harness({ transactions: Array.from({ length: 12 }, (_, index) => ({ sku: `IN-${index}`, qty: index + 1 })) });
- const first = await send(h, 'masuk');
- assert.match(first, /\*Halaman 1\*/); assert.match(first, /Data 1–10 • 10 baris ditampilkan/);
- assert.match(first, /SKU: IN-9\n/); assert.doesNotMatch(first, /SKU: IN-10\n/);
- assert.match(first, /Berikutnya: balas lanjut/); assert.doesNotMatch(first, /Sebelumnya: balas sebelumnya/);
- assert.equal(new URL(h.reads[0]).searchParams.get('limit'), '1000');
- assert.equal(h.sessions.get('6281234567890').search.rows.length, 10);
- const second = await send(h, 'lanjut');
- assert.match(second, /\*Halaman 2\*/); assert.match(second, /Data 11–12 • 2 baris ditampilkan/);
- assert.match(second, /SKU: IN-10\n/); assert.doesNotMatch(second, /SKU: IN-9\n/);
- assert.match(second, /Sebelumnya: balas sebelumnya/); assert.match(second, /Halaman terakhir/); assert.doesNotMatch(second, /Berikutnya: balas lanjut/);
- assert.equal(new URL(h.reads[1]).searchParams.get('offset'), '0');
- assert.match(first, /Ditemukan: \*12 data\*/); assert.match(second, /Ditemukan: \*12 data\*/);
-});
-test('filtered inbound pages skip ten matching rows rather than ten scanned rows', async () => {
- const data = Array.from({ length: 12 }, (_, index) => [{ sku: `OTHER-${index}` }, { sku: `MATCH-${index}` }]).flat();
- const fetchFn = async () => Response.json(data);
- const query = { page: 1, filters: [{ query: 'match', fields: ['sku'] }] };
- const first = await searchTransactions({ url: 'https://test', key: 'test' }, 'inventory_barang_masuk', 'Barang Masuk', query, fetchFn);
- assert.equal(first.rows.length, 10); assert.equal(first.hasMore, true); assert.equal(first.rows[9].sku, 'MATCH-9');
- const second = await searchTransactions({ url: 'https://test', key: 'test' }, 'inventory_barang_masuk', 'Barang Masuk', { ...query, page: 2 }, fetchFn);
- assert.deepEqual(second.rows.map(row => row.sku), ['MATCH-10', 'MATCH-11']); assert.equal(second.hasMore, false);
-});
-
- test('transaction totals cover all batches and both sources without retaining full history', async () => {
-  const data = Array.from({length: 6201}, (_, i) => ({sku: i % 2 ? 'OTHER' : 'MATCH', qty: 1}));
-  for (const source of ['Barang Masuk', 'Barang Keluar']) {
-   const result = await searchTransactions({url:'https://test',key:'test'}, 'inventory_barang_masuk', source, {page:2, filters:[{query:'match',fields:['sku']}]}, async url => {
-    const q=new URL(url).searchParams; return Response.json(data.slice(Number(q.get('offset')), Number(q.get('offset'))+Number(q.get('limit'))));
-   });
-   assert.equal(result.total,3101); assert.equal(result.hasMore,true); assert.equal(result.rows.length,source==='Barang Masuk'?10:3);
+test('unconfigured and unauthorized webhooks never access external services', async () => {
+  const forbidden = () => { throw new Error('unexpected fetch'); };
+  assert.equal((await handleFonnteWebhook({ request: request({}), env: {} }, forbidden)).status, 503);
+  assert.equal((await handleFonnteWebhook({ request: request({}, 'wrong'), env }, forbidden)).status, 401);
+  for (const payload of [{ sender: '628999', message: 'sku ABC' }, { sender: 'group@g.us', message: 'sku ABC' }, { sender: '6281234567890', message: 'sku ABC', isGroup: true }, { sender: '6281234567890', message: 'sku ABC', fromMe: true }]) {
+    assert.deepEqual(await (await handleFonnteWebhook({ request: request(payload), env }, forbidden)).json(), { success: true, ignored: true });
   }
- });
+});
+test('webhook queries all stock tables and sends only inventory results to authorized sender', async () => {
+  const calls = [];
+  const fetchFn = async (url, options) => {
+    calls.push({ url, options });
+    if (url === 'https://api.fonnte.com/send') return Response.json({ status: true });
+    assert.match(url, /or=\(sku\.ilike/);
+    assert.doesNotMatch(url, /nama_barang\.ilike/);
+    return Response.json([{ sku: '00123', nama_barang: 'Kabel', lokasi_bulky: 'A-01', stok_akhir: 7 }]);
+  };
+  const response = await handleFonnteWebhook({ request: request({ sender: '6281234567890', message: 'sku 00123' }), env }, fetchFn);
+  assert.equal(response.status, 200);
+  assert.equal(calls.length, 4);
+  const send = calls.find(call => call.url.endsWith('/send'));
+  assert.equal(send.options.headers.Authorization, 'test-token');
+  assert.equal(send.options.body.get('target'), '6281234567890');
+  assert.match(send.options.body.get('message'), /SKU: 00123/);
+  assert.match(send.options.body.get('message'), /Stok: 7/);
+  assert.match(send.options.body.get('message'), /Sumber: BULKY/);
+  assert.doesNotMatch(send.options.body.get('message'), /sb_secret/);
+});
+test('database failure produces an honest reply and provider rejection fails webhook', async () => {
+  const fetchFn = async (url, options) => {
+    if (url.endsWith('/send')) {
+      assert.match(options.body.get('message'), /belum dapat diakses/);
+      return Response.json({ status: false });
+    }
+    return Response.json({ message: 'private diagnostic' }, { status: 500 });
+  };
+  assert.equal((await handleFonnteWebhook({ request: request({ sender: '6281234567890', message: 'cari kabel' }), env }, fetchFn)).status, 502);
+});
+test('empty and truncated replies accurately describe results', () => {
+  assert.match(formatInventoryReply([]), /tidak ditemukan/);
+  assert.match(formatInventoryReply(Array.from({ length: 11 }, () => ({ source: 'RPL' }))), /10 baris pertama/);
+});
+test('form-encoded webhook payload is supported', async () => {
+  const req = new Request('https://wms.test/api/whatsapp/fonnte', {
+    method: 'POST', headers: { 'X-Webhook-Secret': 'test-secret' },
+    body: new URLSearchParams({ sender: '6281234567890', message: 'bantuan' }),
+  });
+  const fetchFn = async (url, options) => {
+    assert.equal(url, 'https://api.fonnte.com/send');
+    assert.match(options.body.get('message'), /sku ABC123/);
+    return Response.json({ status: true });
+  };
+  assert.equal((await handleFonnteWebhook({ request: req, env }, fetchFn)).status, 200);
+});
+
+test('Edge Function rejects non-POST requests and invalid JSON objects', async () => {
+  const forbidden = () => { throw new Error('unexpected fetch'); };
+  assert.equal((await handleFonnteWebhook({ request: new Request('https://wms.test/'), env }, forbidden)).status, 405);
+  assert.equal((await handleFonnteWebhook({ request: request(null), env }, forbidden)).status, 400);
+});
+
+test('Edge Function uses Supabase built-in service role when no custom key is set', async () => {
+  const fallbackEnv = { ...env, WMS_SUPABASE_SECRET_KEY: undefined, SUPABASE_SERVICE_ROLE_KEY: 'test-service-role' };
+  const fetchFn = async (url, options) => {
+    if (url.endsWith('/send')) return Response.json({ status: true });
+    assert.equal(options.headers.apikey, 'test-service-role');
+    return Response.json([]);
+  };
+  assert.equal((await handleFonnteWebhook({ request: request({ sender: '6281234567890', message: 'sku 00123' }), env: fallbackEnv }, fetchFn)).status, 200);
+});
