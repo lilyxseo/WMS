@@ -117,14 +117,15 @@ jobs:
           });
           ensure(keysResponse.ok, `Server credential lookup failed: HTTP ${keysResponse.status}`);
           const keys = await keysResponse.json();
-          const key = keys.find(item => item.name === 'service_role')?.api_key;
+          const key = keys.find(item => String(item.api_key || '').startsWith('sb_secret_'))?.api_key
+            || keys.find(item => item.name === 'service_role')?.api_key;
           ensure(key, 'Server credential unavailable for the authenticated deployment check');
           const response = await fetch(`https://${project}.supabase.co/functions/v1/app-google-auth`, {
-            method: 'POST', headers: { apikey: key, Authorization: `Bearer ${key}` },
+            method: 'POST', headers: { apikey: key, 'X-WMS-Server-Key': key },
             signal: AbortSignal.timeout(30000),
           });
           const payload = await response.json();
-          const knownCode = ['OAUTH_CONFIG_MISSING', 'OAUTH_AUTHENTICATION_FAILED'].includes(payload.code) ? payload.code : 'NO_CODE';
+          const knownCode = ['OAUTH_CONFIG_MISSING', 'OAUTH_AUTHENTICATION_FAILED', 'SERVER_KEY_REJECTED', 'SERVER_KEY_INVALID'].includes(payload.code) ? payload.code : 'NO_CODE';
           ensure(response.status === 200, `Configured Gmail authentication failed: HTTP ${response.status}, ${knownCode}`);
           ensure(typeof payload.access_token === 'string' && payload.access_token, 'Google access token missing');
           console.log('Configured Gmail OAuth verified; no spreadsheet writes performed.');

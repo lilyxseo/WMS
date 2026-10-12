@@ -6,10 +6,12 @@ const json = (body, status = 200) => new Response(JSON.stringify(body), {
 
 export async function handleAppGoogleAuth(request, env, fetchFn = fetch) {
   if (request.method !== 'POST') return json({ success: false }, 405);
-  const key = request.headers.get('apikey') || '';
-  if (request.headers.get('authorization') !== `Bearer ${key}` || !key) return json({ success: false }, 401);
+  // Supabase's gateway may rewrite Authorization when translating API keys.
+  // Preserve the server credential in a dedicated header and validate it here.
+  const key = request.headers.get('x-wms-server-key') || request.headers.get('apikey') || '';
+  if (!key) return json({ success: false }, 401);
   const legacyServerKey = [env.SUPABASE_SERVICE_ROLE_KEY, env.WMS_SUPABASE_SECRET_KEY].filter(Boolean).includes(key);
-  if (!legacyServerKey && !/^sb_secret_[A-Za-z0-9_-]+$/.test(key)) return json({ success: false }, 401);
+  if (!legacyServerKey && !/^sb_secret_[A-Za-z0-9_-]+$/.test(key)) return json({ success: false, code: 'SERVER_KEY_REJECTED' }, 401);
   // Validate the application's existing secret key with the project's admin API.
   // A publishable key or logged-in user's JWT cannot obtain a Google token.
   if (!legacyServerKey) {
@@ -18,7 +20,7 @@ export async function handleAppGoogleAuth(request, env, fetchFn = fetch) {
         headers: { apikey: key, Authorization: `Bearer ${key}` },
         redirect: 'error', signal: AbortSignal.timeout(10000),
       });
-      if (!response.ok) return json({ success: false }, response.status >= 500 ? 503 : 401);
+      if (!response.ok) return json({ success: false, code: 'SERVER_KEY_INVALID' }, response.status >= 500 ? 503 : 401);
       if (response.body) await response.body.cancel();
     } catch { return json({ success: false }, 503); }
   }

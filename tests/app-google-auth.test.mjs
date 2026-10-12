@@ -110,3 +110,11 @@ test('application create rejects unauthenticated users before contacting Gmail o
  const response=await createRow({request,env:{...appEnv,GOOGLE_SHEET_ID:'inventory'}});
  assert.equal(response.status,403);assert.match(await response.text(),/READ_ONLY_ROLE/);
 });
+
+ test('Gmail bridge preserves server identity when the Supabase gateway rewrites Authorization', async () => {
+  const request=new Request('https://test', {method:'POST',headers:{'X-WMS-Server-Key':'server-key',Authorization:'Bearer translated-gateway-jwt'}});
+  const response=await handleAppGoogleAuth(request,{...oauth,SUPABASE_SERVICE_ROLE_KEY:'server-key'},async url=>{
+   assert.equal(url,'https://oauth2.googleapis.com/token');return Response.json({access_token:'gmail-access'});
+  });
+  assert.equal(response.status,200);
+ });

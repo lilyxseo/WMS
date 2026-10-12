@@ -6,7 +6,7 @@ export async function getGoogleAccessToken(env, fetchFn = fetch) {
   let response;
   try {
     response = await fetchFn(`${url}/functions/v1/app-google-auth`, {
-      method: 'POST', headers: { apikey: key, Authorization: `Bearer ${key}` },
+      method: 'POST', headers: { apikey: key, 'X-WMS-Server-Key': key },
       redirect: 'error', signal: AbortSignal.timeout(20000),
     });
   } catch {
