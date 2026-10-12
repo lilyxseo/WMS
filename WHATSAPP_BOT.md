@@ -114,9 +114,9 @@ Contoh: `masuk #T-007894` atau `keluar #T-007894`; bisa digabung dengan kata lai
 atau beberapa nomor dipisahkan koma. Filter khusus tersedia seperti `keluar iseller=#T-007894`.
 Metadata database tidak ikut dicari. Jumlah memakai pencocokan teks; 12 bisa cocok dengan 120.
 Pencarian transaksi tidak dibatasi 5.000 baris. Database dibaca dalam batch
-1.000 baris hingga halaman dan satu hasil berikutnya ditemukan atau data habis.
-Hanya satu halaman beserta satu hasil berikutnya ditahan dalam memori. Query tanpa kata pencarian
-membaca halaman langsung dengan offset. Pencarian langka pada riwayat besar
+1.000 baris hingga data habis untuk menghitung total hasil yang cocok.
+Hanya satu halaman ditahan dalam memori. Total data ditemukan ditampilkan pada setiap halaman.
+Pencarian pada riwayat besar
 dapat membutuhkan lebih banyak waktu; kegagalan dibalas sebagai kegagalan,
 bukan hasil kosong. Urutan mengikuti baris sumber, bukan tanggal
 teks campuran. Jumlah transaksi tidak dijumlahkan sebagai saldo stok.

@@ -85,20 +85,21 @@ export async function searchAdvancedInventory(env, search, fetchFn, sources, con
     if (!Array.isArray(rows)) throw new Error('Invalid inventory response');
     return { source, rows: rows.slice(0, 10), hasMore: rows.length > 10 };
   }));
-  return { rows: batches.flatMap(batch => batch.rows.map(row => ({ ...row, source: batch.source }))), hasMore: batches.some(batch => batch.hasMore), incomplete: batches.some(batch => batch.incomplete) };
+  return { rows: batches.flatMap(batch => batch.rows.map(row => ({ ...row, source: batch.source }))), hasMore: batches.some(batch => batch.hasMore), incomplete: batches.some(batch => batch.incomplete), total: batches.every(batch => Number.isInteger(batch.total)) ? batches.reduce((sum, batch) => sum + batch.total, 0) : undefined };
 }
 
 export function formatAdvancedReply(result, search, formatRows) {
+  const count = Number.isInteger(result.total) ? `\nDitemukan: *${result.total} data*` : '';
   const navigation = [
     ...(search.page > 1 ? ['Sebelumnya: balas sebelumnya.'] : []),
     ...(result.hasMore ? ['Berikutnya: balas lanjut.'] : ['✅ Halaman terakhir.']),
   ].join('\n');
-  if (!result.rows.length) return `🔎 *Hasil Pencarian*\n*Halaman ${search.page}*\n${search.page > 1 ? 'Tidak ada hasil pada halaman ini.' : formatRows([])}`
+  if (!result.rows.length) return `🔎 *Hasil Pencarian*\n*Halaman ${search.page}*${count}\n${search.page > 1 ? 'Tidak ada hasil pada halaman ini.' : formatRows([])}`
     + `\n\n${navigation}\nKetik menu atau kirim pencarian baru.`;
   const body = formatRows(result.rows, 15);
   const scope = search.hideZero ? 'Stok 0 disembunyikan' : `Filter stok: ${search.stock || 'semua'}`;
   const first = (search.page - 1) * searchPageSize(search.source) + 1;
   const last = first + result.rows.length - 1;
-  return `🔎 *Hasil Pencarian WMS*\nPencarian: ${displayText(search.command, 400)}\n${scope}\n\n*Halaman ${search.page}*\nData ${first}–${last} • ${result.rows.length} baris ditampilkan\n\n${body}`
+  return `🔎 *Hasil Pencarian WMS*\nPencarian: ${displayText(search.command, 400)}\n${scope}\n\n*Halaman ${search.page}*${count}\nData ${first}–${last} • ${result.rows.length} baris ditampilkan\n\n${body}`
     + `\n\n──────────\n${navigation}\nKetik menu untuk pencarian lainnya.`;
 }

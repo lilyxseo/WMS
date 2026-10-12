@@ -26,11 +26,9 @@ export async function searchTransactions(config, table, source, search, fetchFn)
   const pageSize = searchPageSize(source);
   const batchSize = 1000, skip = (search.page - 1) * pageSize;
   let matched = 0;
-  const direct = !search.filters.length && !search.hideZero;
-  // Read until the requested page and one lookahead match are found, or history ends.
-  // Keep only one page plus a lookahead match in memory, regardless of how much history is scanned.
-  for (let offset = direct ? skip : 0; ; offset += batchSize) {
-    const limit = direct ? pageSize + 1 : batchSize;
+  // Count every matching row while retaining only the requested page.
+  for (let offset = 0; ; offset += batchSize) {
+    const limit = batchSize;
     const response = await fetchFn(`${config.url}/rest/v1/${table}?select=${fields.join(',')}&order=source_row_number.desc&offset=${offset}&limit=${limit}`, {
       headers, signal: AbortSignal.timeout(10000),
     });
@@ -39,14 +37,13 @@ export async function searchTransactions(config, table, source, search, fetchFn)
     if (!Array.isArray(batch)) throw new Error('Invalid transaction response');
     for (const row of batch) {
       if ((!search.hideZero || Number(row.qty) !== 0) && transactionMatches(row, search.filters)) {
-        if (direct || matched >= skip) rows.push(row);
+        if (matched >= skip && rows.length < pageSize) rows.push(row);
         matched++;
-        if (rows.length === pageSize + 1) break;
       }
     }
-    if (direct || rows.length === pageSize + 1 || batch.length < batchSize) break;
+    if (batch.length < batchSize) break;
   }
-  return { source, rows: rows.slice(0, pageSize), hasMore: rows.length > pageSize };
+  return { source, rows, total: matched, hasMore: matched > skip + pageSize };
 }
 
 export function formatTransactionRow(row, index) {

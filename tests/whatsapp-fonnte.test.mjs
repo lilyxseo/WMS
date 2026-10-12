@@ -181,13 +181,14 @@ test('inbound browsing shows ten rows, clear data ranges and available navigatio
  assert.match(first, /\*Halaman 1\*/); assert.match(first, /Data 1–10 • 10 baris ditampilkan/);
  assert.match(first, /SKU: IN-9\n/); assert.doesNotMatch(first, /SKU: IN-10\n/);
  assert.match(first, /Berikutnya: balas lanjut/); assert.doesNotMatch(first, /Sebelumnya: balas sebelumnya/);
- assert.equal(new URL(h.reads[0]).searchParams.get('limit'), '11');
+ assert.equal(new URL(h.reads[0]).searchParams.get('limit'), '1000');
  assert.equal(h.sessions.get('6281234567890').search.rows.length, 10);
  const second = await send(h, 'lanjut');
  assert.match(second, /\*Halaman 2\*/); assert.match(second, /Data 11–12 • 2 baris ditampilkan/);
  assert.match(second, /SKU: IN-10\n/); assert.doesNotMatch(second, /SKU: IN-9\n/);
  assert.match(second, /Sebelumnya: balas sebelumnya/); assert.match(second, /Halaman terakhir/); assert.doesNotMatch(second, /Berikutnya: balas lanjut/);
- assert.equal(new URL(h.reads[1]).searchParams.get('offset'), '10');
+ assert.equal(new URL(h.reads[1]).searchParams.get('offset'), '0');
+ assert.match(first, /Ditemukan: \*12 data\*/); assert.match(second, /Ditemukan: \*12 data\*/);
 });
 test('filtered inbound pages skip ten matching rows rather than ten scanned rows', async () => {
  const data = Array.from({ length: 12 }, (_, index) => [{ sku: `OTHER-${index}` }, { sku: `MATCH-${index}` }]).flat();
@@ -198,3 +199,13 @@ test('filtered inbound pages skip ten matching rows rather than ten scanned rows
  const second = await searchTransactions({ url: 'https://test', key: 'test' }, 'inventory_barang_masuk', 'Barang Masuk', { ...query, page: 2 }, fetchFn);
  assert.deepEqual(second.rows.map(row => row.sku), ['MATCH-10', 'MATCH-11']); assert.equal(second.hasMore, false);
 });
+
+ test('transaction totals cover all batches and both sources without retaining full history', async () => {
+  const data = Array.from({length: 6201}, (_, i) => ({sku: i % 2 ? 'OTHER' : 'MATCH', qty: 1}));
+  for (const source of ['Barang Masuk', 'Barang Keluar']) {
+   const result = await searchTransactions({url:'https://test',key:'test'}, 'inventory_barang_masuk', source, {page:2, filters:[{query:'match',fields:['sku']}]}, async url => {
+    const q=new URL(url).searchParams; return Response.json(data.slice(Number(q.get('offset')), Number(q.get('offset'))+Number(q.get('limit'))));
+   });
+   assert.equal(result.total,3101); assert.equal(result.hasMore,true); assert.equal(result.rows.length,source==='Barang Masuk'?10:3);
+  }
+ });
