@@ -1,5 +1,6 @@
-import { getGoogleAccessToken } from './_google-auth.js';
 import { requirePicRole } from './_authz.js';
+const TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
 const REJECT_SPREADSHEET_ID = '1BVGcIWnYqrG-DefzmnO_hZjNn3H3c4sriI7CBAWsxw8';
 const STOCK_SHEET = 'KARTU STOCK KST';
 const IN_SHEET = 'Barang Masuk';
@@ -9,8 +10,27 @@ let serverBarangRejectCache = null;
 let serverBarangRejectLoading = null;
 
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8' } });
-
-async function token(env) { return getGoogleAccessToken(env); }
+const toB64 = input => btoa(typeof input === 'string' ? input : JSON.stringify(input)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+const pemToBuf = pem => {
+  const clean = String(pem || '').replace(/\\n/g, '\n').replace('-----BEGIN PRIVATE KEY-----', '').replace('-----END PRIVATE KEY-----', '').replace(/\s/g, '');
+  const bin = atob(clean);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out.buffer;
+};
+async function token(env) {
+  const now = Math.floor(Date.now() / 1000);
+  const unsigned = `${toB64({ alg: 'RS256', typ: 'JWT' })}.${toB64({ iss: env.GOOGLE_CLIENT_EMAIL, scope: SCOPE, aud: TOKEN_URL, exp: now + 3600, iat: now })}`;
+  const key = await crypto.subtle.importKey('pkcs8', pemToBuf(env.GOOGLE_PRIVATE_KEY), { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(unsigned));
+  let bin = '';
+  new Uint8Array(sig).forEach(b => { bin += String.fromCharCode(b); });
+  const jwt = `${unsigned}.${btoa(bin).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')}`;
+  const res = await fetch(TOKEN_URL, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: jwt }) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.access_token) throw new Error(data.error_description || data.error || 'Gagal membuat access token');
+  return data.access_token;
+}
 function ssId(env) { return String(env.BARANG_REJECT_SHEET_ID || env.SHEET_ID_BARANG_REJECT || REJECT_SPREADSHEET_ID).trim(); }
 function isQuotaError(err) {
   const msg = String(err?.message || err || '');
