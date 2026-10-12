@@ -2240,3 +2240,8 @@ body.dark .loc-status-dense{background:rgba(239,68,68,.16);color:#fca5a5;border-
 .aging-metric .mv-skeleton-cell{display:inline-block;min-width:48px;}
 @media(prefers-reduced-motion:reduce){.mv-skeleton-cell,.skeleton-line{animation:none!important;}}
 .metric .v>.mv-skeleton-cell,.activity-summary b>.mv-skeleton-cell{display:inline-block;vertical-align:middle;width:64px;max-width:100%;}
+
+.session-draft-status{font-size:12px;color:var(--muted);padding:8px 0;line-height:1.5;}
+.session-review-items{list-style:none;padding:0;margin:10px 0;max-height:45vh;overflow:auto;}
+.session-review-items li{display:flex;flex-direction:column;gap:4px;padding:10px 0;border-bottom:1px solid var(--border);overflow-wrap:anywhere;}
+.session-review-items span{font-size:12px;}
