@@ -141,3 +141,16 @@ The `deploy-app-google-auth.yml` workflow deploys only this authentication funct
 without changing the WhatsApp bot or its scheduler. Deploy application changes to
 Cloudflare's production branch (`main`) for the primary domain; `work` deployments
 are previews and do not update the primary domain.
+
+## Page loading behavior
+
+Page headings, filters, forms and table headers render before data requests finish.
+There is no full-page skeleton hiding the content container. Loading placeholders
+belong to table rows, metric values and data sections; cached data remains visible
+where available during revalidation. Activity Log updates its data regions while
+preserving filter drafts and the filter DOM.
+
+Independent API-backed pages avoid unrelated full-table startup hydration. Inventory
+source reads run concurrently, and pending detail hydration is shared across page
+navigation. Delayed responses cannot switch or conceal the active page; failed
+reads settle local loading state and provide a retry action.

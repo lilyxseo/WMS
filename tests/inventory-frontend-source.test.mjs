@@ -38,7 +38,8 @@ test('legacy parser safely ignores malformed non-array rows', () => {
 });
 
 test('main preload routes fetched inventory rows by source shape', () => {
-  assert.match(mainSource, /freshData\[sheet\]=routeFetchedSourceRows\(sheet,raw\)/);
+  assert.match(mainSource, /const rows=await routeFetchedSourceRows\(sheet,raw,\{chunked:true\}\)/);
+  assert.match(mainSource, /return \[sheet,rows\]/);
   assert.doesNotMatch(mainSource, /freshData\[sheet\]=parseSheet\(raw/);
   assert.doesNotMatch(mainSource, /fetchSheet\(sheet\)\.then\(raw=>parseSheetChunked\(raw\)\)/);
   assert.match(mainSource, /return chunked\?parseSheetChunked\(payload\):parseSheet\(payload\)/);
