@@ -23,6 +23,31 @@ Affected endpoints and helpers:
 - Inventory synchronization for Kartu Stok, RPL, BULKY, Barang Masuk, and
   Barang Keluar uses the secret credential through the shared sync engine.
 
+## Gmail identity for application CRUD
+
+All application Google Sheets API handlers use the Gmail OAuth identity configured
+in Supabase (`GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, and
+`GOOGLE_OAUTH_REFRESH_TOKEN`), including movement, cycle count, transaction edits,
+cell updates, Balikan Store, Barang Reject, and the application's PDF import.
+The Gmail account needs Editor access to each spreadsheet and any protected ranges.
+Google Sheets edit history uses that shared Gmail identity; WMS activity logging
+continues to identify the application user separately.
+
+Pages Functions call the server-only `app-google-auth` Edge Function using their
+existing `SUPABASE_URL` and `SUPABASE_SECRET_KEY`. Supabase validates the server
+key against its admin API before issuing a short-lived Google access token.
+Publishable keys, browser sessions and anonymous callers cannot obtain a token.
+Google credentials remain in Supabase; the application does not require
+`GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY`, or copied OAuth secrets in Cloudflare.
+Spreadsheet ID settings in Pages remain necessary and keep their existing mapping.
+There is no fallback to the old service account if Gmail authentication fails.
+
+Deploy `app-google-auth` with JWT gateway verification disabled (the handler checks
+server credentials itself). The existing GitHub workflow deploys this function and
+checks that unauthenticated requests receive HTTP 401. The Pages application must
+also deploy the updated `functions/api` code. Secrets and tokens must never be
+returned by an application API, logged, or placed in frontend runtime configuration.
+
 ## Production inventory schedule (Supabase Cron)
 
 Supabase Cron is the scheduler only. Configure **five independent HTTP jobs**,
@@ -83,7 +108,7 @@ above are unchanged.
    Durable Object.
 2. Confirm the Pages production environment has `INVENTORY_SYNC_SECRET` plus
    the existing sync-engine variables (`SUPABASE_URL`, `SUPABASE_SECRET_KEY`,
-   `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY`, and `SHEET_ID_2026` or
+   the deployed `app-google-auth` Edge Function, and `SHEET_ID_2026` or
    `GOOGLE_SHEET_ID`).
 3. Before enabling Supabase Cron, delete/disable the former
    `wms-inventory-cron` Cloudflare Cron Trigger. Delete its scheduled Worker and

@@ -84,8 +84,8 @@ export function createInventorySyncService(config) {
   async function fetchValues(env, dependencies = {}) {
     const id = normalizeText(env.SHEET_ID_2026 || env.GOOGLE_SHEET_ID);
     if (!id) throw new SyncError('MISSING_SHEET_CONFIG', 'SHEET_ID_2026/GOOGLE_SHEET_ID belum diset');
-    // Service-account token exchange is an outbound request too. Keep it in the
-    // Google total so the metric reflects the Worker's actual subrequest budget.
+    // The central Gmail token request is one Worker subrequest. Keep it in the
+    // Google total alongside the authenticated Sheets read.
     if (dependencies.requestMetrics) dependencies.requestMetrics.googleRequests += 1;
     const accessToken = await (dependencies.getGoogleAccessToken || getGoogleAccessToken)(env);
     const fetchFn = dependencies.fetch || fetch;
