@@ -121,3 +121,23 @@ never start the next job while the previous heavy sync is likely to be active.
 There are no Supabase Edge Functions and no sync implementation in Supabase.
 Cloudflare Pages, Cloudflare API Functions, the shared inventory services, and
 all individual manual sync endpoints remain deployed.
+
+## Gmail OAuth for application CRUD
+
+The application uses Gmail OAuth configured in Supabase for Google Sheets CRUD,
+including the Balikan Store checkbox. Pages Functions use their existing
+`SUPABASE_URL` and `SUPABASE_SECRET_KEY` to request a short-lived Google token
+from the server-only `app-google-auth` Edge Function. The OAuth client and refresh
+token remain in Supabase; no Google secrets or access tokens are returned to the
+browser. There is no fallback to Cloudflare's old service account.
+
+Configure `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, and
+`GOOGLE_OAUTH_REFRESH_TOKEN` in Supabase. The Gmail account needs Editor access
+to the target spreadsheets and protected ranges. Existing Pages spreadsheet IDs
+remain in use. WMS continues to enforce PIC/Developer permissions and log the
+application user; Google edit history uses the configured Gmail identity.
+
+The `deploy-app-google-auth.yml` workflow deploys only this authentication function,
+without changing the WhatsApp bot or its scheduler. Deploy application changes to
+Cloudflare's production branch (`main`) for the primary domain; `work` deployments
+are previews and do not update the primary domain.

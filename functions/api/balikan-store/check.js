@@ -1,4 +1,4 @@
-import { json, getAccessToken, escSheet, buildHeaderInfo } from './_utils';
+import { json, getAccessToken, escSheet, buildHeaderInfo } from './_utils.js';
 import { requirePicRole } from '../_authz.js';
 
 export async function onRequestPatch({ request, env }) {
