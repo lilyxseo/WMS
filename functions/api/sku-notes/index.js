@@ -6,21 +6,38 @@ const skuKey=value=>typeof value==='string'?value.trim().toUpperCase():'';
 const validSku=sku=>sku.length>0&&sku.length<=200;
 const validId=id=>typeof id==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
 async function database(env,params,options={}){
+ const {count=false,...fetchOptions}=options;
  const config=getSecretSupabaseConfig(env);
- const response=await fetch(`${config.url}/rest/v1/sku_notes?${params}`,{...options,headers:{apikey:config.key,Authorization:`Bearer ${config.key}`,'Content-Type':'application/json',...(options.headers||{})}});
+ const response=await fetch(`${config.url}/rest/v1/sku_notes?${params}`,{...fetchOptions,headers:{...(count?{Prefer:'count=exact'}:{}),apikey:config.key,Authorization:`Bearer ${config.key}`,'Content-Type':'application/json',...(options.headers||{})}});
  if(!response.ok)throw new Error('Notes database unavailable');
- return response.json();
+ const rows=await response.json();
+ if(!count)return rows;
+ const rawTotal=String(response.headers.get('content-range')||'').split('/')[1];
+ return {rows,total:/^\d+$/.test(rawTotal||'')?Number(rawTotal):null};
 }
 export async function onRequestGet({request,env}){
  try{
   const viewer=await getNoteIdentity(request,env);
   if(!viewer)return json({success:false,message:'Sesi tidak valid. Silakan login kembali.'},401);
   const url=new URL(request.url),sku=skuKey(url.searchParams.get('sku'));
-  if(!validSku(sku))return json({success:false,message:'SKU wajib diisi.'},400);
+  const all=url.searchParams.get('all')==='1';
+  if(!all&&!validSku(sku))return json({success:false,message:'SKU wajib diisi.'},400);
   const page=Math.max(1,Math.min(100000,parseInt(url.searchParams.get('page'),10)||1));
   const params=new URLSearchParams({select:`${columns},author_id`,sku:`eq.${sku}`,order:'created_at.desc,id.desc',offset:String((page-1)*20),limit:'21'});
-  const rows=await database(env,params);
-  return json({success:true,rows:rows.slice(0,20).map(({author_id,...note})=>({...note,canDelete:author_id===viewer.id})),page,hasNext:rows.length>20});
+  if(all){
+   params.delete('sku');
+   if(url.searchParams.get('mine')==='1')params.set('author_id',`eq.${viewer.id}`);
+   const query=String(url.searchParams.get('q')||'').trim();
+   if(query.length>150)return json({success:false,message:'Pencarian maksimal 150 karakter.'},400);
+   if(query){
+    const value=query.replace(/[\\%_]/g,char=>'\\'+char);
+    const pattern=`%${value.replace(/\\/g,'\\\\').replace(/"/g,'\\"')}%`;
+    params.set('or','('+['sku','body','author_name','author_role'].map(field=>`${field}.ilike."${pattern}"`).join(',')+')');
+   }
+  }
+  const result=await database(env,params,{count:all});
+  const rows=all?result.rows:result;
+  return json({success:true,rows:rows.slice(0,20).map(({author_id,...note})=>({...note,canDelete:author_id===viewer.id})),page,hasNext:rows.length>20,...(all?{total:result.total}:{})});
  }catch{return json({success:false,message:'Catatan belum dapat dimuat. Coba lagi.'},503);}
 }
 export async function onRequestPost({request,env}){
