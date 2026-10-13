@@ -14,7 +14,7 @@ if(process.argv.includes('--validate')){
   if(result.verification.filter(item=>process.argv.includes('--require-ledger')||['kartu_stok','rpl','bulky'].includes(item.source)).every(item=>item.ready))break;
   await new Promise(resolve=>setTimeout(resolve,2000));
  }
- const report={summary:result.summary,partial:result.partial,coverage:result.verification.map(item=>({source:item.source,ready:item.ready,rowCount:item.rowCount,reason:item.reason})),checks:result.checks};
+ const report={summary:result.summary,partial:result.partial,coverage:result.verification.map(item=>({source:item.source,ready:item.ready,rowCount:item.rowCount,reason:item.reason,readStatus:item.readStatus,readCode:item.readCode})),checks:result.checks};
  console.log('::notice title=Warning validation::'+JSON.stringify(report));
  if(result.verification.filter(item=>process.argv.includes('--require-ledger')||['kartu_stok','rpl','bulky'].includes(item.source)).some(item=>!item.ready)){
   console.error('::error::Read-only warning validation could not obtain a stable stock snapshot');process.exit(1);

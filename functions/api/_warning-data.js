@@ -20,10 +20,13 @@ export async function loadWarningData(env){
  const results=await Promise.allSettled(sources.map(async([name,source])=>{
   let select=base+',stok_awal,internal_stock_transfer,replenishment,pengeluaran'+(name==='kartuStok'?'':',netsuite,selisih');
   const rows=[];let total=null;
-  for(let offset=0;;offset+=1000){
+  for(let offset=0;;){
    let batch;try{const result=await read(config,`${source.table}?${new URLSearchParams({select,order:'source_row_number.asc,id.asc',offset:String(offset),limit:'1000'})}`,{count:offset===0});if(offset===0){batch=result.rows;total=result.total;}else batch=result;}
-   catch(error){if(select!==base&&['42703','PGRST204'].includes(error.code)){select=base;rows.length=0;total=null;offset=-1000;continue;}throw error;}
-   rows.push(...batch);if(batch.length<1000||(total!==null&&rows.length>=total))return rows;
+   catch(error){if(select!==base&&['42703','PGRST204'].includes(error.code)){select=base;rows.length=0;total=null;offset=0;continue;}throw error;}
+   rows.push(...batch);
+   if(total!==null){if(rows.length>total)throw new Error('Snapshot count changed');if(rows.length===total)return rows;if(!batch.length)throw new Error('Incomplete stock snapshot');}
+   else if(batch.length<1000)return rows;
+   offset+=batch.length;
   }
  }));
  let ledger=[];let ledgerError=false;
@@ -37,7 +40,7 @@ export async function loadWarningData(env){
   const available=results[index].status==='fulfilled',stable=available&&stableWarningSource(before,after,source.key);
   if(stable)rows[name]=results[index].value;
   else unavailableSources.push(source.table);
-  verification.push({source:source.key,ready:stable,rowCount:stable?rows[name].length:null,lastSuccess:after.find(row=>row.source===source.key)?.last_success_at||null,reason:stable?'':available?'Sinkronisasi belum terverifikasi atau berubah saat pemeriksaan.':`Sumber tidak dapat dibaca (${results[index].reason?.status?'HTTP '+results[index].reason.status:results[index].reason?.name||'koneksi'}${results[index].reason?.code?', '+results[index].reason.code:''}).`});
+  verification.push({source:source.key,ready:stable,readStatus:available?null:results[index].reason?.status||null,readCode:available?'':results[index].reason?.code||'',rowCount:stable?rows[name].length:null,lastSuccess:after.find(row=>row.source===source.key)?.last_success_at||null,reason:stable?'':available?'Sinkronisasi belum terverifikasi atau berubah saat pemeriksaan.':'Sumber tidak dapat dibaca.'});
  });
  for(const key of ['barang_masuk','barang_keluar']){
   const stable=!ledgerError&&stableWarningSource(before,after,key);
