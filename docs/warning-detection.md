@@ -25,3 +25,11 @@ All 4,342 RPL/BULKY rows had no Netsuite or difference reference. There were no 
 Never compare raw outbound totals with one stock location, infer duplicate transactions from repeated SKU/reference/quantity, require optional Netsuite values, or reject operational location names using a fixed rack whitelist. Periods, split shipments, opening balances and evolving warehouse areas can make those assumptions wrong. No transaction table is downloaded into the Worker; the cross-ledger review runs as a server-only database RPC.
 
 The read-only audit workflow and main deployment validation report detector counts/coverage. They do not modify stock, ledgers or notes. Tests cover known production arithmetic, legitimate operational locations, historic name changes, missing references, partial/changed reads and real contradictory data.
+
+### Notifikasi WhatsApp otomatis
+
+Edge Function `warning-whatsapp` memeriksa sumber lengkap setiap 5 menit melalui job `wms-warning-notifications`. Nomor tujuan berasal dari secret `WMS_WARNING_RECIPIENTS`. Fungsi bot dan jadwal ringkasan harian tidak diubah.
+
+Saat pertama diaktifkan, semua warning saat ini dicatat sebagai baseline tanpa pesan. Hanya identitas warning yang belum pernah tercatat yang masuk antrean. Identitas memakai kategori, SKU, sumber/baris; perubahan qty atau teks bukti tidak mengirim ulang. Warning yang pernah tercatat, termasuk yang muncul kembali, tidak dikirim ulang. Snapshot parsial tidak mengubah registri maupun mengirim pesan. Maksimal 5 warning per pesan dan 4 pesan per pemeriksaan; sisanya diproses pada pemeriksaan berikutnya.
+
+Antrean dicatat sebelum meminta Fonnte. Status `sent` berarti diterima Fonnte, bukan jaminan sudah dibaca. Penolakan dicatat `failed`; timeout/hasil tidak pasti atau pekerja terhenti dicatat `uncertain`, tanpa pengiriman ulang otomatis untuk mencegah pesan ganda. Administrator dapat memeriksa tabel privat `warning_notify_outbox`. Endpoint memerlukan secret tersendiri dan tidak dapat dipanggil pengguna anonim. Deployment menguji koneksi dan baseline tanpa mengirim pesan percobaan.

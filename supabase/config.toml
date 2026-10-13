@@ -7,3 +7,6 @@ verify_jwt = false
 # Server-only Gmail OAuth bridge for application CRUD.
 [functions.app-google-auth]
 verify_jwt = false
+
+[functions.warning-whatsapp]
+verify_jwt = false
