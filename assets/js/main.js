@@ -1,3 +1,4 @@
+import { mountAllSkuNotes } from './all-sku-notes.js';
 import { mountSkuNotes } from './sku-notes.js';
 import { restoreSession, getAuthenticatedUser, bindLogoutButtons, loginWithEmailPassword, supabase, getAuthHeaders } from "./supabase.js";
 import { API_KEY, SPREADSHEET_ID, SHEETS, FILTERS, APP_CONFIG, SIGNUP_ACCESS_PASSWORD } from "./config.js";
@@ -828,6 +829,7 @@ syncActiveSidebarParent(page);invalidateInactiveTransactionRequests(page);setMai
 if(page==="barang-reject"){renderBarangRejectPage();return;}
 if(page==="detail"){return;}
 if(page==="locations"){setMainContentLoading(false);renderLocationsPage();return;}
+if(page==="sku-notes"){setMainContentLoading(false);renderAllSkuNotesPage({refresh:true});return;}
 if(page==="stock-aging"){renderStockAgingPage();return;}
 if(page==="search"){pageLog('CariData','init');renderState("results",`Ketik minimal ${SEARCH_STATE.minChars} huruf untuk mencari.`);return;}
 if(page==="arsip"){pageLog('Arsip','init');renderArchivePage();return;}
@@ -838,7 +840,7 @@ if(page==='dashboard'&&!DASHBOARD_SUMMARY){pageLog('Dashboard','init');setMainCo
 const dataPages=['stats','abc-analisis','stok-minus','cycle-count','movement','balikan-store'];
 if(dataPages.includes(page)&&!LOADED_DETAIL_PAGES.has(page)&&!PAGE_DATA_LOADS.get(page)?.promise)PAGE_DATA_LOADS.set(page,{loading:true,error:'',promise:null});
 rerenderCurrentPage({force:true});
-if(['dashboard','settings','anomaly','activity-log','tools-dev','import-pdf-transfer','sheet-input'].includes(page))return;
+if(['dashboard','settings','anomaly','activity-log','sku-notes','tools-dev','import-pdf-transfer','sheet-input'].includes(page))return;
 if(!["dashboard","search"].includes(page)&&!LOADED_DETAIL_PAGES.has(page))void startPageDataLoad(page);
 }
 function pageTitleFromPath(path){return String(path||"/").replace(/^\//,"").split("/").filter(Boolean).map(x=>x.replaceAll("-"," ").replace(/\b\w/g,c=>c.toUpperCase())).join(" / ")||"Dashboard";}
@@ -868,7 +870,7 @@ if(!user){
 if(isPreviewBypassLoginEnabled()){history.replaceState({},"","/");return showPage("dashboard");}
 return showLoginView();
 }
-if(path==="/")return showPage("dashboard");if(path==="/search")return showPage("search");if(path==="/barang-reject"||path==="/barang-reject/dashboard"){BARANG_REJECT_STATE.activeTab="dashboard";return showPage("barang-reject");}if(path==="/barang-reject/masuk"){BARANG_REJECT_STATE.activeTab="masuk";return showPage("barang-reject");}if(path==="/barang-reject/keluar"){BARANG_REJECT_STATE.activeTab="keluar";return showPage("barang-reject");}if(path==="/barang-reject/input"){BARANG_REJECT_STATE.activeTab="masuk";return showPage("barang-reject");}if(path==="/barang-masuk")return showPage("barang-masuk");if(path==="/barang-keluar")return showPage("barang-keluar");if(path==="/accuracy-dashboard"||path==="/accuracy"||path==="/dashboard-akurasi")return showPage("stats");if(path==="/abc-analisis")return showPage("abc-analisis");if(path==="/stock-aging")return showPage("stock-aging");if(path==="/statistics"){history.replaceState({},"","/");return showPage("dashboard");}if(path==="/locations"||path==="/location"||path==="/lokasi")return showPage("locations");if(path==="/settings")return showPage("settings");if(path==="/sheet-input")return showPage("sheet-input");if(path==="/arsip")return showPage("arsip");if(path==="/asset-store")return showPage("asset-store");if(path==="/cycle-count")return showPage("cycle-count");if(path==="/movement")return showPage("movement");if(path==="/balikan-store")return showPage("balikan-store");if(path==="/import-pdf-transfer")return showPage("import-pdf-transfer");if(path==="/activity-log"){if(!isActivityLogAllowed()){history.replaceState({},"","/");return showPage("dashboard");}return showPage("activity-log");}if(path==="/tools-dev"){if(!isToolsDevAllowed()){history.replaceState({},"","/");return showPage("dashboard");}return showPage("tools-dev");}if(path==="/anomaly"){history.replaceState({},"","/warning");return showPage("anomaly");}if(path==="/warning")return showPage("anomaly");if(path==="/stok-minus")return showPage("stok-minus");if(path.startsWith("/sku/")){currentSku=decodeURIComponent(path.split("/sku/")[1]||"");showPage("detail");if(currentSku)showDetail(currentSku);return;}showPage("dashboard");}
+if(path==="/")return showPage("dashboard");if(path==="/search")return showPage("search");if(path==="/sku-notes")return showPage("sku-notes");if(path==="/barang-reject"||path==="/barang-reject/dashboard"){BARANG_REJECT_STATE.activeTab="dashboard";return showPage("barang-reject");}if(path==="/barang-reject/masuk"){BARANG_REJECT_STATE.activeTab="masuk";return showPage("barang-reject");}if(path==="/barang-reject/keluar"){BARANG_REJECT_STATE.activeTab="keluar";return showPage("barang-reject");}if(path==="/barang-reject/input"){BARANG_REJECT_STATE.activeTab="masuk";return showPage("barang-reject");}if(path==="/barang-masuk")return showPage("barang-masuk");if(path==="/barang-keluar")return showPage("barang-keluar");if(path==="/accuracy-dashboard"||path==="/accuracy"||path==="/dashboard-akurasi")return showPage("stats");if(path==="/abc-analisis")return showPage("abc-analisis");if(path==="/stock-aging")return showPage("stock-aging");if(path==="/statistics"){history.replaceState({},"","/");return showPage("dashboard");}if(path==="/locations"||path==="/location"||path==="/lokasi")return showPage("locations");if(path==="/settings")return showPage("settings");if(path==="/sheet-input")return showPage("sheet-input");if(path==="/arsip")return showPage("arsip");if(path==="/asset-store")return showPage("asset-store");if(path==="/cycle-count")return showPage("cycle-count");if(path==="/movement")return showPage("movement");if(path==="/balikan-store")return showPage("balikan-store");if(path==="/import-pdf-transfer")return showPage("import-pdf-transfer");if(path==="/activity-log"){if(!isActivityLogAllowed()){history.replaceState({},"","/");return showPage("dashboard");}return showPage("activity-log");}if(path==="/tools-dev"){if(!isToolsDevAllowed()){history.replaceState({},"","/");return showPage("dashboard");}return showPage("tools-dev");}if(path==="/anomaly"){history.replaceState({},"","/warning");return showPage("anomaly");}if(path==="/warning")return showPage("anomaly");if(path==="/stok-minus")return showPage("stok-minus");if(path.startsWith("/sku/")){currentSku=decodeURIComponent(path.split("/sku/")[1]||"");showPage("detail");if(currentSku)showDetail(currentSku);return;}showPage("dashboard");}
 function syncDeveloperMenuVisibility(){
 const activityLogMenu=document.querySelector('.side-link[data-page="activity-log"]');
 if(activityLogMenu)activityLogMenu.style.display=isActivityLogAllowed()?"":"none";
@@ -1085,6 +1087,7 @@ if(page==="movement")renderMovementPage();
 if(page==="barang-reject")renderBarangRejectPage();
 if(page==="import-pdf-transfer")renderImportPdfTransferPage();
 if(page==="activity-log")renderActivityLogPage();
+if(page==="sku-notes")renderAllSkuNotesPage();
 if(page==="tools-dev")renderToolsDevPage();
 if(page==="arsip")renderArchivePage();
 if(page==="asset-store")renderAssetStorePage();
@@ -1399,7 +1402,7 @@ if(location.pathname.startsWith("/sku/")){
 hideInitialLoader();setMainContentLoading(false);return;
 }
 
-const independentRoutes=['/search','/arsip','/asset-store','/stock-aging','/warning','/activity-log','/tools-dev','/settings','/import-pdf-transfer','/balikan-store','/sheet-input'];
+const independentRoutes=['/sku-notes','/search','/arsip','/asset-store','/stock-aging','/warning','/activity-log','/tools-dev','/settings','/import-pdf-transfer','/balikan-store','/sheet-input'];
 if(independentRoutes.includes(location.pathname)||location.pathname.startsWith('/barang-reject')){hideInitialLoader();setMainContentLoading(false);return;}
 
 await hydrateModuleCachesFromDb();
@@ -2033,6 +2036,9 @@ function selectQuickResult(sku){selectedQuickSku=sku||"";const picked=[...(lastR
 
 function changeSearchPage(delta){if(!delta)return;const totalPage=Math.max(1,Math.ceil(lastResults.length/SEARCH_STATE.pageSize));SEARCH_STATE.page=Math.max(1,Math.min(totalPage,SEARCH_STATE.page+delta));renderResults(lastResults,lastQuery);}
 function renderResults(items,query){if(!items.length){renderQuickResultCard(null,query,"empty");return renderState("results","Data tidak ditemukan.");}const total=items.length;const totalPage=Math.max(1,Math.ceil(total/SEARCH_STATE.pageSize));if(SEARCH_STATE.page>totalPage)SEARCH_STATE.page=totalPage;const startIdx=(SEARCH_STATE.page-1)*SEARCH_STATE.pageSize;const pageItems=items.slice(startIdx,startIdx+SEARCH_STATE.pageSize);const start=total?startIdx+1:0,end=Math.min(startIdx+SEARCH_STATE.pageSize,total);const resultsNode=document.getElementById("results");if(!resultsNode)return;resultsNode.innerHTML=`<div class='subtitle'>${total} hasil.</div><div class='result-list'></div><div class='mv-pagination'><span>Menampilkan ${start}–${end} dari ${total} data</span><div class='row'><button class='btn-ghost' data-search-page='-1'>Prev</button><button class='btn-ghost' data-search-page='1'>Next</button></div></div>`;const listNode=resultsNode.querySelector(".result-list");pageItems.forEach(r=>{const card=document.createElement("div");card.className="result-card";card.tabIndex=0;card.setAttribute("role","button");card.addEventListener("click",e=>{if(e.target.closest("button"))return;selectQuickResult(r.sku);});card.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();selectQuickResult(r.sku);}});const badgesHtml=r.sources.filter(s=>!['Barang Masuk','Barang Keluar'].includes(s)).map(s=>`<span class='badge ${badgeClass(s)}'>${esc(s)}</span>`).join(" ");card.innerHTML=`<div class='result-head'><div><strong data-highlight='nama'></strong><div>SKU: <span data-highlight='sku'></span></div></div><div>${badgesHtml}</div></div><div class='row'><button class='btn-ghost copy-mini-btn' data-copy-sku onclick="copySku(decodeURIComponent('${encAttr(r.sku)}'),this)"><span aria-hidden='true'>⧉</span><span>Copy SKU</span></button><button class='btn-primary' onclick="navigateTo('/sku/'+encodeURIComponent(decodeURIComponent('${encAttr(r.sku)}')))">Lihat Detail</button></div>`;const namaEl=card.querySelector("[data-highlight='nama']");const skuEl=card.querySelector("[data-highlight='sku']");highlightText(r.nama,query).forEach(node=>namaEl.append(node));highlightText(r.sku,query).forEach(node=>skuEl.append(node));listNode?.append(card);});}
+let allSkuNotesController=null;
+function confirmSkuNoteDelete(options){if(document.getElementById('confirmModalRoot'))showConfirmModal(options);else toast('Dialog konfirmasi belum tersedia. Muat ulang halaman.','error');}
+function renderAllSkuNotesPage({refresh=false}={}){const previous=allSkuNotesController;allSkuNotesController=mountAllSkuNotes(document.getElementById('allSkuNotesApp'),{account:inventoryDraftOwner()+'|'+authRequestGeneration,confirmDelete:confirmSkuNoteDelete,navigate:navigateToSku});if(refresh&&previous===allSkuNotesController)void allSkuNotesController?.refresh();}
 let skuDetailRequestId=0;
 async function showDetail(identifier,{background=false,throwOnError=false}={}){
 const sku=String(identifier||"").trim();
@@ -2072,7 +2078,7 @@ html+=`<div class='summary-grid'>${summary.map(([k,v])=>`<div class='summary-car
 html+=`<div class='detail-note'><div class='note-box'><div class='note-title'>Lokasi</div><div class='note-value'>${locationSet.size?[...locationSet].slice(0,12).map(esc).join(", "):"-"}</div></div></div>`;
 html+=`<div id="skuNotesRoot"></div>`;
 for(const sheet of [...INVENTORY_PRELOAD_SHEETS,"Barang Masuk","Barang Keluar"]){const rows=bySheet[sheet];html+=`<details class='source-card' ${rows.length?'open':''}><summary><span><span class='badge ${badgeClass(sheet)}'>${sheet}</span></span><span>${rows.length} baris</span></summary><div class='source-body'>${renderSkuDetailTable(sheet,rows)}</div></details>`;}
-html+="</div>";detail.innerHTML=html;mountSkuNotes(document.getElementById("skuNotesRoot"),{sku,account:inventoryDraftOwner(),confirmDelete:options=>{if(document.getElementById('confirmModalRoot'))showConfirmModal(options);else toast('Dialog konfirmasi belum tersedia. Muat ulang halaman.','error');}});}
+html+="</div>";detail.innerHTML=html;mountSkuNotes(document.getElementById("skuNotesRoot"),{sku,account:inventoryDraftOwner(),confirmDelete:confirmSkuNoteDelete});}
 const SKU_DETAIL_LOCATION_FIELDS=new Set(["lokasi","lokasi bulky","lokasi_bulky","lokasiBulky"]);
 function getSkuDetailPresentationCells(row){const source=row&&typeof row==="object"?row:{};const canonical=String(source.lokasi??"").trim();const bulky=String(source.lokasi_bulky??source.lokasiBulky??source["lokasi bulky"]??"").trim();const cells={lokasi:canonical||bulky};for(const [key,value] of Object.entries(source)){if(!SKU_DETAIL_LOCATION_FIELDS.has(key))cells[key]=value;}return cells;}
 const SKU_DETAIL_INTERNAL_COLUMNS=new Set(["rownumber","sourcerownumber","syncedat"]);
@@ -2350,7 +2356,7 @@ async function refreshBarangReject(){const result=await loadBarangRejectData({fo
 async function refreshAccuracy(){await refreshInventoryGroupFull();updateStats();}
 async function refreshStokMinus(){await Promise.all([refreshInventoryGroupFull(),refreshTransaksiFull({render:false})]);localStorage.removeItem(STOK_MINUS_CACHE_KEY);refreshStokMinusInBackground();}
 async function refreshAbc(){await Promise.all([refreshInventoryGroupFull(),refreshTransaksiFull({render:false})]);return renderAbcAnalisisPage(true);}
-const SOFT_REFRESH_ROUTES={dashboard:refreshDashboard,'barang-masuk':refreshBarangMasuk,'barang-keluar':refreshBarangKeluar,locations:refreshLokasi,anomaly:refreshWarning,stats:refreshAccuracy,'stok-minus':refreshStokMinus,'abc-analisis':refreshAbc,'stock-aging':()=>loadStockAging(true),'cycle-count':refreshCycleCount,movement:refreshMovement,'balikan-store':refreshBalikanStore,detail:()=>refreshSkuDetail(currentSku),search:refreshSearch,arsip:softRefreshArchive,'asset-store':softRefreshAsset,'barang-reject':refreshBarangReject,'activity-log':renderActivityLogPage};
+const SOFT_REFRESH_ROUTES={dashboard:refreshDashboard,'barang-masuk':refreshBarangMasuk,'barang-keluar':refreshBarangKeluar,locations:refreshLokasi,anomaly:refreshWarning,stats:refreshAccuracy,'stok-minus':refreshStokMinus,'abc-analisis':refreshAbc,'stock-aging':()=>loadStockAging(true),'cycle-count':refreshCycleCount,movement:refreshMovement,'balikan-store':refreshBalikanStore,detail:()=>refreshSkuDetail(currentSku),search:refreshSearch,arsip:softRefreshArchive,'asset-store':softRefreshAsset,'barang-reject':refreshBarangReject,'activity-log':renderActivityLogPage,'sku-notes':()=>{renderAllSkuNotesPage();return allSkuNotesController?.refresh();}};
 window.SOFT_REFRESH_ROUTES=SOFT_REFRESH_ROUTES;
 
 function invalidateInventoryDerivedCaches(){
