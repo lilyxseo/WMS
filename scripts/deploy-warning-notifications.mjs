@@ -14,6 +14,29 @@ if(process.argv.includes('--configure')){
  const recipients=process.env.WMS_WARNING_RECIPIENTS;
  if(!/^62\d{8,13}(,62\d{8,13})*$/.test(recipients||''))throw new Error('Notification recipients unavailable');
  await sql(await readFile(new URL('../supabase/migrations/20261013030000_warning_notifications.sql',import.meta.url),'utf8'));
+ // Exercise persistent deduplication and lease ownership in a rolled-back transaction.
+ await sql(`begin;
+ do $test$
+ declare owner uuid:=gen_random_uuid(); contender uuid:=gen_random_uuid(); finding jsonb; claimed integer;
+ begin
+  perform 1 from public.warning_notify_state where id for update;
+  update public.warning_notify_state set initialized=false,run=null,lease=null where id;
+  if not public.warning_notify_lock(owner) then raise exception 'Cannot acquire test lease';end if;
+  if public.warning_notify_lock(contender) then raise exception 'Overlapping run accepted';end if;
+  finding:=jsonb_build_array(jsonb_build_object('fingerprint','deployment-test-'||owner,'warning','{}'::jsonb));
+  perform public.warning_notify_collect(owner,finding,array['620000000000'],true);
+  if exists(select 1 from public.warning_notify_outbox where fingerprint='deployment-test-'||owner) then raise exception 'Baseline enqueued messages';end if;
+  finding:=jsonb_build_array(jsonb_build_object('fingerprint','deployment-new-'||owner,'warning','{}'::jsonb));
+  perform public.warning_notify_collect(owner,finding,array['620000000000'],true);
+  if exists(select 1 from public.warning_notify_seen where fingerprint='deployment-new-'||owner) then raise exception 'Redeploy swallowed a new finding';end if;
+  perform public.warning_notify_collect(owner,finding,array['620000000000'],false);
+  perform public.warning_notify_collect(owner,finding,array['620000000000'],false);
+  select count(*) into claimed from public.warning_notify_outbox where fingerprint='deployment-new-'||owner;
+  if claimed<>1 then raise exception 'Persistent deduplication failed';end if;
+  perform public.warning_notify_unlock(owner);
+ end $test$;
+ rollback;`);
+ console.log('Database baseline, persistent deduplication and overlapping-run checks passed; test writes rolled back.');
  const secrets=await management('/secrets');if(!secrets.some(s=>s.name==='FONNTE_TOKEN'))throw new Error('Fonnte configuration unavailable');
  const keys=await management('/api-keys?reveal=true');const key=keys.find(k=>k.api_key?.startsWith('sb_secret_'))?.api_key;
  if(!key)throw new Error('Server data key unavailable');
