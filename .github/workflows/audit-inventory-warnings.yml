@@ -19,4 +19,4 @@ jobs:
         env:
           SUPABASE_PROJECT_REF: udullprykzdskrxmbbkj
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: node scripts/audit-inventory-warnings.mjs
+        run: node scripts/audit-inventory-warnings.mjs --validate

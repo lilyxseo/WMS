@@ -10,6 +10,9 @@ on:
       - 'supabase/migrations/20261013000000_shared_sku_notes.sql'
       - 'supabase/migrations/20261013010000_delete_own_sku_notes.sql'
       - 'scripts/deploy-sku-notes.mjs'
+      - 'scripts/deploy-warning-rules.mjs'
+      - 'scripts/audit-inventory-warnings.mjs'
+      - 'supabase/migrations/20261013020000_verified_inventory_warning_review.sql'
       - '.github/workflows/deploy-app-google-auth.yml'
   workflow_dispatch:
 permissions:
@@ -38,6 +41,16 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: node scripts/deploy-sku-notes.mjs
+      - name: Deploy verified warning rules
+        if: github.ref == 'refs/heads/main'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: node scripts/deploy-warning-rules.mjs
+      - name: Validate warning detection without data writes
+        if: github.ref == 'refs/heads/main'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: node scripts/audit-inventory-warnings.mjs --validate --require-ledger
       - name: Check Gmail Edge Function
         run: deno check supabase/functions/app-google-auth/index.ts
       - uses: supabase/setup-cli@v1

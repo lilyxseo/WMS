@@ -2,6 +2,25 @@
 // document URLs, or full transaction ledgers are exported.
 const project=process.env.SUPABASE_PROJECT_REF,token=process.env.SUPABASE_ACCESS_TOKEN;
 if(!project||!token)throw new Error('Audit configuration unavailable');
+if(process.argv.includes('--validate')){
+ const {loadInventoryWarnings}=await import('../functions/api/_inventory-warnings.js');
+ const response=await fetch(`https://api.supabase.com/v1/projects/${project}/api-keys?reveal=true`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(30000)});
+ if(!response.ok)throw new Error('Audit server credential unavailable');
+ const keys=await response.json(),key=keys.find(item=>String(item.api_key||'').startsWith('sb_secret_'))?.api_key;
+ if(!key)throw new Error('Audit server credential unavailable');
+ let result;
+ for(let attempt=0;attempt<4;attempt++){
+  result=await loadInventoryWarnings({SUPABASE_URL:`https://${project}.supabase.co`,SUPABASE_SECRET_KEY:key},{page:1,limit:1});
+  if(result.verification.filter(item=>process.argv.includes('--require-ledger')||['kartu_stok','rpl','bulky'].includes(item.source)).every(item=>item.ready))break;
+  await new Promise(resolve=>setTimeout(resolve,2000));
+ }
+ const report={summary:result.summary,partial:result.partial,coverage:result.verification.map(item=>({source:item.source,ready:item.ready,rowCount:item.rowCount})),checks:result.checks};
+ console.log('::notice title=Warning validation::'+JSON.stringify(report));
+ if(result.verification.filter(item=>process.argv.includes('--require-ledger')||['kartu_stok','rpl','bulky'].includes(item.source)).some(item=>!item.ready)){
+  console.error('::error::Read-only warning validation could not obtain a stable stock snapshot');process.exit(1);
+ }
+ process.exit(0);
+}
 const query=`
 with rows as (
  select to_jsonb(s) as j from public.inventory_kartu_stok s
