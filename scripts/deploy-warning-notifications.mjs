@@ -1,5 +1,6 @@
 import {readFile} from 'node:fs/promises';
 import {randomBytes} from 'node:crypto';
+process.on('unhandledRejection',error=>{console.error('::error::'+error.message);process.exit(1);});
 const project=process.env.SUPABASE_PROJECT_REF,token=process.env.SUPABASE_ACCESS_TOKEN;
 const base=`https://api.supabase.com/v1/projects/${project}`;
 async function management(path,body){
