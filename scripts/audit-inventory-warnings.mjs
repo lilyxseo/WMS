@@ -3,32 +3,17 @@
 const project=process.env.SUPABASE_PROJECT_REF,token=process.env.SUPABASE_ACCESS_TOKEN;
 if(!project||!token)throw new Error('Audit configuration unavailable');
 const query=`
-with snapshots as (
- select 'kartuStok' as source,to_jsonb(s) as j from public.inventory_kartu_stok s
- union all select 'rpl',to_jsonb(s) from public.inventory_rpl s
- union all select 'bulky',to_jsonb(s) from public.inventory_bulky s
-), classified as (
- select source,j,btrim(coalesce(j->>'sku','')) as sku,btrim(coalesce(j->>'nama_barang','')) as name,
- btrim(coalesce(j->>'lokasi_bulky','')) as location,
- case when coalesce(j->>'stok_akhir','') ~ '^-?[0-9]+([.][0-9]+)?$' then (j->>'stok_akhir')::numeric end as stock
- from snapshots
-), variants as (
- select sku,jsonb_agg(jsonb_build_object('source',source,'name',name,'stock',stock,'location',location)) as variants
- from classified where sku<>'' and stock>0 group by sku
- having count(distinct upper(regexp_replace(name,'[[:space:]]+',' ','g')))>1
-), missing as (select * from public.inventory_outbound_without_inbound())
+with rows as (
+ select to_jsonb(s) as j from public.inventory_kartu_stok s
+), numeric_rows as (
+ select j, (j->>'stok_awal')::numeric as a,(j->>'internal_stock_transfer')::numeric as i,(j->>'replenishment')::numeric as r,(j->>'pengeluaran')::numeric as p,(j->>'stok_akhir')::numeric as c
+ from rows where (j->>'stok_awal') ~ '^-?[0-9]+([.][0-9]+)?$' and (j->>'internal_stock_transfer') ~ '^-?[0-9]+([.][0-9]+)?$' and (j->>'replenishment') ~ '^-?[0-9]+([.][0-9]+)?$' and (j->>'pengeluaran') ~ '^-?[0-9]+([.][0-9]+)?$' and (j->>'stok_akhir') ~ '^-?[0-9]+([.][0-9]+)?$'
+)
 select jsonb_build_object(
- 'schema',(select jsonb_object_agg(table_name,cols) from (select table_name,jsonb_agg(column_name order by ordinal_position) as cols from information_schema.columns where table_schema='public' and table_name in ('inventory_kartu_stok','inventory_rpl','inventory_bulky','inventory_sync_status') group by table_name) a),
- 'sync',(select jsonb_agg(to_jsonb(s)) from public.inventory_sync_status s),
- 'snapshots',(select jsonb_agg(to_jsonb(a)) from (select source,count(*) as rows,count(*) filter(where sku='') as blank_sku,count(*) filter(where name='') as blank_name,count(*) filter(where stock>0 and location='') as positive_missing_location,count(*) filter(where stock<0) as negative,count(*) filter(where stock=0) as zero_stock from classified group by source) a),
- 'name_conflict_count',(select count(*) from variants),
- 'name_examples',(select jsonb_agg(to_jsonb(a)) from (select * from variants order by sku limit 8) a),
- 'negative_examples',(select jsonb_agg(to_jsonb(a)) from (select source,sku,name,location,stock,j->>'stok_awal' as opening,j->>'internal_stock_transfer' as internal,j->>'replenishment' as replenish,j->>'pengeluaran' as outgoing,j->>'netsuite' as netsuite,j->>'selisih' as selisih from classified where stock<0 order by source,sku limit 12) a),
- 'accuracy_examples',(select jsonb_agg(to_jsonb(a)) from (select sku,name,stock,j->>'netsuite' as netsuite,j->>'selisih' as selisih from classified where source='bulky' and coalesce(j->>'selisih','') not in ('','0','0.0','0.00') order by sku limit 10) a),
- 'blank_examples',(select jsonb_agg(to_jsonb(a)) from (select source,sku,name,location,stock from classified where sku='' or name='' or (stock>0 and location='') limit 10) a),
- 'outbound_missing_count',(select count(*) from missing),
- 'outbound_missing_with_snapshot',(select count(*) from missing m where exists(select 1 from classified c where public.inventory_normalize_sku(c.sku)=public.inventory_normalize_sku(m.sku))),
- 'outbound_examples',(select jsonb_agg(to_jsonb(a)) from (select m.sku,m.nama_barang,(select jsonb_agg(jsonb_build_object('source',c.source,'opening',c.j->>'stok_awal','stock',c.stock)) from classified c where public.inventory_normalize_sku(c.sku)=public.inventory_normalize_sku(m.sku)) as stock_evidence from missing m order by m.sku limit 10) a)
+ 'balance_formulas',(select jsonb_build_object('complete_rows',count(*),'plus_plus',count(*) filter(where abs(a+i+r-p-c)<0.000001),'minus_minus',count(*) filter(where abs(a-i-r-p-c)<0.000001),'plus_minus',count(*) filter(where abs(a+i-r-p-c)<0.000001),'minus_plus',count(*) filter(where abs(a-i+r-p-c)<0.000001),'active_transfer_rows',count(*) filter(where i<>0 or r<>0)) from numeric_rows),
+ 'unmatched_balance',(select jsonb_agg(to_jsonb(v)) from (select j->>'sku' as sku,j->>'lokasi_bulky' as location,a,i,r,p,c from numeric_rows where abs(a-i-r-p-c)>0.000001 limit 12) v),
+ 'outbound_detail',(select jsonb_agg(to_jsonb(v)) from (select sku,nama_barang,tanggal,qty,status,keterangan,from_location,to_location,source_row_number from public.inventory_barang_keluar where public.inventory_normalize_sku(sku)='681565407499' order by source_row_number desc limit 8) v),
+ 'reference_coverage',(select jsonb_agg(to_jsonb(v)) from (select 'rpl' as source,count(*) as rows,count(*) filter(where netsuite is null) as no_reference,count(*) filter(where selisih is null) as no_difference from public.inventory_rpl union all select 'bulky',count(*),count(*) filter(where netsuite is null),count(*) filter(where selisih is null) from public.inventory_bulky) v)
 ) as audit;
 `;
 const response=await fetch(`https://api.supabase.com/v1/projects/${project}/database/query`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({query}),signal:AbortSignal.timeout(60000)});
