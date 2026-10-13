@@ -1,4 +1,5 @@
 import { json, getAccessToken, escSheet, buildHeaderInfo } from './_utils';
+import { fetchLastInboundLocations } from './_last-inbound-location.js';
 import { fetchLocationInventory, LOCATION_INVENTORY_QTY_FIELD, LOCATION_INVENTORY_TABLE } from './_location-inventory.js';
 
 export async function onRequestGet({ request, env }) {
@@ -60,16 +61,20 @@ export async function onRequestGet({ request, env }) {
       });
       out.push(rowData);
     }
-    let locationInventory = {};
-    let locationInventoryError = null;
-    try {
-      locationInventory = await fetchLocationInventory(env, out.map(row => row.sku));
-    } catch (error) {
-      locationInventoryError = error?.message || 'Gagal membaca inventory lokasi';
-      console.error('[BalikanStore] Location inventory lookup failed', locationInventoryError);
-    }
+    const skus = out.map(row => row.sku);
+    const [inventoryResult, inboundResult] = await Promise.allSettled([
+      fetchLocationInventory(env, skus), fetchLastInboundLocations(env, skus),
+    ]);
+    const locationInventory = inventoryResult.status === 'fulfilled' ? inventoryResult.value : {};
+    const lastInboundLocations = inboundResult.status === 'fulfilled' ? inboundResult.value : {};
+    const locationInventoryError = inventoryResult.status === 'rejected' ? 'Gagal membaca inventory lokasi' : null;
+    const lastInboundLocationError = inboundResult.status === 'rejected' ? 'Gagal membaca lokasi terakhir Barang Masuk' : null;
+    if (locationInventoryError) console.error('[BalikanStore] Location inventory lookup failed');
+    if (lastInboundLocationError) console.error('[BalikanStore] Last inbound location lookup failed');
     out.forEach(row => {
-      row.locations = locationInventory[String(row.sku || '').trim().toLowerCase()] || [];
+      const sku = String(row.sku || '').trim().toLowerCase();
+      row.locations = locationInventory[sku] || [];
+      row.lastInboundLocation = lastInboundLocations[sku] || '';
     });
     return json({
       sheetName,
@@ -83,6 +88,7 @@ export async function onRequestGet({ request, env }) {
         aggregatedBy: ['sku', 'lokasi_bulky'],
       },
       locationInventoryError,
+      lastInboundLocationError,
     });
   } catch (err) { return json({ message: err?.message || 'Internal server error' }, 500); }
 }
