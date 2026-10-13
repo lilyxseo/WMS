@@ -2245,3 +2245,6 @@ body.dark .loc-status-dense{background:rgba(239,68,68,.16);color:#fca5a5;border-
 .session-review-items{list-style:none;padding:0;margin:10px 0;max-height:45vh;overflow:auto;}
 .session-review-items li{display:flex;flex-direction:column;gap:4px;padding:10px 0;border-bottom:1px solid var(--border);overflow-wrap:anywhere;}
 .session-review-items span{font-size:12px;}
+
+#page-balikan-store .balikan-location-item .balikan-location-name{white-space:normal;overflow-wrap:anywhere}
+#page-balikan-store .balikan-last-location{font-size:11px;font-weight:500}

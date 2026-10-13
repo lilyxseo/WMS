@@ -3210,7 +3210,7 @@ function getBalikanTableColumns(){const dynamic=(window.BALIKAN_DYNAMIC_COLUMNS|
 function getBalikanUniqueOptions(rows,col){const version=`${BALIKAN_STATE.lastDataChecksum}|${getBalikanTableColumns().map(([key])=>key).join('|')}`;if(BALIKAN_STATE.filterOptionsVersion!==version){BALIKAN_STATE.filterOptionsVersion=version;BALIKAN_STATE.filterOptionsByColumn={};}const cache=BALIKAN_STATE.filterOptionsByColumn||(BALIKAN_STATE.filterOptionsByColumn={});if(!cache[col])cache[col]=getUniqueOptions(rows,col,'balikan');return cache[col];}
 function ensureBalikanFilterState(){if(!BALIKAN_STATE.filterState)BALIKAN_STATE.filterState={page:1,pageSize:50,openFilterCol:'',columnFilters:{},rows:[],filtered:[]};const st=BALIKAN_STATE.filterState;if(![25,50,100].includes(Number(st.pageSize)))st.pageSize=50;if(!Number.isFinite(Number(st.page))||Number(st.page)<1)st.page=1;getBalikanTableColumns().forEach(([k])=>{if(!Array.isArray(st.columnFilters[k]))st.columnFilters[k]=[];});return st;}
 function getBalikanCacheKey(sheetName){return `${MODULE_CACHE_KEYS.balikanStore}:${String(sheetName||'default')}`;}
-function checksumBalikanRows(rows=[],dynamicColumns=[]){try{return JSON.stringify({cols:(dynamicColumns||[]).map(c=>[c.key,c.header]),rows:(rows||[]).map(r=>[r.rowNumber,r.no,r.sku,r.namaBarang,r.qty,r.rakTujuan,r.lokasi,r.stokBulky,r.stokRetail,r.status,r.keterangan,r.checked,r.locations,...(dynamicColumns||[]).map(c=>r?.[c.key])])});}catch(_err){return `${rows?.length||0}:${Date.now()}`;}}
+function checksumBalikanRows(rows=[],dynamicColumns=[]){try{return JSON.stringify({cols:(dynamicColumns||[]).map(c=>[c.key,c.header]),rows:(rows||[]).map(r=>[r.rowNumber,r.no,r.sku,r.namaBarang,r.qty,r.rakTujuan,r.lokasi,r.stokBulky,r.stokRetail,r.status,r.keterangan,r.checked,r.locations,r.lastInboundLocation,...(dynamicColumns||[]).map(c=>r?.[c.key])])});}catch(_err){return `${rows?.length||0}:${Date.now()}`;}}
 function getBalikanRowsCache(sheetName){try{const parsed=JSON.parse(localStorage.getItem(getBalikanCacheKey(sheetName))||'null');return parsed&&Array.isArray(parsed.rows)?parsed:null;}catch(_err){return null;}}
 function setBalikanRowsCache(sheetName,payload){try{localStorage.setItem(getBalikanCacheKey(sheetName),JSON.stringify(payload));}catch(_err){}}
 function normalizeBalikanRawSearch(value){return String(value||"").toLowerCase().trim().replace(/\s+/g," ");}
@@ -3394,8 +3394,9 @@ function renderBalikanLocationCardContent(rows=[]){
     const itemKey=normalizeBalikanLocation(rawLocation);
     const active=hasActive&&itemKey===activeKey;
     const inactive=hasActive&&!active;
+    const lastUsed=!!itemKey&&itemKey===normalizeBalikanLocation(row.lastInboundLocation);
     const qtyLabel=item.qty===null||item.qty===undefined?'—':`${item.qty} pcs`;
-    return `<button type='button' class='balikan-location-item ${active?'is-active':''} ${inactive?'is-inactive':''}' data-balikan-location-select='1' data-row-number='${Number(row.rowNumber)||0}' data-location='${esc(rawLocation)}' ${!itemKey||!canUpdate?'disabled':''} aria-pressed='${active?'true':'false'}'><span class='balikan-location-name'>${esc(displayLabel)} :</span><strong>${qtyLabel}</strong></button>`;
+    return `<button type='button' class='balikan-location-item ${active?'is-active':''} ${inactive?'is-inactive':''}' data-balikan-location-select='1' data-row-number='${Number(row.rowNumber)||0}' data-location='${esc(rawLocation)}' ${!itemKey||!canUpdate?'disabled':''} aria-pressed='${active?'true':'false'}'><span class='balikan-location-name'>${esc(displayLabel)}${lastUsed?" <small class='balikan-last-location'>(terakhir digunakan)</small>":''} :</span><strong>${qtyLabel}</strong></button>`;
   }).join('')}</div>`;
 }
 function getBalikanInventFieldKey(){
