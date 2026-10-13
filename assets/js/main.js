@@ -3394,7 +3394,7 @@ function renderBalikanLocationCardContent(rows=[]){
     const itemKey=normalizeBalikanLocation(rawLocation);
     const active=hasActive&&itemKey===activeKey;
     const inactive=hasActive&&!active;
-    const lastUsed=!!itemKey&&itemKey===normalizeBalikanLocation(row.lastInboundLocation);
+    const lastUsed=!!itemKey&&itemKey!=='masih di inbound'&&itemKey===normalizeBalikanLocation(row.lastInboundLocation);
     const qtyLabel=item.qty===null||item.qty===undefined?'—':`${item.qty} pcs`;
     return `<button type='button' class='balikan-location-item ${active?'is-active':''} ${inactive?'is-inactive':''}' data-balikan-location-select='1' data-row-number='${Number(row.rowNumber)||0}' data-location='${esc(rawLocation)}' ${!itemKey||!canUpdate?'disabled':''} aria-pressed='${active?'true':'false'}'><span class='balikan-location-name'>${esc(displayLabel)}${lastUsed?" <small class='balikan-last-location'>(terakhir digunakan)</small>":''} :</span><strong>${qtyLabel}</strong></button>`;
   }).join('')}</div>`;

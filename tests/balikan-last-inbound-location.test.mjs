@@ -37,3 +37,12 @@ test('no receipt or destination absent from stock options produces no guessed la
 test('refresh detects changed last inbound location even when TRIP and stock data are unchanged',()=>{
  const ctx=vm.createContext({Date});vm.runInContext(source.split('\n').find(line=>line.startsWith('function checksumBalikanRows(')),ctx);const row={sku:'001',rowNumber:5,locations:[{lokasi:'A10-2',qty:87}],lastInboundLocation:'A10-2'};assert.notEqual(ctx.checksumBalikanRows([row]),ctx.checksumBalikanRows([{...row,lastInboundLocation:'B20-1'}]));
 });
+test('latest inbound staging destinations are skipped for the previous real location',async()=>{
+ await withRows([
+  {sku:'001',to_location:'MASIH DI INBOUND',tanggal:'10/15/2026',source_row_number:5},
+  {sku:'001',to_location:'  Masih   di inbound  ',tanggal:'10/14/2026',source_row_number:4},
+  {sku:'001',to_location:'A10-2',tanggal:'10/13/2026',source_row_number:3},
+  {sku:'002',to_location:'masih di inbound',tanggal:'10/15/2026',source_row_number:6},
+ ],async()=>{assert.deepEqual(await fetchLastInboundLocations(env,['001','002']),{'001':'A10-2'});});
+});
+test('cached inbound staging locations never receive the last-used label',()=>{assert.doesNotMatch(render({sku:'001',lokasi:'MASIH DI INBOUND',lastInboundLocation:'MASIH DI INBOUND',locations:[{lokasi:'MASIH DI INBOUND',qty:0}]}),/terakhir digunakan/);});

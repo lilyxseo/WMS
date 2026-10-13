@@ -23,6 +23,7 @@ export async function fetchLastInboundLocations(env, skus = []) {
     });
     for (const row of rows) {
       const sku = normalize(row.sku), location = String(row.to_location ?? '').trim();
+      if (normalize(location).replace(/\s+/g, ' ') === 'masih di inbound') continue;
       if (sku && location && !Object.hasOwn(locations, sku)) locations[sku] = location;
     }
   }
