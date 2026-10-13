@@ -2248,3 +2248,10 @@ body.dark .loc-status-dense{background:rgba(239,68,68,.16);color:#fca5a5;border-
 
 #page-balikan-store .balikan-location-item .balikan-location-name{white-space:normal;overflow-wrap:anywhere}
 #page-balikan-store .balikan-last-location{font-size:11px;font-weight:500}
+
+.sku-notes form label{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+.sku-notes textarea{width:100%;box-sizing:border-box;resize:vertical;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--text);font:inherit}
+.sku-note{padding:14px 0;border-bottom:1px solid var(--line)}
+.sku-note-meta{display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:12px}
+.sku-note-meta time{color:var(--muted)}
+.sku-note p{white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0 0}
