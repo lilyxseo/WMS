@@ -1,0 +1,22 @@
+name: Audit inventory warning data
+on:
+  push:
+    branches: [fix/warning-evidence]
+    paths: ['scripts/audit-inventory-warnings.mjs', '.github/workflows/audit-inventory-warnings.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Read warning statistics
+        env:
+          SUPABASE_PROJECT_REF: udullprykzdskrxmbbkj
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: node scripts/audit-inventory-warnings.mjs
