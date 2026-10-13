@@ -2269,3 +2269,4 @@ body.dark .loc-status-dense{background:rgba(239,68,68,.16);color:#fca5a5;border-
 .sku-notes .state{padding:8px 0;font-size:12px}
 .sku-notes .mv-pagination{margin-top:8px;font-size:11px}
 .sku-notes [hidden]{display:none!important}
+.sku-note-meta .sku-note-delete{margin-left:auto;padding:3px 7px;font-size:11px;color:var(--danger)}

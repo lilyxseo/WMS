@@ -13,13 +13,14 @@ async function database(env,params,options={}){
 }
 export async function onRequestGet({request,env}){
  try{
-  if(!await getNoteIdentity(request,env))return json({success:false,message:'Sesi tidak valid. Silakan login kembali.'},401);
+  const viewer=await getNoteIdentity(request,env);
+  if(!viewer)return json({success:false,message:'Sesi tidak valid. Silakan login kembali.'},401);
   const url=new URL(request.url),sku=skuKey(url.searchParams.get('sku'));
   if(!validSku(sku))return json({success:false,message:'SKU wajib diisi.'},400);
   const page=Math.max(1,Math.min(100000,parseInt(url.searchParams.get('page'),10)||1));
-  const params=new URLSearchParams({select:columns,sku:`eq.${sku}`,order:'created_at.desc,id.desc',offset:String((page-1)*20),limit:'21'});
+  const params=new URLSearchParams({select:`${columns},author_id`,sku:`eq.${sku}`,order:'created_at.desc,id.desc',offset:String((page-1)*20),limit:'21'});
   const rows=await database(env,params);
-  return json({success:true,rows:rows.slice(0,20),page,hasNext:rows.length>20});
+  return json({success:true,rows:rows.slice(0,20).map(({author_id,...note})=>({...note,canDelete:author_id===viewer.id})),page,hasNext:rows.length>20});
  }catch{return json({success:false,message:'Catatan belum dapat dimuat. Coba lagi.'},503);}
 }
 export async function onRequestPost({request,env}){
@@ -36,4 +37,20 @@ export async function onRequestPost({request,env}){
   if(!existing.length||existing[0].body!==body)return json({success:false,message:'Catatan berubah. Muat ulang daftar sebelum mencoba lagi.'},409);
   return json({success:true,note:existing[0]});
  }catch{return json({success:false,message:'Penyimpanan belum terkonfirmasi. Teks tetap tersedia; coba kembali untuk catatan yang sama.'},503);}
+}
+
+export async function onRequestDelete({request,env}){
+ try{
+  const author=await getNoteIdentity(request,env);
+  if(!author)return json({success:false,message:'Sesi tidak valid. Silakan login kembali.'},401);
+  let input;try{input=await request.json();}catch{return json({success:false,message:'Data catatan tidak valid.'},400);}
+  const sku=skuKey(input?.sku);
+  if(!validSku(sku)||!validId(input?.id))return json({success:false,message:'SKU atau catatan tidak valid.'},400);
+  // Apply ownership in the deletion itself: no client role, name, or author ID
+  // can broaden this filter, including Developer accounts.
+  const params=new URLSearchParams({select:'id',id:`eq.${input.id}`,sku:`eq.${sku}`,author_id:`eq.${author.id}`});
+  const rows=await database(env,params,{method:'DELETE',headers:{Prefer:'return=representation'}});
+  if(!rows.length)return json({success:false,message:'Catatan tidak ditemukan atau bukan milik Anda.'},404);
+  return json({success:true,id:rows[0].id});
+ }catch{return json({success:false,message:'Penghapusan belum terkonfirmasi. Refresh Catatan sebelum mencoba lagi.'},503);}
 }

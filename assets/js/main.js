@@ -2072,7 +2072,7 @@ html+=`<div class='summary-grid'>${summary.map(([k,v])=>`<div class='summary-car
 html+=`<div class='detail-note'><div class='note-box'><div class='note-title'>Lokasi</div><div class='note-value'>${locationSet.size?[...locationSet].slice(0,12).map(esc).join(", "):"-"}</div></div></div>`;
 html+=`<div id="skuNotesRoot"></div>`;
 for(const sheet of [...INVENTORY_PRELOAD_SHEETS,"Barang Masuk","Barang Keluar"]){const rows=bySheet[sheet];html+=`<details class='source-card' ${rows.length?'open':''}><summary><span><span class='badge ${badgeClass(sheet)}'>${sheet}</span></span><span>${rows.length} baris</span></summary><div class='source-body'>${renderSkuDetailTable(sheet,rows)}</div></details>`;}
-html+="</div>";detail.innerHTML=html;mountSkuNotes(document.getElementById("skuNotesRoot"),{sku,account:inventoryDraftOwner()});}
+html+="</div>";detail.innerHTML=html;mountSkuNotes(document.getElementById("skuNotesRoot"),{sku,account:inventoryDraftOwner(),confirmDelete:options=>{if(document.getElementById('confirmModalRoot'))showConfirmModal(options);else toast('Dialog konfirmasi belum tersedia. Muat ulang halaman.','error');}});}
 const SKU_DETAIL_LOCATION_FIELDS=new Set(["lokasi","lokasi bulky","lokasi_bulky","lokasiBulky"]);
 function getSkuDetailPresentationCells(row){const source=row&&typeof row==="object"?row:{};const canonical=String(source.lokasi??"").trim();const bulky=String(source.lokasi_bulky??source.lokasiBulky??source["lokasi bulky"]??"").trim();const cells={lokasi:canonical||bulky};for(const [key,value] of Object.entries(source)){if(!SKU_DETAIL_LOCATION_FIELDS.has(key))cells[key]=value;}return cells;}
 const SKU_DETAIL_INTERNAL_COLUMNS=new Set(["rownumber","sourcerownumber","syncedat"]);
