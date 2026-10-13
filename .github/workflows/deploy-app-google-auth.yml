@@ -8,6 +8,7 @@ on:
       - 'supabase/config.toml'
       - 'tests/**'
       - 'supabase/migrations/20261013000000_shared_sku_notes.sql'
+      - 'supabase/migrations/20261013010000_delete_own_sku_notes.sql'
       - 'scripts/deploy-sku-notes.mjs'
       - '.github/workflows/deploy-app-google-auth.yml'
   workflow_dispatch:
