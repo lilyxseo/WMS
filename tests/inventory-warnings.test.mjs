@@ -13,19 +13,20 @@ test('complete warning rules avoid known false positives and preserve evidence',
   rows.kartuStok.push({ sku: 'LOC', nama_barang: 'Located', lokasi_bulky: 'MASIH DI INBOUND', stok_akhir: 2 }, { sku: 'EMPTY-LOC', nama_barang: 'Lost', lokasi_bulky: ' ', stok_akhir: 3 }, { sku: 'MINUS', nama_barang: 'Minus', lokasi_bulky: 'A01-1', stok_akhir: -2 });
   rows.bulky.push({ sku: 'ACC', nama_barang: 'Accuracy', lokasi_bulky: 'A01-1', stok_akhir: 1, netsuite: null, selisih: 2 });
   const warnings = buildInventoryWarnings(rows);
-  assert.equal(warnings.filter(row => row.category === 'OUTBOUND_WITHOUT_INBOUND').length, 1);
+  assert.equal(warnings.filter(row => row.category === 'OUTBOUND_WITHOUT_INBOUND').length, 0, 'invalid/unknown outbound quantity is not receipt evidence');
   assert.equal(warnings.some(row => row.category === 'OUTBOUND_WITHOUT_INBOUND' && row.sku.toUpperCase() === 'BOTH'), false);
   assert.equal(warnings.some(row => row.category === 'NAME_MISMATCH' && row.sku.toUpperCase() === 'BOTH'), false);
   assert.equal(warnings.some(row => row.category === 'EMPTY_LOCATION' && row.sku === 'LOC'), false);
-  for (const category of ['EMPTY_LOCATION','NEGATIVE_STOCK','ACCURACY_MISMATCH']) assert.equal(has(warnings, category), true);
+  for (const category of ['EMPTY_LOCATION','NEGATIVE_STOCK']) assert.equal(has(warnings, category), true);
+  assert.equal(has(warnings,'ACCURACY_MISMATCH'),false,'missing reference must not be interpreted as zero');
   assert.equal(has(warnings, 'MISSING_NETSUITE'), false, 'NETSUITE is an optional BULKY header');
   assert.ok(warnings.every(row => row.evidence && row.recommendation));
 });
 
 test('material name conflict, blank SKU and accuracy aggregation are deterministic', () => {
   const rows = base();
-  rows.rpl.push({ sku: 'ABC', nama_barang: 'First name', selisih: 2 }, { sku: null, nama_barang: 'No sku', selisih: 0 });
-  rows.bulky.push({ sku: ' abc ', nama_barang: 'Second name', netsuite: 10, selisih: -2 });
+  rows.rpl.push({ sku: 'ABC', nama_barang: 'First name', stok_akhir:3,netsuite:1,selisih: 2 }, { sku: null, nama_barang: 'No sku', selisih: 0 });
+  rows.bulky.push({ sku: ' abc ', nama_barang: 'Second name', stok_akhir:1,netsuite:3,selisih: -2 });
   const warnings = buildInventoryWarnings(rows);
   assert.equal(has(warnings, 'NAME_MISMATCH'), true);
   assert.equal(has(warnings, 'EMPTY_SKU'), true);
@@ -49,7 +50,8 @@ test('warning endpoint never downloads the large transaction ledgers', async () 
   const originalFetch = globalThis.fetch, urls = [];
   globalThis.fetch = async url => {
     urls.push(String(url));
-    if (String(url).includes('/rpc/inventory_outbound_without_inbound')) return new Response(JSON.stringify([{ sku:'OUT-1', nama_barang:'Outbound' }]), { status:200 });
+    if(String(url).includes('inventory_sync_status'))return Response.json(['kartu_stok','rpl','bulky','barang_masuk','barang_keluar'].map(source=>({source,status:'success',source_version:'v1',last_success_at:'2026-10-13T06:51:00Z',locked_at:null})));
+    if (String(url).includes('/rpc/inventory_warning_ledger_review')) return new Response(JSON.stringify([{ sku:'OUT-1', nama_barang:'Outbound',qty:1,source_row_number:17,tanggal:'2026-10-13' }]), { status:200 });
     return new Response('[]', { status:200 });
   };
   try {
