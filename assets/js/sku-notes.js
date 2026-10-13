@@ -8,9 +8,13 @@ export function mountSkuNotes(root,{sku,account}){
  sku=String(sku).trim().toUpperCase();const key=keyFor(account,sku);
  let state=states.get(key);
  if(!state){let draft={};try{draft=JSON.parse(localStorage.getItem(key)||'{}');}catch{}
- state={body:typeof draft?.body==='string'?draft.body:'',id:typeof draft?.id==='string'?draft.id:'',rows:[],page:1,hasNext:false,loading:false,saving:false,error:'',success:'',loadId:0};states.set(key,state);}
+ state={body:typeof draft?.body==='string'?draft.body:'',id:typeof draft?.id==='string'?draft.id:'',rows:[],page:1,hasNext:false,loading:false,saving:false,error:'',success:'',loadId:0,expanded:false,composing:!!draft?.body};states.set(key,state);}
  state.root=root;
- root.innerHTML=`<section class="card sku-notes"><div class="section-header"><h3>Catatan SKU</h3><button type="button" class="btn-ghost" data-notes-refresh>Refresh Catatan</button></div><p class="subtitle">Dapat dilihat pengguna lain. Nama, role, dan tanggal dicatat otomatis.</p><form data-notes-form><label>Catatan baru<textarea data-notes-input rows="3" maxlength="2000" placeholder="Tulis catatan untuk SKU ini…"></textarea></label><div class="row"><button type="submit" class="btn-primary" data-notes-submit>Simpan Catatan</button><small data-notes-count></small></div></form><p data-notes-status role="status"></p><div data-notes-list></div><div class="mv-pagination"><span data-notes-page></span><div class="row"><button type="button" class="btn-ghost" data-notes-prev>Sebelumnya</button><button type="button" class="btn-ghost" data-notes-next>Berikutnya</button></div></div></section>`;
+ root.innerHTML=`<details class="card sku-notes" data-notes-panel><summary class="sku-notes-heading"><span>Catatan SKU</span><small data-notes-badge></small></summary><div class="sku-notes-content"><div class="sku-notes-actions"><details data-notes-compose><summary>+ Tambah catatan</summary><form data-notes-form><label><span class="sr-only">Catatan baru</span><textarea data-notes-input rows="2" maxlength="2000" placeholder="Tulis catatan…"></textarea></label><div class="row"><button type="submit" class="btn-primary" data-notes-submit>Simpan Catatan</button><small data-notes-count></small></div></form></details><button type="button" class="btn-ghost" data-notes-refresh>Refresh</button></div><p data-notes-status role="status"></p><div class="sku-notes-list" data-notes-list></div><div class="mv-pagination" data-notes-pager><span data-notes-page></span><div class="row"><button type="button" class="btn-ghost" data-notes-prev>Sebelumnya</button><button type="button" class="btn-ghost" data-notes-next>Berikutnya</button></div></div></div></details>`;
+ const panel=root.querySelector('[data-notes-panel]'),compose=root.querySelector('[data-notes-compose]');
+ panel.open=state.expanded;compose.open=state.composing;
+ panel.addEventListener('toggle',()=>{state.expanded=panel.open;});
+ compose.addEventListener('toggle',()=>{state.composing=compose.open;});
  const textarea=root.querySelector('[data-notes-input]');textarea.value=state.body;
  const persist=()=>{try{if(state.body)localStorage.setItem(key,JSON.stringify({body:state.body,id:state.id}));else localStorage.removeItem(key);}catch{state.error='Draf belum tersimpan di browser. Jangan tutup halaman sebelum menyimpan catatan.';}};
  const render=()=>{
@@ -18,7 +22,9 @@ export function mountSkuNotes(root,{sku,account}){
   const input=node.querySelector('[data-notes-input]');input.disabled=state.saving;
   const submit=node.querySelector('[data-notes-submit]');submit.disabled=state.saving||!state.body.trim();submit.textContent=state.saving?'Menyimpan…':'Simpan Catatan';
   node.querySelector('[data-notes-count]').textContent=`${state.body.length}/2000`;
-  const status=node.querySelector('[data-notes-status]');status.textContent=state.error||state.success||(state.loading?'Memuat catatan…':'');status.className=state.error?'state-error':'';
+  const badge=node.querySelector('[data-notes-badge]');badge.textContent=state.body?'Draf':state.loading&&!state.rows.length?'…':state.rows.length?`${state.rows.length}${state.hasNext?'+':''} di halaman ini`:state.error?'Coba lagi':'Belum ada';
+  node.querySelector('[data-notes-pager]').hidden=state.page===1&&!state.hasNext;
+  const status=node.querySelector('[data-notes-status]');status.textContent=state.error||state.success||(state.loading?'Memuat catatan…':'');status.className=state.error?'state-error':'';status.hidden=!status.textContent;
   node.querySelector('[data-notes-list]').innerHTML=state.rows.length?renderNoteRows(state.rows):state.loading?'':state.error?'':'<p class="state">Belum ada catatan untuk SKU ini.</p>';
   node.querySelector('[data-notes-page]').textContent=`Halaman ${state.page}`;
   node.querySelector('[data-notes-prev]').disabled=state.loading||state.saving||state.page<=1;
@@ -35,7 +41,7 @@ export function mountSkuNotes(root,{sku,account}){
  root.querySelector('[data-notes-form]').addEventListener('submit',async event=>{
   event.preventDefault();if(state.saving||!state.body.trim())return;
   if(!state.id)state.id=crypto.randomUUID();persist();state.saving=true;state.error='';state.success='';render();
-  try{const response=await fetch('/api/sku-notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sku,body:state.body,id:state.id})});const data=await response.json();if(!response.ok||!data.success)throw new Error(data.message||'Catatan belum berhasil disimpan.');state.body='';state.id='';persist();state.root?.querySelector('[data-notes-input]')&&(state.root.querySelector('[data-notes-input]').value='');state.success='Catatan tersimpan dan dapat dilihat pengguna lain.';await load(1);}
+  try{const response=await fetch('/api/sku-notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sku,body:state.body,id:state.id})});const data=await response.json();if(!response.ok||!data.success)throw new Error(data.message||'Catatan belum berhasil disimpan.');state.body='';state.id='';persist();state.root?.querySelector('[data-notes-input]')&&(state.root.querySelector('[data-notes-input]').value='');state.composing=false;if(state.root?.isConnected)state.root.querySelector('[data-notes-compose]').open=false;state.success='Catatan tersimpan.';await load(1);}
   catch(error){state.error=error.message||'Penyimpanan belum terkonfirmasi. Teks tetap tersedia untuk dicoba kembali.';}
   finally{state.saving=false;render();}
  });
