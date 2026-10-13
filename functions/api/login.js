@@ -1,3 +1,4 @@
+import { createVerifiedDevToken } from './_note-identity.js';
 import { getPublishableSupabaseConfig, getSecretSupabaseConfig } from './_supabase-config.js';
 
 const DEV_SESSION_TTL_SECONDS = 60 * 60 * 12;
@@ -19,21 +20,6 @@ function safeEquals(a, b) {
   }
 
   return out === 0;
-}
-
-function createDevToken(secret, username) {
-  const payload = {
-    sub: "developer",
-    username,
-    role: "Mode Development",
-    isDeveloper: true,
-    exp: Math.floor(Date.now() / 1000) + DEV_SESSION_TTL_SECONDS,
-  };
-
-  const base = btoa(JSON.stringify(payload));
-  const sig = btoa(`${base}.${secret}`).replace(/=+$/g, "");
-
-  return `${base}.${sig}`;
 }
 
 const INVALID_CREDENTIALS_RESPONSE = {
@@ -95,11 +81,7 @@ export async function onRequestPost({ request, env }) {
         safeEquals(normalizedIdentifier, devUsername) &&
         safeEquals(normalizedPassword, devPassword)
       ) {
-        const secret = String(
-          env.DEV_SESSION_SECRET || "dev-secret"
-        );
-
-        const accessToken = createDevToken(secret, normalizedIdentifier);
+        const accessToken = await createVerifiedDevToken(env, normalizedIdentifier);
         const expiresAt =
           Math.floor(Date.now() / 1000) + DEV_SESSION_TTL_SECONDS;
 

@@ -1,3 +1,4 @@
+import { mountSkuNotes } from './sku-notes.js';
 import { restoreSession, getAuthenticatedUser, bindLogoutButtons, loginWithEmailPassword, supabase, getAuthHeaders } from "./supabase.js";
 import { API_KEY, SPREADSHEET_ID, SHEETS, FILTERS, APP_CONFIG, SIGNUP_ACCESS_PASSWORD } from "./config.js";
 import { buildAutoInsight } from "./utils/insight-helper.js";
@@ -158,7 +159,7 @@ return isActivityLogAllowed();
 }
 window.currentUser=getCurrentUser();
 const nativeFetch=window.fetch.bind(window);
-const AUTHENTICATED_INVENTORY_PATHS=new Set(['/api/dashboard-summary','/api/dashboard-recent-transactions','/api/dashboard-monthly-insight','/api/movement/summary','/api/inventory-sync-status','/api/inventory-version','/api/sync/inventory/all','/api/sync/inventory/kartu-stok','/api/sync/inventory/barang-masuk','/api/sync/inventory/barang-keluar','/api/sync/inventory/rpl','/api/sync/inventory/bulky','/api/kartu-stok','/api/barang-masuk','/api/barang-keluar','/api/rpl','/api/bulky','/api/inventory-sku-detail','/api/barcode-lookup']);
+const AUTHENTICATED_INVENTORY_PATHS=new Set(['/api/dashboard-summary','/api/dashboard-recent-transactions','/api/dashboard-monthly-insight','/api/movement/summary','/api/inventory-sync-status','/api/inventory-version','/api/sync/inventory/all','/api/sync/inventory/kartu-stok','/api/sync/inventory/barang-masuk','/api/sync/inventory/barang-keluar','/api/sync/inventory/rpl','/api/sync/inventory/bulky','/api/kartu-stok','/api/barang-masuk','/api/barang-keluar','/api/rpl','/api/bulky','/api/inventory-sku-detail','/api/sku-notes','/api/barcode-lookup']);
 window.fetch=async(input,init={})=>{
   const url=typeof input==='string'?input:String(input?.url||'');
   if(url.startsWith('/api/')){
@@ -2069,8 +2070,9 @@ const sourceList=Array.isArray(sel.sources)?sel.sources:[...sel.sources||[]];
 let html=`<div class='detail-profile'><div class='detail-hero'><div class='detail-top'><div><div class='detail-name'>${esc(nama)}</div><div class='detail-sku'>SKU: <strong>${esc(sku)}</strong> <button class='btn-ghost copy-mini-btn' data-copy-sku onclick="copySku(decodeURIComponent('${encAttr(sku)}'),this)"><span aria-hidden='true'>⧉</span><span>Copy SKU</span></button></div></div><button class='btn-primary' onclick="goBackToPreviousPage()"><span aria-hidden='true'>←</span><span>Kembali ke hasil pencarian</span></button></div><div class='source-row'>${sourceList.map(s=>`<span class='badge ${badgeClass(s)}'>${esc(s)}</span>`).join(" ")}</div></div>`;
 html+=`<div class='summary-grid'>${summary.map(([k,v])=>`<div class='summary-card'><div class='k'>${k}</div><div class='v'>${esc(v)}</div></div>`).join("")}</div>`;
 html+=`<div class='detail-note'><div class='note-box'><div class='note-title'>Lokasi</div><div class='note-value'>${locationSet.size?[...locationSet].slice(0,12).map(esc).join(", "):"-"}</div></div></div>`;
+html+=`<div id="skuNotesRoot"></div>`;
 for(const sheet of [...INVENTORY_PRELOAD_SHEETS,"Barang Masuk","Barang Keluar"]){const rows=bySheet[sheet];html+=`<details class='source-card' ${rows.length?'open':''}><summary><span><span class='badge ${badgeClass(sheet)}'>${sheet}</span></span><span>${rows.length} baris</span></summary><div class='source-body'>${renderSkuDetailTable(sheet,rows)}</div></details>`;}
-html+="</div>";detail.innerHTML=html;}
+html+="</div>";detail.innerHTML=html;mountSkuNotes(document.getElementById("skuNotesRoot"),{sku,account:inventoryDraftOwner()});}
 const SKU_DETAIL_LOCATION_FIELDS=new Set(["lokasi","lokasi bulky","lokasi_bulky","lokasiBulky"]);
 function getSkuDetailPresentationCells(row){const source=row&&typeof row==="object"?row:{};const canonical=String(source.lokasi??"").trim();const bulky=String(source.lokasi_bulky??source.lokasiBulky??source["lokasi bulky"]??"").trim();const cells={lokasi:canonical||bulky};for(const [key,value] of Object.entries(source)){if(!SKU_DETAIL_LOCATION_FIELDS.has(key))cells[key]=value;}return cells;}
 const SKU_DETAIL_INTERNAL_COLUMNS=new Set(["rownumber","sourcerownumber","syncedat"]);
