@@ -2269,7 +2269,11 @@ body.dark .loc-status-dense{background:rgba(239,68,68,.16);color:#fca5a5;border-
 .sku-notes .state{padding:8px 0;font-size:12px}
 .sku-notes .mv-pagination{margin-top:8px;font-size:11px}
 .sku-notes [hidden]{display:none!important}
-.sku-note-meta .sku-note-delete{margin-left:auto;padding:3px 7px;font-size:11px;color:var(--danger)}
+.sku-note-meta .sku-note-delete{display:inline-flex;align-items:center;justify-content:center;gap:5px;margin-left:auto;min-height:30px;padding:4px 9px;border:1px solid color-mix(in srgb,var(--danger) 30%,transparent);border-radius:8px;background:color-mix(in srgb,var(--danger) 7%,transparent);font-size:11px;font-weight:600;color:var(--danger)}
+.sku-note-delete-icon{width:14px;height:14px;flex:0 0 auto}
+.sku-note-meta .sku-note-delete:hover:not(:disabled){background:color-mix(in srgb,var(--danger) 15%,transparent);border-color:var(--danger)}
+.sku-note-meta .sku-note-delete:focus-visible{outline:2px solid var(--danger);outline-offset:2px}
+.sku-note-meta .sku-note-delete:disabled{opacity:.5;cursor:wait}
 .all-notes-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 .all-notes-toolbar .search-lg{flex:1;min-width:180px}
 .all-notes-toolbar select{padding:9px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text)}
@@ -2278,3 +2282,7 @@ body.dark .loc-status-dense{background:rgba(239,68,68,.16);color:#fca5a5;border-
 .all-notes-sku{font-size:13px;font-weight:600;color:var(--primary);overflow-wrap:anywhere}
 .all-sku-notes [data-all-notes-status]{font-size:12px;margin:8px 0}
 .all-sku-notes [hidden]{display:none!important}
+
+.all-notes-sku{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;text-decoration:none}
+.all-notes-item-name{color:var(--text);font-size:12px;font-weight:500}
+.all-notes-sku:hover .all-notes-item-name{text-decoration:underline}

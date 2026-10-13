@@ -1,3 +1,4 @@
+import {fetchSkuNoteNames} from '../_sku-note-names.js';
 import {getSecretSupabaseConfig} from '../_supabase-config.js';
 import {getNoteIdentity} from '../_note-identity.js';
 const columns='id,sku,body,author_name,author_role,created_at';
@@ -37,7 +38,9 @@ export async function onRequestGet({request,env}){
   }
   const result=await database(env,params,{count:all});
   const rows=all?result.rows:result;
-  return json({success:true,rows:rows.slice(0,20).map(({author_id,...note})=>({...note,canDelete:author_id===viewer.id})),page,hasNext:rows.length>20,...(all?{total:result.total}:{})});
+  const visible=rows.slice(0,20);
+  const names=all?await fetchSkuNoteNames(env,visible.map(note=>note.sku)):{};
+  return json({success:true,rows:visible.map(({author_id,...note})=>({...note,canDelete:author_id===viewer.id,...(all?{namaBarang:names[String(note.sku).trim().toUpperCase()]||''}:{})})),page,hasNext:rows.length>20,...(all?{total:result.total}:{})});
  }catch{return json({success:false,message:'Catatan belum dapat dimuat. Coba lagi.'},503);}
 }
 export async function onRequestPost({request,env}){

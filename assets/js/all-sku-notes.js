@@ -12,7 +12,7 @@ export function mountAllSkuNotes(root,{account,confirmDelete,navigate}){
   if(disposed||!root.isConnected)return;
   const status=root.querySelector('[data-all-notes-status]');status.textContent=state.error||(state.loading?'Memuat catatan…':'');status.hidden=!status.textContent;status.className=state.error?'state-error':'';
   const list=root.querySelector('[data-all-notes-list]');
-  list.innerHTML=state.rows.length?state.rows.map(note=>`<div class="all-notes-entry"><a class="all-notes-sku" href="/sku/${encodeURIComponent(note.sku)}" data-all-note-sku="${escape(note.sku)}">SKU ${escape(note.sku)}</a>${renderNoteRows([note],{disabled:state.loading||!!state.deleting,deletingId:state.deleting})}</div>`).join(''):state.loading||state.error?'':'<p class="state">Tidak ada catatan ditemukan.</p>';
+  list.innerHTML=state.rows.length?state.rows.map(note=>`<div class="all-notes-entry"><a class="all-notes-sku" href="/sku/${encodeURIComponent(note.sku)}" data-all-note-sku="${escape(note.sku)}"><span>SKU ${escape(note.sku)}</span><span class="all-notes-item-name">${escape(note.namaBarang||'Nama belum tersedia')}</span></a>${renderNoteRows([note],{disabled:state.loading||!!state.deleting,deletingId:state.deleting})}</div>`).join(''):state.loading||state.error?'':'<p class="state">Tidak ada catatan ditemukan.</p>';
   const start=state.rows.length?(state.page-1)*20+1:0,end=state.rows.length?(state.page-1)*20+state.rows.length:0;
   root.querySelector('[data-all-notes-page]').textContent=`${start}–${end}${state.total===null?'':` dari ${state.total} catatan`} • Halaman ${state.page}${state.total===null?'':`/${Math.max(1,Math.ceil(state.total/20))}`}`;
   root.querySelector('[data-all-notes-prev]').disabled=state.loading||!!state.deleting||state.page<=1;
