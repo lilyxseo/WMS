@@ -2250,16 +2250,14 @@ body.dark .loc-status-dense{background:rgba(239,68,68,.16);color:#fca5a5;border-
 #page-balikan-store .balikan-last-location{font-size:11px;font-weight:500}
 
 .sku-notes{padding:0}
-.sku-notes-heading{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;list-style:none;font-size:13px;font-weight:600}
-.sku-notes-heading::-webkit-details-marker{display:none}
-.sku-notes-heading::after{content:'⌄';margin-left:auto;color:var(--muted)}
-.sku-notes[open]>.sku-notes-heading::after{transform:rotate(180deg)}
+.sku-notes-heading{display:flex;align-items:center;gap:10px;padding:8px 14px;font-size:13px;font-weight:600}
+.sku-notes-heading>.btn-ghost{margin-left:auto}
 .sku-notes-heading small{font-size:11px;font-weight:400;color:var(--muted)}
 .sku-notes-content{padding:0 14px 10px}
 .sku-notes-actions{display:flex;align-items:flex-start;gap:8px}
 .sku-notes-actions>details{flex:1;min-width:0}
 .sku-notes-actions>details>summary{cursor:pointer;font-size:12px;padding:7px 0;color:var(--primary)}
-.sku-notes-actions>.btn-ghost,.sku-notes .row button{padding:6px 10px;font-size:12px}
+.sku-notes-heading>.btn-ghost,.sku-notes .row button{padding:6px 10px;font-size:12px}
 .sku-notes form label{display:flex;flex-direction:column;margin:6px 0}
 .sku-notes textarea{width:100%;box-sizing:border-box;resize:vertical;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--text);font:inherit;font-size:12px}
 .sku-notes-list{max-height:240px;overflow-y:auto}
