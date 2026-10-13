@@ -6,7 +6,7 @@ const project=process.env.SUPABASE_PROJECT_REF,token=process.env.SUPABASE_ACCESS
 const base=`https://api.supabase.com/v1/projects/${project}`;
 async function management(path,body){
  const response=await fetch(base+path,{method:body?'POST':'GET',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(60000)});
- if(!response.ok){const detail=await response.json().catch(()=>({}));const code=String(detail.code||'');const safe=stage==='schema'||stage==='state-tests'?String(detail.message||detail.error||'').slice(0,400):'';throw new Error(`Warning ${stage} failed: HTTP ${response.status}, ${code}, ${safe}`);}return response.json();
+ if(!response.ok){const detail=await response.json().catch(()=>({}));const code=String(detail.code||'');const safe=stage==='schema'||stage==='state-tests'?String(detail.message||detail.error||'').slice(0,400):'';throw new Error(`Warning ${stage} failed: HTTP ${response.status}, ${code}, ${safe}`);}const raw=await response.text();return raw.trim()?JSON.parse(raw):[];
 }
 const sql=query=>management('/database/query',{query});
 const literal=value=>`'${String(value).replaceAll("'","''")}'`;
