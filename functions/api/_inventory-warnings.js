@@ -26,7 +26,7 @@ export function stockBalance(row){
  return Number.isFinite(expected)?{opening,internal,replenishment,outgoing,closing,expected}:null;
 }
 function warning(category,severity,source,row,issue,evidence,recommendation,confidence='record'){
- return {id:[category,source,row.source_row_number??row.id??'',normalizeWarningSku(row.sku),text(row.lokasi_bulky),evidence].join(':'),category,categoryLabel:WARNING_CATEGORIES[category],severity,source,sku:text(row.sku)||'-',namaBarang:text(row.nama_barang)||'-',issue,evidence,recommendation,confidence,sourceRow:row.source_row_number??null,location:text(row.lokasi_bulky||row.from_location||row.to_location),eventDate:text(row.tanggal)};
+ return {id:[category,source,row.source_row_number??row.id??'',normalizeWarningSku(row.sku),text(row.lokasi_bulky),evidence].join(':'),category,categoryLabel:WARNING_CATEGORIES[category],severity,source,sku:text(row.sku)||'-',namaBarang:text(row.nama_barang)||'-',issue,evidence,recommendation,confidence,sourceRecord:row.source_row_number??row.id??null,sourceRow:row.source_row_number??null,location:text(row.lokasi_bulky||row.from_location||row.to_location),eventDate:text(row.tanggal)};
 }
 export function buildInventoryWarnings(input,{allowCrossSource=true}={}){
  const rows=Object.fromEntries(Object.keys(SOURCE_NAMES).map(key=>[key,Array.isArray(input?.[key])?input[key]:[]]));
@@ -74,7 +74,7 @@ export function queryInventoryWarnings(allRows,options={}){
  const comparators={sku:(a,b)=>collator.compare(a.sku,b.sku),name:(a,b)=>collator.compare(a.namaBarang,b.namaBarang),category:(a,b)=>collator.compare(a.categoryLabel,b.categoryLabel),newest:(a,b)=>date(b).localeCompare(date(a)),severity:(a,b)=>(rank[a.severity]||9)-(rank[b.severity]||9)};
  const compare=comparators[options.sort]||comparators.severity;rows.sort((a,b)=>compare(a,b)||collator.compare(a.sku,b.sku)||collator.compare(a.id,b.id));
  const total=rows.length,limit=Math.min(100,Math.max(1,parseInt(options.limit,10)||25)),page=Math.min(Math.max(1,Math.ceil(total/limit)),Math.max(1,parseInt(options.page,10)||1));
- return {rows:rows.slice((page-1)*limit,page*limit),total,page,limit};
+ return {rows:options.full===true?rows:rows.slice((page-1)*limit,page*limit),total,page,limit};
 }
 export async function loadInventoryWarnings(env,options={}){
  const data=await loadWarningData(env),allStockReady=data.verification.filter(item=>['kartu_stok','rpl','bulky'].includes(item.source)).every(item=>item.ready);
