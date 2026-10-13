@@ -9,7 +9,7 @@ export const WARNING_CATEGORIES=Object.freeze({
 });
 const SOURCE_NAMES={kartuStok:'Kartu Stok',rpl:'RPL',bulky:'BULKY',barangMasuk:'Barang Masuk',barangKeluar:'Barang Keluar'};
 const rank={High:1,Medium:2,Low:3};
-export const normalizeWarningSku=value=>String(value??'').normalize('NFKC').replace(/[\u200B-\u200D\u2060\uFEFF]/g,'').trim().toUpperCase();
+export const normalizeWarningSku=value=>String(value??'').replace(/[\u00A0\u200B-\u200D\u2060\uFEFF]/g,'').normalize('NFKC').trim().toUpperCase();
 export const normalizeWarningName=value=>normalizeWarningSku(value).replace(/[^\p{L}\p{N}]/gu,'');
 const text=value=>String(value??'').trim();
 export function warningNumber(value){
