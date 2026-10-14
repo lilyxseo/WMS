@@ -705,6 +705,7 @@ void clearCache();
 ++dashboardSummaryRequestId;
 ++inventorySyncStatusRequestId;
 settingsDatabaseController?.dispose();settingsDatabaseController=null;
+BALIKAN_STATE.requestId+=1;BALIKAN_STATE.requestController?.abort();window.currentTripSheet='';window.BALIKAN_ROWS=[];BALIKAN_STATE.sheetCache={};BALIKAN_STATE.dynamicColumnCache={};
 user=null;
 devProfile=null;
 authChecking=false;
@@ -3141,17 +3142,25 @@ async function deleteHistoryRow(sheetKey,sheetName,rowNumber){const res=await fe
 const INLINE_EDIT_STATE={isEditing:false,editingRow:null,editingField:"",pendingSave:null,lastInputAt:0};
 function createEditableCell(row,field,value,options){const td=document.createElement("td");td.className=`editable-cell ${options?.cellClass||""}`.trim();const rowNumber=Number(row?.rowNumber);const sheetName=getBalikanActiveSheetName(row);const state=getBalikanSaveStatus(rowNumber,field,sheetName);td.dataset.saveState=state?.status||"";td.title=state?.message||"";const display=value||"-";td.innerHTML=`${esc(display)}${state?.status==="saving"?"<span class='balikan-save-badge'>menyimpan</span>":state?.status==="queued"?"<span class='balikan-save-badge'>pending</span>":state?.status==="saved"?"<span class='balikan-save-badge saved'>tersimpan</span>":state?.status==="error"?"<span class='balikan-save-badge error'>gagal</span>":""}`;td.addEventListener("click",()=>{const latestValue=typeof options?.getLatestValue==="function"?options.getLatestValue({row,field,td}):row?.[field];startInlineEdit(td,row,field,latestValue,options);});return td;}
 function startInlineEdit(cellEl,row,field,oldValue,options={}){const td=cellEl.closest('td')||cellEl;if(td.querySelector("input,select,textarea"))return;const saveDelayMs=Number(options.saveDelayMs||2000);const blurDelayMs=Number(options.blurDelayMs||1000);const showSaveButton=options.showSaveButton!==false;const input=document.createElement(options.multiline?"textarea":"input");const saveBtn=document.createElement("button");saveBtn.type="button";saveBtn.className="inline-edit-save-btn";saveBtn.textContent="Save";const prevValue=oldValue??"";input.value=String(prevValue);input.className="inline-edit-input inline-editor";td.classList.add("editing");td.innerHTML="";td.appendChild(input);if(showSaveButton)td.appendChild(saveBtn);input.focus();input.select();let cancelled=false,saving=false,pendingTimer=null,lastInputAt=0;INLINE_EDIT_STATE.isEditing=true;INLINE_EDIT_STATE.editingRow=Number(row?.rowNumber)||null;INLINE_EDIT_STATE.editingField=String(field||"");const clearPending=()=>{const timer=pendingTimer;if(timer){clearTimeout(timer);pendingTimer=null;}if(INLINE_EDIT_STATE.pendingSave===timer)INLINE_EDIT_STATE.pendingSave=null;};const finish=(value)=>{td.classList.remove("editing");td.textContent=value||"-";if(INLINE_EDIT_STATE.editingRow===(Number(row?.rowNumber)||null)&&INLINE_EDIT_STATE.editingField===String(field||"")){INLINE_EDIT_STATE.isEditing=false;INLINE_EDIT_STATE.editingRow=null;INLINE_EDIT_STATE.editingField="";clearPending();}};async function save(reason="manual"){if(cancelled||saving)return;const newValue=input.value.trim();if(newValue===String(prevValue)){options.onCancel?.({row,field,value:prevValue,td});finish(prevValue);return;}saving=true;try{await options.onSave?.({row,field,value:newValue,oldValue:prevValue,td,reason});if(row&&field)row[field]=newValue;finish(newValue);}catch(err){if(row&&field)row[field]=prevValue;options.onCancel?.({row,field,value:prevValue,td});finish(prevValue);toast(err?.message||"Gagal update data","error");}finally{saving=false;}}const queueAutoSave=(reason="typing")=>{clearPending();lastInputAt=Date.now();INLINE_EDIT_STATE.lastInputAt=lastInputAt;pendingTimer=setTimeout(()=>{if(cancelled||saving)return;const idleFor=Date.now()-lastInputAt;if(idleFor<saveDelayMs-50)return;save(reason);},saveDelayMs);INLINE_EDIT_STATE.pendingSave=pendingTimer;};input.addEventListener("input",()=>{options.onInput?.({row,field,value:input.value,td,input});queueAutoSave("typing-idle");});input.addEventListener("blur",()=>{clearPending();pendingTimer=setTimeout(()=>{if(cancelled||saving)return;save("blur-delay");},blurDelayMs);INLINE_EDIT_STATE.pendingSave=pendingTimer;});input.addEventListener("focus",()=>{clearPending();});if(showSaveButton)saveBtn.addEventListener("click",()=>save("button"));input.addEventListener("keydown",(e)=>{if(e.key==="Enter"&&(!options.multiline||e.ctrlKey||e.metaKey)){e.preventDefault();clearPending();save("enter");}if(e.key==="Escape"){cancelled=true;options.onCancel?.({row,field,value:prevValue,td});finish(prevValue);}});}
+function balikanSheetPreferenceKey(){const owner=inventoryDraftOwner();return owner?`wms:balikan-sheet:v1:${encodeURIComponent(owner)}`:'';}
+function readBalikanSheetPreference(){try{const key=balikanSheetPreferenceKey();return key?localStorage.getItem(key)||'':'';}catch{return '';}}
+function saveBalikanSheetPreference(sheet){try{const key=balikanSheetPreferenceKey();if(key){if(sheet)localStorage.setItem(key,sheet);else localStorage.removeItem(key);}}catch{}}
 async function loadBalikanSheets(){
   if(!balikanSheetSelect)return;
+  const generation=authRequestGeneration;
   balikanSheetSelect.disabled=true;
   balikanSheetSelect.innerHTML='<option value="">Memuat daftar sheet...</option>';
   try{
     const res=await fetch('/api/balikan-store/sheets');
     const data=await res.json();
+    if(generation!==authRequestGeneration)return;
     if(!res.ok)throw new Error(data?.message||'Gagal memuat daftar sheet');
     BALIKAN_STATE.sheets=Array.isArray(data?.sheets)?data.sheets.filter(n=>String(n||'').toUpperCase().includes('TRIP')):[];
     balikanSheetSelect.innerHTML='<option value="">Pilih sheet TRIP</option><option value="'+BALIKAN_ALL_TRIP_VALUE+'">Semua Sheet TRIP</option>'+BALIKAN_STATE.sheets.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
-    if(window.currentTripSheet&&(window.currentTripSheet===BALIKAN_ALL_TRIP_VALUE||BALIKAN_STATE.sheets.includes(window.currentTripSheet)))balikanSheetSelect.value=window.currentTripSheet;
+    const candidate=window.currentTripSheet||readBalikanSheetPreference();
+    const selected=candidate&&(candidate===BALIKAN_ALL_TRIP_VALUE||BALIKAN_STATE.sheets.includes(candidate))?candidate:'';
+    if(candidate&&!selected){window.currentTripSheet='';saveBalikanSheetPreference('');}
+    if(selected){balikanSheetSelect.value=selected;if(!window.currentTripSheet)await selectBalikanSheet(selected);}
     if(!window.currentTripSheet){
       setBalikanDisplayRows([],[]);
       balikanSummary.textContent='Pilih satu sheet TRIP untuk mulai.';
@@ -3190,6 +3199,8 @@ function setBalikanDisplayRows(rows=[],dynamicColumns=[]){window.BALIKAN_ROWS=ta
 async function selectBalikanSheet(sheetName){
   const sheet=String(sheetName||'').trim();
   window.currentTripSheet=sheet;
+  saveBalikanSheetPreference(sheet);
+  if(balikanSheetSelect)balikanSheetSelect.value=sheet;
   BALIKAN_STATE.requestId+=1;
   BALIKAN_STATE.requestController?.abort();
   BALIKAN_STATE.requestController=null;
