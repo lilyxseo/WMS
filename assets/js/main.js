@@ -1,3 +1,4 @@
+import { mountSettingsDatabase, databaseStatus } from './settings-database.js';
 import { isInventoryPicRole } from './utils/role-access.js';
 import { warningRowsMarkup, warningVerificationMarkup } from './warning-view.js';
 import { mountAllSkuNotes } from './all-sku-notes.js';
@@ -413,6 +414,7 @@ const DASHBOARD_SECTION_ERROR={summary:'',recent:'',insight:''};
 const DASHBOARD_LOAD_STATE={summary:'idle',recent:'idle',insight:'idle'};
 const DASHBOARD_REQUESTS={summary:null,recent:null,insight:null,generation:0,controllers:{summary:null,recent:null,insight:null}};
 let dashboardSummaryRequestId=0;
+let settingsDatabaseController=null;
 let inventorySyncStatusRequestId=0;
 let inventorySyncStatusState="idle";
 const LOADED_DETAIL_PAGES=new Set();
@@ -700,6 +702,7 @@ for(const key of [...LARGE_CACHE_KEYS,ANOMALY_CACHE_KEY])localStorage.removeItem
 void clearCache();
 ++dashboardSummaryRequestId;
 ++inventorySyncStatusRequestId;
+settingsDatabaseController?.dispose();settingsDatabaseController=null;
 user=null;
 devProfile=null;
 authChecking=false;
@@ -804,6 +807,7 @@ window.addEventListener("keydown",e=>{if(e.key==="Escape")closeColumnMenus();});
 function getBarangRejectNavPage(){return `barang-reject-${BARANG_REJECT_STATE.activeTab==='dashboard'?'dashboard':BARANG_REJECT_STATE.activeTab==='masuk'?'masuk':BARANG_REJECT_STATE.activeTab==='keluar'?'keluar':'input'}`;}
 const PAGE_DATA_LOADS=new Map();
 let detailHydrationPromise=null;
+let detailHydrationNeedsRefresh=false;
 function renderMetricPlaceholders(labels){return labels.map(label=>`<div class='metric'><div class='k'>${esc(label)}</div><div class='v'><span class='mv-skeleton-cell short'></span></div></div>`).join('');}
 function renderDataSkeletonRows(columns,rows=6){return Array.from({length:rows},()=>`<tr class='mv-skeleton-row' aria-hidden='true'>${Array.from({length:columns},()=>"<td><span class='mv-skeleton-cell'></span></td>").join('')}</tr>`).join('');}
 function renderPageDataStatus(page){
@@ -1091,6 +1095,7 @@ if(page==="import-pdf-transfer")renderImportPdfTransferPage();
 if(page==="activity-log")renderActivityLogPage();
 if(page==="sku-notes")renderAllSkuNotesPage();
 if(page==="tools-dev")renderToolsDevPage();
+if(page==="settings")renderSettingsPage();
 if(page==="arsip")renderArchivePage();
 if(page==="asset-store")renderAssetStorePage();
 if(page==="balikan-store")renderBalikanTable(true);
@@ -1368,7 +1373,7 @@ if(page==='barang-masuk')return loadTransactionTablePage('in',{page:TABLE_STATE.
 if(page==='barang-keluar')return loadTransactionTablePage('out',{page:TABLE_STATE.out.page});
 if(page==='balikan-store'){await loadBalikanSheets();return window.BALIKAN_ROWS;}
 if(page==='locations')return renderLocationsPage();
-if(!detailHydrationPromise)detailHydrationPromise=hydrateAllDataOnInit({force:false}).finally(()=>{detailHydrationPromise=null;});
+if(!detailHydrationPromise)detailHydrationPromise=hydrateAllDataOnInit({force:detailHydrationNeedsRefresh,useCacheFirst:!detailHydrationNeedsRefresh}).then(data=>{if(data)detailHydrationNeedsRefresh=false;return data;}).finally(()=>{detailHydrationPromise=null;});
 return detailHydrationPromise;
 }
 async function initAppData(){
@@ -2281,26 +2286,46 @@ function getSystemStatusMeta(){
 }
 function updateSettingsDashboard(){
   if(!settingsDataSources)return;
-  const sheetMap={"Barang Masuk":"Barang Masuk","Barang Keluar":"Barang Keluar","Kartu Stock":"Kartu Stock","RPL":"RPL","BULKY":"BULKY","Dashboard Akurasi":"Kartu Stock"};
-  const icons={"Barang Masuk":"arrow-down-to-line","Barang Keluar":"arrow-up-from-line","Kartu Stock":"package-search","RPL":"clipboard-list","BULKY":"boxes","Dashboard Akurasi":"shield-check"};
-  const totalRows=Object.values(DATA).reduce((n,rows)=>n+(Array.isArray(rows)?rows.length:0),0);
-  const lastTs=getLastSyncTs();
-  const status=getSystemStatusMeta();
-  settingsLastRefresh.textContent=formatSyncDate(lastTs);
-  settingsTotalRows.textContent=`${totalRows.toLocaleString("id-ID")} row`;
-  settingsSystemStatus.textContent=status.label;
-  settingsSystemDot.className=`status-dot ${status.dot}`;
-  settingsCacheStatus.textContent=lastTs?"Aktif":"Tidak aktif";
-  settingsCacheTime.textContent=formatSyncDate(lastTs);
-  settingsDataSources.innerHTML=Object.entries(sheetMap).map(([label,key])=>{
-    const count=(DATA[key]||[]).length;
-    const tag=!apiConnected?"error":(count>0?"ok":"empty");
-    const txt=!apiConnected?"error":(count>0?"tersedia":"kosong");
-    const active=!apiConnected?"Tidak ada data":(count>0?"Aktif":"Tidak ada data");
-    return `<div class='settings-source-item'><div class='settings-source-main'><i data-lucide='${icons[label]||"database"}'></i><div><strong>${label}</strong><small>${active}</small></div></div><div class='settings-source-meta'><span>${count.toLocaleString("id-ID")} row</span><em class='${tag}'>${txt}</em></div></div>`;
-  }).join("");
-  if(window.lucide)lucide.createIcons();
+  const totalRows=Object.values(DATA).reduce((n,rows)=>n+(Array.isArray(rows)?rows.length:0),0),lastTs=getLastSyncTs(),current=getCurrentUser()||{};
+  settingsLastRefresh.textContent=formatSyncDate(lastTs);settingsTotalRows.textContent=`${totalRows.toLocaleString('id-ID')} baris`;
+  settingsCacheStatus.textContent=lastTs?'Tercatat':'Belum tersimpan';settingsCacheTime.textContent=formatSyncDate(lastTs);
+  const set=(id,value)=>{const el=document.getElementById(id);if(el)el.textContent=value;};
+  set('settingsUserName',current.name||current.full_name||current.email||'—');set('settingsUserRole',getCurrentUserRole()||'—');
+  set('settingsUserAccess',(getPermissions().canCrud?'CRUD':'Baca saja')+(isToolsDevAllowed()?' & fitur Developer':''));
+  const version=document.getElementById('settingsBuildVersion');if(version)version.textContent=version.dataset.build&&!version.dataset.build.includes('__APP_VERSION__')?version.dataset.build.slice(0,8):'Lokal';
+  const theme=document.getElementById('settingsTheme');if(theme)theme.value=document.documentElement.getAttribute('data-theme')||'dark';
 }
+function updateSettingsDatabaseHealth(state){
+ const healthy=state.rows.length===5&&state.rows.every(row=>databaseStatus(row).kind==='ok');
+ const pending=state.syncing||REFRESH_STATE.isRefreshing||isSyncing||state.rows.some(row=>databaseStatus(row).kind==='pending');
+ if(settingsSystemStatus)settingsSystemStatus.textContent=state.error?'Status gagal dimuat':pending?'Sinkronisasi berjalan':healthy?'Semua sumber siap':state.loading?'Memuat status':'Perlu pemeriksaan';
+ if(settingsSystemDot)settingsSystemDot.className=`status-dot ${state.error?'error':pending||state.loading?'loading':healthy?'ok':'error'}`;
+}
+function renderSettingsPage(){
+ updateSettingsDashboard();
+ const root=document.getElementById('settingsDatabase');if(!root)return;
+ if(!settingsDatabaseController)settingsDatabaseController=mountSettingsDatabase(root,{synchronize:syncSettingsDatabase,canSync:()=>getPermissions().canSync,isBusy:()=>!!(REFRESH_STATE.refreshPromise||REFRESH_STATE.isRefreshing||isSyncing),isActive:()=>getActivePage()==='settings',generation:()=>authRequestGeneration,onChange:updateSettingsDatabaseHealth});
+ else{settingsDatabaseController.render();void settingsDatabaseController.refresh();}
+}
+async function syncSettingsDatabase(onProgress,onlySources){
+ if(!getPermissions().canSync)throw new Error('Sinkronisasi manual tersedia untuk PIC atau Developer.');
+ if(REFRESH_STATE.refreshPromise||REFRESH_STATE.isRefreshing||isSyncing)throw new Error('Sinkronisasi lain sedang berjalan. Tunggu hingga selesai.');
+ const generation=authRequestGeneration;
+ REFRESH_STATE.refreshPromise=(async()=>{
+  setRefreshIndicator(true,'Menyinkronkan database…');
+  try{
+   const result=await syncInventorySourcesForRefresh({onProgress,onlySources,shouldContinue:()=>generation===authRequestGeneration});
+   if(generation!==authRequestGeneration)return result;
+   invalidateInventoryDerivedCaches();LOADED_DETAIL_PAGES.clear();window.mainDataCache=null;detailHydrationNeedsRefresh=true;
+   logActivitySafe({action:'SYNC_DATABASE',module:'Pengaturan',detail:`Sinkron database: ${Object.values(result.sources).filter(item=>item.success).length}/${Object.keys(result.sources).length} sumber berhasil`,status:result.success?'SUCCESS':'FAILED',metadata:{sources:Object.fromEntries(Object.entries(result.sources).map(([name,item])=>[name,{success:!!item.success,skipped:!!item.skipped}]))}});
+   await loadInventorySyncStatus().catch(()=>null);
+   updateSettingsDashboard();return result;
+  }finally{setRefreshIndicator(false);REFRESH_STATE.refreshPromise=null;}
+ })();
+ return REFRESH_STATE.refreshPromise;
+}
+function setSettingsTheme(theme){if(['dark','light'].includes(theme)&&document.documentElement.getAttribute('data-theme')!==theme)toggleDark();updateSettingsDashboard();}
+window.setSettingsTheme=setSettingsTheme;
 function renderFilters(){const searchFilters=FILTERS.filter(f=>!["Barang Masuk","Barang Keluar"].includes(f));filterRow.innerHTML=searchFilters.map(f=>`<button class='chip ${f===currentFilter?"active":""}' onclick="setFilter(decodeURIComponent('${encAttr(f)}'))">${esc(f)}</button>`).join("");if(!searchFilters.includes(currentFilter)){currentFilter="Semua";}}
 function setFilter(f){currentFilter=f;renderFilters();SEARCH_STATE.filterValue=SEARCH_STATE.inputValue||searchInput?.value||lastQuery||"";runSearch();}
 function setMainContentLoading(){
@@ -2311,6 +2336,7 @@ if(mainContentPages)mainContentPages.classList.remove('hidden');
 function initDashboard(){setMainContentLoading(true);}
 function setStatus(type,text){statusEl.textContent=type==="loading"?`⏳ ${text}`:(type==="error"?`❌ ${text}`:text)}
 function updateSyncUI(){
+settingsDatabaseController?.render();
 const refreshBtn=document.querySelector("[data-refresh-btn]");
 const refreshing=!!(isSyncing||REFRESH_STATE.isRefreshing);
 if(refreshBtn){refreshBtn.classList.toggle("is-syncing",refreshing);refreshBtn.disabled=refreshing;}
@@ -2320,7 +2346,7 @@ function renderState(id,text){document.getElementById(id).innerHTML=`<div class=
 function updateSyncTime(){renderInventorySyncStatus();updateSettingsDashboard();}
 function updateApiState(){const t=apiConnected?"Terhubung":"Tidak terhubung";settingsApiState.textContent=t;sidebarApi.textContent="";updateSettingsDashboard();}
 async function clearSystemCache(){
-  showConfirmModal({title:'Hapus Cache',message:'Hapus cache lokal sekarang?',confirmText:'Hapus',cancelText:'Batal',type:'danger',onConfirm:async()=>{await clearCache();updateSettingsDashboard();toast("Cache berhasil dibersihkan","success");}});
+  showConfirmModal({title:'Hapus Cache',message:'Hapus cache inventory di perangkat ini? Draft movement dan cycle count tetap disimpan.',confirmText:'Hapus',cancelText:'Batal',type:'danger',onConfirm:async()=>{await clearCache();for(const key of Object.values(MODULE_CACHE_KEYS)){localStorage.removeItem(key);delete MODULE_CACHE_MEMORY[key];}window.mainDataCache=null;LOADED_DETAIL_PAGES.clear();detailHydrationNeedsRefresh=true;updateSettingsDashboard();toast("Cache berhasil dibersihkan","success");}});
 }
 function showCopyButtonFeedback(btn){if(!btn)return;const label=btn.querySelector('span:last-child');if(!label)return;const prev=label.textContent;btn.classList.add('is-copied');label.textContent='Copied';clearTimeout(btn._copyTimer);btn._copyTimer=setTimeout(()=>{label.textContent=prev;btn.classList.remove('is-copied');},1200);}
 function copySku(sku,btn){navigator.clipboard.writeText(sku||"").then(()=>{showCopyButtonFeedback(btn);toast(`SKU ${sku} disalin`);});}
@@ -2358,7 +2384,7 @@ async function refreshBarangReject(){const result=await loadBarangRejectData({fo
 async function refreshAccuracy(){await refreshInventoryGroupFull();updateStats();}
 async function refreshStokMinus(){await Promise.all([refreshInventoryGroupFull(),refreshTransaksiFull({render:false})]);localStorage.removeItem(STOK_MINUS_CACHE_KEY);refreshStokMinusInBackground();}
 async function refreshAbc(){await Promise.all([refreshInventoryGroupFull(),refreshTransaksiFull({render:false})]);return renderAbcAnalisisPage(true);}
-const SOFT_REFRESH_ROUTES={dashboard:refreshDashboard,'barang-masuk':refreshBarangMasuk,'barang-keluar':refreshBarangKeluar,locations:refreshLokasi,anomaly:refreshWarning,stats:refreshAccuracy,'stok-minus':refreshStokMinus,'abc-analisis':refreshAbc,'stock-aging':()=>loadStockAging(true),'cycle-count':refreshCycleCount,movement:refreshMovement,'balikan-store':refreshBalikanStore,detail:()=>refreshSkuDetail(currentSku),search:refreshSearch,arsip:softRefreshArchive,'asset-store':softRefreshAsset,'barang-reject':refreshBarangReject,'activity-log':renderActivityLogPage,'sku-notes':()=>{renderAllSkuNotesPage();return allSkuNotesController?.refresh();}};
+const SOFT_REFRESH_ROUTES={dashboard:refreshDashboard,'barang-masuk':refreshBarangMasuk,'barang-keluar':refreshBarangKeluar,locations:refreshLokasi,anomaly:refreshWarning,stats:refreshAccuracy,'stok-minus':refreshStokMinus,'abc-analisis':refreshAbc,'stock-aging':()=>loadStockAging(true),'cycle-count':refreshCycleCount,movement:refreshMovement,'balikan-store':refreshBalikanStore,detail:()=>refreshSkuDetail(currentSku),search:refreshSearch,arsip:softRefreshArchive,'asset-store':softRefreshAsset,'barang-reject':refreshBarangReject,'activity-log':renderActivityLogPage,'sku-notes':()=>{renderAllSkuNotesPage();return allSkuNotesController?.refresh();},settings:()=>settingsDatabaseController?.refresh()};
 window.SOFT_REFRESH_ROUTES=SOFT_REFRESH_ROUTES;
 
 function invalidateInventoryDerivedCaches(){
@@ -2378,11 +2404,14 @@ const MANUAL_SYNC_SOURCES=Object.freeze([
 ['rpl','/api/sync/inventory/rpl'],
 ['bulky','/api/sync/inventory/bulky']
 ]);
-async function syncInventorySourcesForRefresh(){
+async function syncInventorySourcesForRefresh({onProgress=()=>{},onlySources,shouldContinue=()=>true}={}){
 const startedAt=Date.now(),sources={};
 // Do not combine these jobs in one Worker: every source performs multiple
 // upstream requests and the combined invocation can exceed Cloudflare limits.
-for(const [name,url] of MANUAL_SYNC_SOURCES){
+const jobs=onlySources?MANUAL_SYNC_SOURCES.filter(([name])=>onlySources.includes(name)):MANUAL_SYNC_SOURCES;
+for(const [index,[name,url]] of jobs.entries()){
+if(!shouldContinue()){sources[name]={success:false,reason:'SESSION_CHANGED'};break;}
+onProgress({name,index:index+1,total:jobs.length});
 const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),120000);
 try{
 const {res,data}=await fetchJsonSafe(url,{method:'POST',cache:'no-store',signal:controller.signal,silentInvalidJson:true});
@@ -2392,7 +2421,7 @@ if(!sources[name].success&&!sources[name].reason)sources[name].reason=data?.mess
 finally{clearTimeout(timeout);}
 }
 const outcomes=Object.values(sources),succeeded=outcomes.filter(result=>result.success).length;
-return {success:succeeded===outcomes.length,partialSuccess:succeeded>0&&succeeded<outcomes.length,sources,durationMs:Date.now()-startedAt};
+return {success:outcomes.length>0&&succeeded===outcomes.length,partialSuccess:succeeded>0&&succeeded<outcomes.length,sources,durationMs:Date.now()-startedAt};
 }
 
 async function triggerManualRefresh(){

@@ -1,0 +1,27 @@
+.settings-page-description{color:var(--muted);font-size:13px;margin:-4px 0 18px}
+.settings-page-layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.settings-page-layout .settings-database-card{grid-column:1/-1}
+#page-settings .settings-head i{color:var(--muted)}
+#page-settings .settings-grid{margin-top:14px}
+#page-settings .settings-item strong{overflow-wrap:anywhere}
+#page-settings select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text)}
+.settings-db-overview{display:flex;gap:24px;align-items:center;flex-wrap:wrap;margin:16px 0}
+.settings-db-overview>div{display:grid;gap:4px}
+.settings-db-overview small,.settings-db-source small{color:var(--muted);font-size:12px}
+.settings-db-count{margin-left:auto;color:var(--muted);font-size:12px}
+.settings-db-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.settings-db-source{border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.settings-db-source>div{display:grid;gap:5px;min-width:0}
+.settings-db-source strong{font-size:13px}.settings-db-source small{overflow-wrap:anywhere}
+.settings-db-badge{font-size:11px;white-space:nowrap;border-radius:20px;padding:5px 8px;background:var(--line);color:var(--muted)}
+.settings-db-badge.ok{background:rgba(34,197,94,.15);color:#16a34a}
+.settings-db-badge.error,.settings-db-feedback.is-error{color:#ef4444}
+.settings-db-badge.pending{background:rgba(245,158,11,.15);color:#d97706}
+.settings-db-feedback{font-size:12px;color:var(--muted);min-height:18px;margin:12px 0 0}
+#page-settings .settings-actions{flex-wrap:wrap;margin-bottom:10px}
+#page-settings button:disabled{opacity:.55;cursor:not-allowed}
+@media(max-width:720px){.settings-page-layout,.settings-db-list{grid-template-columns:1fr}.settings-db-overview{gap:14px}.settings-db-count{margin-left:0;width:100%}.settings-db-source small{font-size:11px}.settings-database-card .settings-actions button{flex:1 1 auto}}
+[data-theme="dark"] #page-settings .settings-db-badge.ok{color:#86efac}
+[data-theme="dark"] #page-settings .settings-db-badge.pending{color:#fbbf24}
+[data-theme="dark"] #page-settings .settings-db-badge.error,[data-theme="dark"] #page-settings .settings-db-feedback.is-error{color:#fca5a5}
+[data-theme="light"] #page-settings .settings-db-badge.error,[data-theme="light"] #page-settings .settings-db-feedback.is-error{color:#b91c1c}

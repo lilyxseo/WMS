@@ -16,6 +16,7 @@
   <title>WMS - Goto Living</title>
   <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
   <link rel="stylesheet" href="/assets/css/style.css?v=96a2814-debug-2" />
+  <link rel="stylesheet" href="/assets/css/settings.css?v=__APP_VERSION__" />
   <link rel="icon" href="/assets/goto.svg" sizes="any" />
 </head>
 <body>
@@ -386,55 +387,45 @@
 
     <section id="page-settings" class="panel page hidden">
       <h3 class="page-title">Pengaturan & Informasi Sistem</h3>
-      <div class="settings-layout">
+      <p class="settings-page-description">Kelola sinkronisasi database, tampilan, dan data perangkat.</p>
+      <div class="settings-layout settings-page-layout">
+        <article class="card settings-card settings-database-card">
+          <div class="settings-head"><i data-lucide="database"></i><h4>Database</h4></div>
+          <p class="settings-desc">Status data WMS dan sinkronisasi dari Google Sheets.</p>
+          <div id="settingsDatabase" class="settings-database" aria-label="Status database"><p class="settings-note">Memuat status database…</p></div>
+        </article>
         <article class="card settings-card">
-          <div class="settings-head"><i data-lucide="monitor-cog"></i><h4>Informasi Sistem</h4></div>
+          <div class="settings-head"><i data-lucide="user-round-cog"></i><h4>Akun & Tampilan</h4></div>
           <div class="settings-grid">
-            <div class="settings-item"><small>Nama aplikasi</small><strong>Mini WMS - Goto Living</strong></div>
-            <div class="settings-item"><small>Versi aplikasi</small><strong>v1.0.0</strong></div>
-            <div class="settings-item"><small>Terakhir refresh data</small><strong id="settingsLastRefresh">-</strong></div>
-            <div class="settings-item"><small>Total data terbaca</small><strong id="settingsTotalRows">0 row</strong></div>
+            <div class="settings-item"><small>Nama</small><strong id="settingsUserName">—</strong></div>
+            <div class="settings-item"><small>Role</small><strong id="settingsUserRole">—</strong></div>
+            <div class="settings-item"><small>Hak akses</small><strong id="settingsUserAccess">—</strong></div>
+            <label class="settings-item" for="settingsTheme"><small>Tema</small><select id="settingsTheme" onchange="setSettingsTheme(this.value)"><option value="dark">Gelap</option><option value="light">Terang</option></select></label>
           </div>
-          <div class="settings-status"><span id="settingsSystemDot" class="status-dot loading"></span><i data-lucide="activity"></i><span>Status sistem:</span><strong id="settingsSystemStatus">Loading</strong></div>
         </article>
         <article class="card settings-card">
-          <div class="settings-head"><i data-lucide="database"></i><h4>Sumber Data</h4></div>
-          <div id="settingsDataSources" class="settings-list"></div>
-        </article>
-        <article class="card settings-card">
-          <div class="settings-head"><i data-lucide="hard-drive"></i><h4>Cache & Data</h4></div>
+          <div class="settings-head"><i data-lucide="hard-drive"></i><h4>Data Perangkat</h4></div>
+          <p class="settings-desc">Cache membantu membuka data yang pernah dimuat di perangkat ini.</p>
           <div class="settings-grid settings-grid--cache">
-            <div class="settings-item"><small>Status cache</small><strong id="settingsCacheStatus">-</strong></div>
-            <div class="settings-item"><small>Waktu terakhir cache</small><strong id="settingsCacheTime">-</strong></div>
+            <div class="settings-item"><small>Status cache</small><strong id="settingsCacheStatus">—</strong></div>
+            <div class="settings-item"><small>Cache terakhir diperbarui</small><strong id="settingsCacheTime">—</strong></div>
+            <div class="settings-item"><small>Data dimuat di perangkat</small><strong id="settingsTotalRows">0 baris</strong></div>
           </div>
-          <div class="row settings-actions">
-            <button class="btn-primary" data-refresh-btn onclick="loadAllData(true)">Refresh Data</button>
-            <button class="btn-ghost" onclick="clearSystemCache()">Clear Cache</button>
-          </div>
+          <div class="row settings-actions"><button type="button" class="btn-ghost" onclick="clearSystemCache()">Hapus cache lokal</button></div>
+          <small class="settings-note">Waktu cache berbeda dari sinkron database. Draft movement dan cycle count tetap tersimpan.</small>
         </article>
         <article class="card settings-card">
-          <div class="settings-head"><i data-lucide="file-output"></i><h4>Export & Laporan</h4></div>
+          <div class="settings-head"><i data-lucide="monitor-cog"></i><h4>Informasi Aplikasi</h4></div>
           <div class="settings-grid">
-            <div class="settings-item"><small>Format default</small><strong>CSV</strong></div>
-            <div class="settings-item"><small>Struktur export</small><strong>Mengikuti tabel aktif</strong></div>
-            <div class="settings-item"><small>Include header</small><strong>Aktif</strong></div>
-            <div class="settings-item"><small>Separator</small><strong>Koma (,)</strong></div>
+            <div class="settings-item"><small>Aplikasi</small><strong>WMS • Goto Living</strong></div>
+            <div class="settings-item"><small>Versi build</small><strong id="settingsBuildVersion" data-build="__APP_VERSION__">—</strong></div>
+            <div class="settings-item"><small>Zona waktu sinkronisasi</small><strong>WIB • Asia/Jakarta</strong></div>
+            <div class="settings-item"><small>Ekspor data</small><strong>CSV sesuai tabel aktif</strong></div>
           </div>
-        </article>
-        <article class="card settings-card">
-          <div class="settings-head"><i data-lucide="info"></i><h4>Tentang Aplikasi</h4></div>
-          <p class="settings-desc">Sistem monitoring dan analisis stok gudang berbasis data sheet.</p>
-          <ul class="settings-feature-list">
-            <li><i data-lucide="layout-dashboard"></i><span>Dashboard</span></li>
-            <li><i data-lucide="alert-triangle"></i><span>Warning</span></li>
-            <li><i data-lucide="trending-down"></i><span>Stok minus</span></li>
-            <li><i data-lucide="map-pin"></i><span>Lokasi</span></li>
-            <li><i data-lucide="clipboard-check"></i><span>Cycle count</span></li>
-          </ul>
-          <small class="settings-note">Data berasal dari Google Sheet, gunakan dengan hati-hati.</small>
+          <div class="settings-status"><span id="settingsSystemDot" class="status-dot loading"></span><span>Status database:</span><strong id="settingsSystemStatus">Memuat status</strong></div>
         </article>
       </div>
-      <div class="settings-legacy hidden">
+      <div class="settings-legacy hidden"><div id="settingsDataSources"></div><span id="settingsLastRefresh"></span>
         <p><strong>Status API:</strong> <span id="settingsApiState">-</span></p><p><strong>Data loaded:</strong> <span id="loadedState">-</span></p><p><strong>Jumlah data per sheet:</strong> <span id="countPerSheet">-</span></p><p><strong>Spreadsheet ID:</strong> <code id="spreadsheetInfo"></code></p><p><strong>Sheet digunakan:</strong> <span id="sheetInfo"></span></p>
       </div>
     </section>
@@ -445,6 +436,6 @@
 <div id="confirmModalRoot" class="confirm-modal-root" aria-hidden="true"></div>
 <div id="toast" class="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-<script type="module" src="/assets/js/main.js?v=96a2814-debug-2"></script>
+<script type="module" src="/assets/js/main.js?v=__APP_VERSION__"></script>
 </body>
 </html>
