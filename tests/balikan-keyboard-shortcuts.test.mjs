@@ -67,3 +67,14 @@ test('quick check serializes clicks, writes exact sheet/row and preserves search
   reject(new Error('offline'));await pending;assert.equal(h.resets(),0);assert.equal(h.button.disabled,false);
   h.context.window.toggleBalikanCheck=async()=>{};await h.context.autoCheckSingleBalikanResult();assert.equal(h.resets(),1);
 });
+
+test('Alt digits choose displayed location and reject edits, repeats, stale results and disabled choices',()=>{
+  const search={typing:true},editor={typing:true},row={rowNumber:7},buttons=[{dataset:{sheetName:'TRIP 1',rowNumber:'7',location:'A01-1'}},{dataset:{sheetName:'TRIP 1',rowNumber:'7',location:'B02-2'}}];let selected=null;
+  const context=vm.createContext({document:{querySelector:()=>search,querySelectorAll:()=>buttons},balikanSearchInput:search,isKeyboardTypingTarget:t=>!!t?.typing,getPermissions:()=>({canUpdate:true}),PAGE_DATA_LOADS:new Map(),BALIKAN_STATE:{},getBalikanVisibleRows:()=>({rows:[row]}),getBalikanLocationCardRow:rows=>rows[0],getBalikanActiveSheetName:()=>'TRIP 1',getBalikanSkuLocationOptions:()=>[{rawLocation:'A01-1'},{rawLocation:'B02-2'}],normalizeBalikanLocation:v=>v||'',handleBalikanLocationSelect:button=>{selected=button;},Element:class{}});
+  const start=source.indexOf('function handleBalikanShortcutKeydown('),end=source.indexOf('let balikanShortcutsActive',start);vm.runInContext(source.slice(start,end),context);
+  const event={altKey:true,key:'2',code:'Digit2',target:search,preventDefault(){this.prevented=true;}};
+  context.handleBalikanShortcutKeydown(event);assert.equal(selected,buttons[1]);assert.equal(event.prevented,true);
+  for(const overrides of [{target:editor},{repeat:true},{isComposing:true},{key:'9',code:'Digit9'}]){selected=null;context.handleBalikanShortcutKeydown({...event,...overrides});assert.equal(selected,null);}
+  buttons[1].disabled=true;selected=null;context.handleBalikanShortcutKeydown(event);assert.equal(selected,null);
+  buttons[1].disabled=false;context.getBalikanVisibleRows=()=>({rows:[{rowNumber:8}]});context.handleBalikanShortcutKeydown(event);assert.equal(selected,null);
+});

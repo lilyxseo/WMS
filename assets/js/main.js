@@ -3431,7 +3431,7 @@ function renderBalikanLocationCardContent(rows=[]){
   const sheetBadge=`<span class='balikan-sheet-badge'>${esc(getBalikanActiveSheetName(row)||'-')}</span>`;
   const statusBadge=renderBalikanStatusBadge(row);
   const selectedMeta=isBalikanLocationRowSelected(row)?`${sheetBadge}${statusBadge}`:sheetBadge;
-  return `<div class='k'>Lokasi</div><div class='v balikan-location-title'><span>${esc(row.sku||'-')}</span> ${selectedMeta}</div><div class='subtitle'>${locations.length} lokasi ditemukan. Tap lokasi untuk update kolom LOKASI.</div><div class='balikan-location-list'>${locations.map(item=>{
+  return `<div class='k'>Lokasi</div><div class='v balikan-location-title'><span>${esc(row.sku||'-')}</span> ${selectedMeta}</div><div class='subtitle'>${locations.length} lokasi ditemukan. Tap lokasi untuk update kolom LOKASI.</div><div class='balikan-location-list'>${locations.map((item,index)=>{
     const displayLabel=decodeBalikanLocationValue(item.displayLabel||item.lokasi);
     const rawLocation=decodeBalikanLocationValue(item.rawLocation||item.lokasi);
     const itemKey=normalizeBalikanLocation(rawLocation);
@@ -3439,7 +3439,7 @@ function renderBalikanLocationCardContent(rows=[]){
     const inactive=hasActive&&!active;
     const lastUsed=!!itemKey&&itemKey!=='masih di inbound'&&itemKey===normalizeBalikanLocation(row.lastInboundLocation);
     const qtyLabel=item.qty===null||item.qty===undefined?'—':`${item.qty} pcs`;
-    return `<button type='button' class='balikan-location-item ${active?'is-active':''} ${inactive?'is-inactive':''}' data-balikan-location-select='1' data-row-number='${Number(row.rowNumber)||0}' data-location='${esc(rawLocation)}' ${!itemKey||!canUpdate?'disabled':''} aria-pressed='${active?'true':'false'}'><span class='balikan-location-name'>${esc(displayLabel)}${lastUsed?" <small class='balikan-last-location'>(terakhir digunakan)</small>":''} :</span><strong>${qtyLabel}</strong></button>`;
+    return `<button type='button' class='balikan-location-item ${active?'is-active':''} ${inactive?'is-inactive':''}' title='${index<9?`Alt + ${index+1} • `:''}${esc(displayLabel)}' ${index<9?`aria-keyshortcuts='Alt+${index+1}'`:''} data-balikan-location-select='1' data-sheet-name='${esc(getBalikanActiveSheetName(row))}' data-row-number='${Number(row.rowNumber)||0}' data-location='${esc(rawLocation)}' ${!itemKey||!canUpdate?'disabled':''} aria-pressed='${active?'true':'false'}'><span class='balikan-location-name'>${esc(displayLabel)}${lastUsed?" <small class='balikan-last-location'>(terakhir digunakan)</small>":''} :</span><strong>${qtyLabel}</strong></button>`;
   }).join('')}</div>`;
 }
 function getBalikanInventFieldKey(){
@@ -3659,6 +3659,19 @@ function handleBalikanSearchKeydown(event){
   if(event.key==='Escape'){event.preventDefault();resetBalikanSearch();focusBalikanSearch();}
 }
 function handleBalikanShortcutKeydown(event){
+  if(event.altKey&&!event.ctrlKey&&!event.metaKey&&!event.shiftKey&&!event.repeat&&!event.isComposing){
+    const digit=/^Digit[1-9]$/.test(event.code||'')?Number(event.code.slice(-1)):/^[1-9]$/.test(event.key)?Number(event.key):0;
+    const search=document.querySelector('#balikanSearchInput')||balikanSearchInput;
+    if(digit&&(!isKeyboardTypingTarget(event.target)||event.target===search)){
+      const buttons=document.querySelectorAll('#balikanLocationCard [data-balikan-location-select]');
+      const button=buttons[digit-1];
+      if(!button||button.disabled||getPermissions().canUpdate===false||PAGE_DATA_LOADS.get('balikan-store')?.loading||BALIKAN_STATE.isRefreshing)return;
+      const row=getBalikanLocationCardRow(getBalikanVisibleRows().rows);
+      const location=row?getBalikanSkuLocationOptions(row)[digit-1]:null;
+      if(!row||button.dataset.sheetName!==getBalikanActiveSheetName(row)||Number(button.dataset.rowNumber)!==Number(row.rowNumber)||normalizeBalikanLocation(button.dataset.location)!==normalizeBalikanLocation(location?.rawLocation||location?.lokasi))return;
+      event.preventDefault();void handleBalikanLocationSelect(button);return;
+    }
+  }
   if(event.ctrlKey&&!event.altKey&&!event.shiftKey&&String(event.key).toLowerCase()==='k'){event.preventDefault();focusBalikanSearch();return;}
   if(isKeyboardTypingTarget(event.target))return;
   if(event.key==='/'&&!event.ctrlKey&&!event.metaKey&&!event.altKey){event.preventDefault();focusBalikanSearch();return;}
