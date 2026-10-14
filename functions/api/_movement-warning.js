@@ -1,7 +1,7 @@
 import {normalizeTransactionDate} from './_transaction-read.js';
-// The stock formula subtracts signed movement components. Check only a
-// completely absent component (zero/missing row), never infer physical stock
-// from raw ledger totals or flag a zero closing balance on its own.
+// WMS charges outgoing movements to the subtractive transfer component;
+// receiving locations generally include them in STOK AWAL. Never require a
+// negative transfer at the destination or infer failure from closing zero.
 const text=value=>String(value??'').trim();
 export function normalizeMovementLocation(value){
  let raw=text(value);try{raw=decodeURIComponent(raw);}catch{}
@@ -52,13 +52,27 @@ export function movementImpactFindings(context,stock,{normalizeSku,number,busine
    const rows=stockByLocation.get(key(group.sku,location))||[];
    if(!rows.length){
     const other=stockByLocation.get(key(group.sku,side==='From'?group.to:group.from))||[];
-    if(other.some(r=>number(r.stok_akhir)!==null&&number(r.stok_akhir)>0)){missing.push(`${side} ${location} belum memiliki baris SKU`);proof.push(`${side} ${location}: pasangan SKU/lokasi tidak ditemukan di Kartu Stok.`);}continue;
+    if(other.some(r=>number(r.stok_akhir)!==null&&number(r.stok_akhir)>0)){missing.push(`${side} ${location} belum memiliki baris SKU`);proof.push(`${side} ${location}: pasangan SKU/lokasi tidak ditemukan di ketiga sumber stok.`);}continue;
    }
-   const values=rows.map(r=>number(r[group.kind.field])),closing=rows.map(r=>number(r.stok_akhir));
-   if(values.some(v=>v===null)||closing.some(v=>v===null))continue;
-   if(values.every(zero)){
+   const closing=rows.map(r=>number(r.stok_akhir));
+   if(closing.some(v=>v===null))continue;
+   const rowLabels=rows.map(r=>`${r.warningSource||'Kartu Stok'} baris ${r.source_row_number??'-'}`).join(', ');
+   if(side==='From'){
+    const values=rows.map(r=>number(r[group.kind.field]));
+    if(values.some(v=>v===null)||!values.every(zero))continue;
     missing.push(`${side} ${location}`);
-    proof.push(`${side} ${location}: ${group.kind.label} 0 (netto riwayat ${expected}); saldo ${closing.reduce((a,b)=>a+b,0)}; baris Kartu Stok ${rows.map(r=>r.source_row_number??'-').join(', ')}.`);
+    proof.push(`${side} ${location}: ${group.kind.label} 0 meskipun ada movement keluar (netto lokasi ${expected}); saldo ${[...new Set(closing)].join(' / ')}; ${rowLabels}.`);
+   }else{
+    // Incoming transfers are included in opening stock in real WMS formulas.
+    // A positive opening/closing value or a negative incoming component is
+    // evidence of impact, even though the destination transfer column is zero.
+    const received=rows.some(r=>{const a=number(r.stok_awal),i=number(r.internal_stock_transfer),p=number(r.replenishment);return a!==null&&a>0||number(r.stok_akhir)>0||i!==null&&i<0||p!==null&&p<0;});
+    if(received||!closing.every(zero))continue;
+    if(rows.some(r=>!Object.hasOwn(r,'stok_awal')||number(r.stok_awal)===null&&r.stok_awal!==null&&text(r.stok_awal)!==''))continue;
+    const opening=rows.map(r=>number(r.stok_awal));
+    if(opening.some(v=>v!==null&&!zero(v)))continue;
+    missing.push(`${side} ${location}`);
+    proof.push(`${side} ${location}: STOK AWAL ${opening.some(v=>v===null)?'kosong/belum terisi':'0'} dan saldo 0, penerimaan movement belum terlihat; ${rowLabels}.`);
    }
   }
   checked++;
