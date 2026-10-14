@@ -1,3 +1,4 @@
+import { mountAccentColors } from './accent-colors.js';
 import { mountSettingsDatabase, databaseStatus } from './settings-database.js';
 import { isInventoryPicRole } from './utils/role-access.js';
 import { warningRowsMarkup, warningVerificationMarkup } from './warning-view.js';
@@ -609,6 +610,7 @@ const requestGeneration=++authRequestGeneration;
 authChecking=true;
 isAuthStateReady=false;
 applyTheme();
+mountAccentColors(document.getElementById('accentPicker'));
 renderAuthState();
 preparePublicShell();
 await loadRuntimeConfig();

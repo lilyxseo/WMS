@@ -6,6 +6,9 @@
       const savedTheme = localStorage.getItem("theme");
       const theme = savedTheme || "dark";
       document.documentElement.setAttribute("data-theme", theme);
+      let accent='red';
+      try{const saved=localStorage.getItem('wms.accent');if(['red','blue','green','purple','amber'].includes(saved))accent=saved;}catch{}
+      document.documentElement.dataset.accent=accent;
     })();
   </script>
   <meta charset="UTF-8" />
@@ -16,6 +19,7 @@
   <title>WMS - Goto Living</title>
   <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
   <link rel="stylesheet" href="/assets/css/style.css?v=96a2814-debug-2" />
+  <link rel="stylesheet" href="/assets/css/accent-colors.css?v=__APP_VERSION__" />
   <link rel="stylesheet" href="/assets/css/settings.css?v=__APP_VERSION__" />
   <link rel="icon" href="/assets/goto.svg" sizes="any" />
 </head>
@@ -303,7 +307,7 @@
     </div>
   </aside>
   <main class="content">
-    <div class="header"><div class="header-card"><div class="header-left"><button class="icon-btn mobile-only" id="openSidebar" aria-label="Menu"><i data-lucide="menu"></i></button></div><div class="header-actions"><button id="refreshToggleHeader" class="theme-btn icon-only" aria-label="Refresh data manual" title="Refresh data manual"><i data-lucide="refresh-cw"></i></button><button id="darkBtnHeader" class="theme-btn icon-only" aria-label="Toggle dark mode" title="Toggle dark mode"><i data-lucide="moon-star"></i></button></div></div></div>
+    <div class="header"><div class="header-card"><div class="header-left"><button class="icon-btn mobile-only" id="openSidebar" aria-label="Menu"><i data-lucide="menu"></i></button></div><div class="header-actions"><details id="accentPicker" class="accent-picker"><summary class="theme-btn icon-only" aria-label="Pilih warna aksen" title="Warna aksen"><i data-lucide="palette"></i></summary><div class="accent-options"><p>Warna aksen</p><button type="button" data-accent-choice="red" aria-pressed="false"><span class="accent-swatch" style="--swatch:#dc2626" aria-hidden="true"></span>Merah</button><button type="button" data-accent-choice="blue" aria-pressed="false"><span class="accent-swatch" style="--swatch:#1d4ed8" aria-hidden="true"></span>Biru</button><button type="button" data-accent-choice="green" aria-pressed="false"><span class="accent-swatch" style="--swatch:#047857" aria-hidden="true"></span>Hijau</button><button type="button" data-accent-choice="purple" aria-pressed="false"><span class="accent-swatch" style="--swatch:#7e22ce" aria-hidden="true"></span>Ungu</button><button type="button" data-accent-choice="amber" aria-pressed="false"><span class="accent-swatch" style="--swatch:#b45309" aria-hidden="true"></span>Amber</button></div></details><button id="refreshToggleHeader" class="theme-btn icon-only" aria-label="Refresh data manual" title="Refresh data manual"><i data-lucide="refresh-cw"></i></button><button id="darkBtnHeader" class="theme-btn icon-only" aria-label="Toggle dark mode" title="Toggle dark mode"><i data-lucide="moon-star"></i></button></div></div></div>
 
     <div id="mainContentPages">
     <section id="page-dashboard" class="page"><section class="dashboard-section"><div class="card"><div class="section-header section-header--dashboard"><h3 class="page-title">Dashboard</h3></div><div id="dashboardCards" class="grid dashboard"></div></div></section><div id="recentMove"></div></section>
