@@ -1,3 +1,4 @@
+import { isInventoryPicRole } from './utils/role-access.js';
 import { warningRowsMarkup, warningVerificationMarkup } from './warning-view.js';
 import { mountAllSkuNotes } from './all-sku-notes.js';
 import { mountSkuNotes } from './sku-notes.js';
@@ -154,7 +155,7 @@ const role=String(current.role||current.user_role||"").toLowerCase();
 return role.includes("admin")||role.includes("developer")||role.includes("dev");
 }
 function isActivityLogAllowed(){
-return isDeveloperUser()||isPreviewBypassLoginEnabled()||isDeveloperRoleLike();
+return isDeveloperUser()||isPreviewBypassLoginEnabled()||isDeveloperRoleLike()||isInventoryPicRole(getCurrentUserRole());
 }
 function isToolsDevAllowed(){
 return isActivityLogAllowed();
@@ -747,7 +748,7 @@ showAuthMode("login");
 form.dataset.bound="1";
 }
 function bindNav(){
-document.querySelectorAll(".side-link[data-route]").forEach(btn=>btn.addEventListener("click",()=>{if(btn.dataset.route==="/activity-log"&&!isDeveloperUser()){navigateTo("/dashboard");closeSidebarMobile();return;}if(btn.dataset.route==="/tools-dev"&&!isToolsDevAllowed()){navigateTo("/dashboard");closeSidebarMobile();return;}navigateTo(btn.dataset.route);closeSidebarMobile();}));
+document.querySelectorAll(".side-link[data-route]").forEach(btn=>btn.addEventListener("click",()=>{if(btn.dataset.route==="/activity-log"&&!isActivityLogAllowed()){navigateTo("/dashboard");closeSidebarMobile();return;}if(btn.dataset.route==="/tools-dev"&&!isToolsDevAllowed()){navigateTo("/dashboard");closeSidebarMobile();return;}navigateTo(btn.dataset.route);closeSidebarMobile();}));
 document.querySelectorAll("[data-sidebar-parent]").forEach(btn=>btn.addEventListener("click",()=>toggleSidebarMenu(btn.dataset.sidebarParent)));
 }
 async function refreshMovementTableData(mode,{deletedRowNumbers=[]}={}){
@@ -2498,7 +2499,7 @@ scheduleDevAutoRefreshNext();
 }
 }
 function startDevAutoRefresh(){
-if(!isToolsDevAllowed()){toast('Tools Dev hanya untuk preview/development/admin','error');return;}
+if(!isToolsDevAllowed()){toast('Tools Dev hanya untuk Developer, Admin, atau PIC Inventory','error');return;}
 if(isDevAutoRefreshRunning)return;
 isDevAutoRefreshRunning=true;
 devAutoRefreshLastError="";

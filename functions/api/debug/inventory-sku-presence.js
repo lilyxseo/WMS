@@ -1,4 +1,4 @@
-import { getRequestRole } from '../_authz.js';
+import { getRequestRole, hasInventoryDeveloperAccess } from '../_authz.js';
 import { getSecretSupabaseConfig } from '../_supabase-config.js';
 
 function json(body, status = 200) {
@@ -27,8 +27,8 @@ function addEscapedRepresentations(result) {
 
 export async function onRequestGet({ request, env }) {
   const role = String(await getRequestRole(request, env) || '').trim().toLowerCase();
-  if (!role.includes('developer') && !role.includes('admin')) {
-    return json({ success: false, message: 'Akses developer/admin diperlukan.' }, 403);
+  if (!role.includes('developer') && !role.includes('admin') && !await hasInventoryDeveloperAccess(request,env)) {
+    return json({ success: false, message: 'Akses Developer, Admin, atau PIC Inventory diperlukan.' }, 403);
   }
   const sku = new URL(request.url).searchParams.get('sku');
   if (sku === null || !String(sku).trim()) return json({ success: false, message: 'Parameter sku wajib diisi.' }, 400);

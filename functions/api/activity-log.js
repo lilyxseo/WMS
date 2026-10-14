@@ -1,3 +1,4 @@
+import { hasInventoryDeveloperAccess } from './_authz.js';
 import { getSecretSupabaseConfig } from './_supabase-config.js';
 
 function json(data, status = 200) {
@@ -205,7 +206,7 @@ export async function onRequestPost({ request, env }) {
 
 export async function onRequestGet({ request, env }) {
   try {
-    if (!isDeveloperRequest(request, env)) return json({ success: false, error: "Akses ditolak" }, 403);
+    if (!isDeveloperRequest(request, env) && !await hasInventoryDeveloperAccess(request,env)) return json({ success: false, error: "Akses ditolak" }, 403);
     const url = new URL(request.url);
     const data = await supabaseGetLogs(env, Object.fromEntries(url.searchParams.entries()));
     return json({ success: true, data });
