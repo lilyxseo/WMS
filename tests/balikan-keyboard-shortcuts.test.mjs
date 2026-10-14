@@ -47,7 +47,7 @@ test('search exposes concise shortcut help and keyboard focus styling', () => {
 
 import vm from 'node:vm';
 function singleResultHarness(rows,save=async()=>{}){
-  const button={};let resets=0;
+  const button={style:{}};let resets=0;
   const context=vm.createContext({document:{getElementById:()=>button,querySelector:()=>null},balikanSearchInput:null,BALIKAN_STATE:{shortcutCheckPending:false},PAGE_DATA_LOADS:new Map(),getPermissions:()=>({canUpdate:true}),getBalikanVisibleRows:()=>({rows}),isCheckedValue:value=>value==='TRUE',getBalikanActiveSheetName:row=>row.sheetName,window:{toggleBalikanCheck:save},resetBalikanSearch:()=>{resets++;},toast:()=>{},showToast:()=>{}});
   const start=source.indexOf('function syncBalikanSingleCheckShortcut('),end=source.indexOf('function handleBalikanSearchKeydown(',start);
   vm.runInContext(source.slice(start,end),context);
@@ -56,7 +56,7 @@ function singleResultHarness(rows,save=async()=>{}){
 test('single-result button excludes duplicate SKU rows and checked/read-only/loading results',()=>{
   const row={sku:'123',sheetName:'TRIP 1',rowNumber:2};const h=singleResultHarness([row]);
   h.context.syncBalikanSingleCheckShortcut([row]);assert.equal(h.button.hidden,false);assert.equal(h.button.disabled,false);
-  h.context.syncBalikanSingleCheckShortcut([row,{...row,sheetName:'TRIP 2'}]);assert.equal(h.button.hidden,true);
+  h.context.syncBalikanSingleCheckShortcut([row,{...row,sheetName:'TRIP 2'}]);assert.equal(h.button.hidden,true);assert.equal(h.button.style.display,'none');
   h.context.syncBalikanSingleCheckShortcut([{...row,checked:'TRUE'}]);assert.equal(h.button.disabled,true);
   h.context.getPermissions=()=>({canUpdate:false});h.context.syncBalikanSingleCheckShortcut([row]);assert.equal(h.button.hidden,true);
   h.context.getPermissions=()=>({canUpdate:true});h.context.PAGE_DATA_LOADS.set('balikan-store',{loading:true});h.context.syncBalikanSingleCheckShortcut([row]);assert.equal(h.button.disabled,true);

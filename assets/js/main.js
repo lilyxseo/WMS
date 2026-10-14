@@ -3634,7 +3634,7 @@ function focusBalikanSearch(){const input=document.querySelector('#balikanSearch
 function syncBalikanSingleCheckShortcut(rows){
   const button=document.getElementById('btnBalikanSingleCheck');if(!button)return;
   const single=rows.length===1&&getPermissions().canUpdate!==false;
-  button.hidden=!single;
+  button.hidden=!single;button.style.display=single?'':'none';
   button.disabled=!single||BALIKAN_STATE.shortcutCheckPending||isCheckedValue(rows[0]?.checked)||!!PAGE_DATA_LOADS.get('balikan-store')?.loading||!!BALIKAN_STATE.isRefreshing;
   button.textContent=BALIKAN_STATE.shortcutCheckPending?'Menyimpan…':isCheckedValue(rows[0]?.checked)?'Sudah dicentang':'Centang';
   button.onclick=()=>{void autoCheckSingleBalikanResult();};
