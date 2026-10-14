@@ -3659,6 +3659,10 @@ function handleBalikanSearchKeydown(event){
   if(event.key==='Escape'){event.preventDefault();resetBalikanSearch();focusBalikanSearch();}
 }
 function handleBalikanShortcutKeydown(event){
+  if(event.altKey&&!event.ctrlKey&&!event.metaKey&&!event.shiftKey&&!event.repeat&&!event.isComposing&&(event.code==='Backquote'||event.key==='`')){
+    const search=document.querySelector('#balikanSearchInput')||balikanSearchInput;
+    if(!isKeyboardTypingTarget(event.target)||event.target===search){event.preventDefault();void autoCheckSingleBalikanResult();return;}
+  }
   if(event.altKey&&!event.ctrlKey&&!event.metaKey&&!event.shiftKey&&!event.repeat&&!event.isComposing){
     const digit=/^Digit[1-9]$/.test(event.code||'')?Number(event.code.slice(-1)):/^[1-9]$/.test(event.key)?Number(event.key):0;
     const search=document.querySelector('#balikanSearchInput')||balikanSearchInput;

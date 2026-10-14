@@ -78,3 +78,14 @@ test('Alt digits choose displayed location and reject edits, repeats, stale resu
   buttons[1].disabled=true;selected=null;context.handleBalikanShortcutKeydown(event);assert.equal(selected,null);
   buttons[1].disabled=false;context.getBalikanVisibleRows=()=>({rows:[{rowNumber:8}]});context.handleBalikanShortcutKeydown(event);assert.equal(selected,null);
 });
+
+test('Alt backquote checks from search and page but ignores editors, modifiers and held keys',()=>{
+  const search={typing:true},editor={typing:true};let calls=0;
+  const context=vm.createContext({document:{querySelector:()=>search},balikanSearchInput:search,isKeyboardTypingTarget:t=>!!t?.typing,autoCheckSingleBalikanResult:()=>{calls++;},Element:class{}});
+  const start=source.indexOf('function handleBalikanShortcutKeydown('),end=source.indexOf('let balikanShortcutsActive',start);vm.runInContext(source.slice(start,end),context);
+  const event={altKey:true,key:'`',code:'Backquote',target:search,preventDefault(){this.prevented=true;}};
+  context.handleBalikanShortcutKeydown(event);assert.equal(calls,1);assert.equal(event.prevented,true);
+  context.handleBalikanShortcutKeydown({...event,target:{}});assert.equal(calls,2);
+  for(const overrides of [{target:editor},{repeat:true},{isComposing:true},{ctrlKey:true},{metaKey:true},{shiftKey:true}])context.handleBalikanShortcutKeydown({...event,...overrides});
+  assert.equal(calls,2);
+});
