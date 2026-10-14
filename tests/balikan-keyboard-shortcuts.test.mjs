@@ -44,3 +44,26 @@ test('search exposes concise shortcut help and keyboard focus styling', () => {
   assert.match(html, /aria-describedby="balikanShortcutHint"/);
   assert.match(css, /balikan-table tbody tr:focus/);
 });
+
+import vm from 'node:vm';
+function singleResultHarness(rows,save=async()=>{}){
+  const button={};let resets=0;
+  const context=vm.createContext({document:{getElementById:()=>button,querySelector:()=>null},balikanSearchInput:null,BALIKAN_STATE:{shortcutCheckPending:false},PAGE_DATA_LOADS:new Map(),getPermissions:()=>({canUpdate:true}),getBalikanVisibleRows:()=>({rows}),isCheckedValue:value=>value==='TRUE',getBalikanActiveSheetName:row=>row.sheetName,window:{toggleBalikanCheck:save},resetBalikanSearch:()=>{resets++;},toast:()=>{},showToast:()=>{}});
+  const start=source.indexOf('function syncBalikanSingleCheckShortcut('),end=source.indexOf('function handleBalikanSearchKeydown(',start);
+  vm.runInContext(source.slice(start,end),context);
+  return {context,button,resets:()=>resets};
+}
+test('single-result button excludes duplicate SKU rows and checked/read-only/loading results',()=>{
+  const row={sku:'123',sheetName:'TRIP 1',rowNumber:2};const h=singleResultHarness([row]);
+  h.context.syncBalikanSingleCheckShortcut([row]);assert.equal(h.button.hidden,false);assert.equal(h.button.disabled,false);
+  h.context.syncBalikanSingleCheckShortcut([row,{...row,sheetName:'TRIP 2'}]);assert.equal(h.button.hidden,true);
+  h.context.syncBalikanSingleCheckShortcut([{...row,checked:'TRUE'}]);assert.equal(h.button.disabled,true);
+  h.context.getPermissions=()=>({canUpdate:false});h.context.syncBalikanSingleCheckShortcut([row]);assert.equal(h.button.hidden,true);
+  h.context.getPermissions=()=>({canUpdate:true});h.context.PAGE_DATA_LOADS.set('balikan-store',{loading:true});h.context.syncBalikanSingleCheckShortcut([row]);assert.equal(h.button.disabled,true);
+});
+test('quick check serializes clicks, writes exact sheet/row and preserves search on failed save',async()=>{
+  let reject,calls=0;const h=singleResultHarness([{sku:'123',sheetName:'TRIP 2',rowNumber:8}],(sheet,row,checked)=>{calls++;assert.equal(sheet,'TRIP 2');assert.equal(row,8);assert.equal(checked,true);return new Promise((_,r)=>{reject=r;});});
+  const pending=h.context.autoCheckSingleBalikanResult();await h.context.autoCheckSingleBalikanResult();assert.equal(calls,1);assert.equal(h.button.disabled,true);
+  reject(new Error('offline'));await pending;assert.equal(h.resets(),0);assert.equal(h.button.disabled,false);
+  h.context.window.toggleBalikanCheck=async()=>{};await h.context.autoCheckSingleBalikanResult();assert.equal(h.resets(),1);
+});
