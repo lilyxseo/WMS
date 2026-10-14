@@ -8,6 +8,8 @@ if(process.argv.includes('--movement')){
  'inbound',(select jsonb_agg(j) from (select tanggal,from_location,to_location,sku,qty,status,keterangan,source_row_number,synced_at from public.inventory_barang_masuk where sku='682200007014' order by tanggal,source_row_number) j),
  'outbound',(select jsonb_agg(j) from (select tanggal,from_location,to_location,sku,qty,status,keterangan,source_row_number from public.inventory_barang_keluar where sku='682200007014' order by tanggal,source_row_number) j),
  'sync',(select jsonb_agg(j) from (select source,status,last_success_at,locked_at from public.inventory_sync_status order by source) j),
+ 'sync_history',(select jsonb_agg(j) from (select source,status,started_at,finished_at,duration_ms,source_row_count,substring(error_message from '^([A-Z_]+):') as error_code from public.inventory_sync_history order by started_at desc limit 12) j),
+ 'http_health',(select jsonb_agg(j) from (select status_code,count(*) as requests,count(*) filter(where content ilike '%exceeded CPU%' or content ilike '%error 1102%') as cpu_limit_errors from net._http_response where created>now()-interval '20 minutes' group by status_code) j),
  'transfer_labels',(select jsonb_agg(j) from (select status,keterangan,count(*) as rows from public.inventory_barang_masuk where upper(coalesce(keterangan,'')) like '%TRANSFER%' or upper(coalesce(status,'')) like '%MOVEMENT%' group by status,keterangan) j)
  ) as audit`;
  const response=await fetch(`https://api.supabase.com/v1/projects/${project}/database/query`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({query}),signal:AbortSignal.timeout(60000)});
@@ -25,10 +27,10 @@ if(process.argv.includes('--validate')||process.argv.includes('--movement-previe
  const keys=await response.json(),key=keys.find(item=>String(item.api_key||'').startsWith('sb_secret_'))?.api_key;
  if(!key)throw new Error('Audit server credential unavailable');
  let result;
- for(let attempt=0;attempt<4;attempt++){
+ for(let attempt=0;attempt<8;attempt++){
   result=await loadInventoryWarnings({SUPABASE_URL:`https://${project}.supabase.co`,SUPABASE_SECRET_KEY:key},process.argv.includes('--movement-preview')?{full:true}:{page:1,limit:1});
   if(result.verification.filter(item=>process.argv.includes('--require-ledger')||process.argv.includes('--movement-preview')||['kartu_stok','rpl','bulky'].includes(item.source)).every(item=>item.ready))break;
-  await new Promise(resolve=>setTimeout(resolve,2000));
+  await new Promise(resolve=>setTimeout(resolve,5000));
  }
  const report={summary:result.summary,partial:result.partial,coverage:result.verification.map(item=>({source:item.source,ready:item.ready,rowCount:item.rowCount,reason:item.reason,readStatus:item.readStatus,readCode:item.readCode})),checks:result.checks};
  console.log('::notice title=Warning validation::'+JSON.stringify(report));
