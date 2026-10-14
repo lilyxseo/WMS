@@ -2,6 +2,21 @@
 // document URLs, or full transaction ledgers are exported.
 const project=process.env.SUPABASE_PROJECT_REF,token=process.env.SUPABASE_ACCESS_TOKEN;
 if(!project||!token)throw new Error('Audit configuration unavailable');
+if(process.argv.includes('--movement')){
+ const query=`select jsonb_build_object(
+ 'stock',(select jsonb_agg(j) from (select 'Kartu Stok' as source,sku,lokasi_bulky,stok_awal,internal_stock_transfer,replenishment,pengeluaran,stok_akhir,source_row_number from public.inventory_kartu_stok where sku='682200007014' union all select 'BULKY',sku,lokasi_bulky,stok_awal,internal_stock_transfer,replenishment,pengeluaran,stok_akhir,source_row_number from public.inventory_bulky where sku='682200007014') j),
+ 'inbound',(select jsonb_agg(j) from (select tanggal,from_location,to_location,sku,qty,status,keterangan,source_row_number,synced_at from public.inventory_barang_masuk where sku='682200007014' order by tanggal,source_row_number) j),
+ 'outbound',(select jsonb_agg(j) from (select tanggal,from_location,to_location,sku,qty,status,keterangan,source_row_number from public.inventory_barang_keluar where sku='682200007014' order by tanggal,source_row_number) j),
+ 'sync',(select jsonb_agg(j) from (select source,status,last_success_at,locked_at from public.inventory_sync_status order by source) j),
+ 'transfer_labels',(select jsonb_agg(j) from (select status,keterangan,count(*) as rows from public.inventory_barang_masuk where upper(coalesce(keterangan,'')) like '%TRANSFER%' or upper(coalesce(status,'')) like '%MOVEMENT%' group by status,keterangan) j)
+ ) as audit`;
+ const response=await fetch(`https://api.supabase.com/v1/projects/${project}/database/query`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({query}),signal:AbortSignal.timeout(60000)});
+ if(!response.ok){console.error(`::error::Read-only movement audit failed: HTTP ${response.status}`);process.exit(1);}
+ const audit=(await response.json())?.[0]?.audit;
+ if(!audit)throw new Error('Movement audit unavailable');
+ for(const [key,value] of Object.entries(audit))console.log(`::notice title=Movement ${key}::`+JSON.stringify(value));
+ process.exit(0);
+}
 if(process.argv.includes('--validate')){
  const {loadInventoryWarnings}=await import('../functions/api/_inventory-warnings.js');
  const response=await fetch(`https://api.supabase.com/v1/projects/${project}/api-keys?reveal=true`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(30000)});
