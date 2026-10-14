@@ -1,3 +1,4 @@
+import { isInventoryPicRole } from '../../assets/js/utils/role-access.js';
 import { getPublishableSupabaseConfig, getSecretSupabaseConfig } from './_supabase-config.js';
 
 function json(body, status = 200) {
@@ -105,4 +106,12 @@ export async function requirePicRole({ request, env, action = 'CRUD' }) {
   if (canCrud) return { ok: true, role };
   await auditDeniedCrud({ request, env, role, action });
   return { ok: false, role, response: json({ success: false, message: 'Akses read-only. Hanya PIC atau Developer yang bisa mengubah data.', reason: READ_ONLY_REASON }, 403) };
+}
+
+// Inventory PIC elevation is granted only by a server-read profile after
+// Supabase validates the session, never by caller-supplied role metadata.
+export async function hasInventoryDeveloperAccess(request,env){
+ const authUser=await getSupabaseAuthUser(request,env);
+ if(!authUser?.id)return false;
+ return isInventoryPicRole(await getUserProfileRole(authUser.id,authUser.email,env));
 }
