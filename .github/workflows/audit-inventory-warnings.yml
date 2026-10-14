@@ -4,6 +4,11 @@ on:
     branches: [fix/warning-evidence, feat/movement-impact-warnings]
     paths: ['scripts/audit-inventory-warnings.mjs', '.github/workflows/audit-inventory-warnings.yml']
   workflow_dispatch:
+    inputs:
+      movement:
+        description: 'Inspect reported movement SKU without data writes'
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -19,4 +24,4 @@ jobs:
         env:
           SUPABASE_PROJECT_REF: udullprykzdskrxmbbkj
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: node scripts/audit-inventory-warnings.mjs --movement
+        run: node scripts/audit-inventory-warnings.mjs ${{ github.ref == 'refs/heads/feat/movement-impact-warnings' && '--movement-preview' || inputs.movement == true && '--movement' || '--validate' }}

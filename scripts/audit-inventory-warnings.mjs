@@ -17,7 +17,8 @@ if(process.argv.includes('--movement')){
  for(const [key,value] of Object.entries(audit))console.log(`::notice title=Movement ${key}::`+JSON.stringify(value));
  process.exit(0);
 }
-if(process.argv.includes('--validate')){
+if(process.argv.includes('--movement-preview'))await import('./deploy-warning-rules.mjs');
+if(process.argv.includes('--validate')||process.argv.includes('--movement-preview')){
  const {loadInventoryWarnings}=await import('../functions/api/_inventory-warnings.js');
  const response=await fetch(`https://api.supabase.com/v1/projects/${project}/api-keys?reveal=true`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(30000)});
  if(!response.ok)throw new Error('Audit server credential unavailable');
@@ -25,13 +26,14 @@ if(process.argv.includes('--validate')){
  if(!key)throw new Error('Audit server credential unavailable');
  let result;
  for(let attempt=0;attempt<4;attempt++){
-  result=await loadInventoryWarnings({SUPABASE_URL:`https://${project}.supabase.co`,SUPABASE_SECRET_KEY:key},{page:1,limit:1});
-  if(result.verification.filter(item=>process.argv.includes('--require-ledger')||['kartu_stok','rpl','bulky'].includes(item.source)).every(item=>item.ready))break;
+  result=await loadInventoryWarnings({SUPABASE_URL:`https://${project}.supabase.co`,SUPABASE_SECRET_KEY:key},process.argv.includes('--movement-preview')?{full:true}:{page:1,limit:1});
+  if(result.verification.filter(item=>process.argv.includes('--require-ledger')||process.argv.includes('--movement-preview')||['kartu_stok','rpl','bulky'].includes(item.source)).every(item=>item.ready))break;
   await new Promise(resolve=>setTimeout(resolve,2000));
  }
  const report={summary:result.summary,partial:result.partial,coverage:result.verification.map(item=>({source:item.source,ready:item.ready,rowCount:item.rowCount,reason:item.reason,readStatus:item.readStatus,readCode:item.readCode})),checks:result.checks};
  console.log('::notice title=Warning validation::'+JSON.stringify(report));
- if(result.verification.filter(item=>process.argv.includes('--require-ledger')||['kartu_stok','rpl','bulky'].includes(item.source)).some(item=>!item.ready)){
+ if(process.argv.includes('--movement-preview')){const findings=result.rows.filter(row=>row.category.startsWith('MOVEMENT_'));console.log('::notice title=Movement detection preview::'+JSON.stringify({total:findings.length,reportedSkuDetected:findings.some(row=>row.sku==='682200007014'),sample:findings.slice(0,25).map(row=>({sku:row.sku,category:row.category,issue:row.issue,evidence:row.evidence}))}));}
+ if(result.verification.filter(item=>process.argv.includes('--require-ledger')||process.argv.includes('--movement-preview')||['kartu_stok','rpl','bulky'].includes(item.source)).some(item=>!item.ready)){
   const statusResponse=await fetch(`https://api.supabase.com/v1/projects/${project}/database/query`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({query:'select source,status,last_success_at,locked_at,source_version from public.inventory_sync_status order by source'}),signal:AbortSignal.timeout(30000)});
   if(statusResponse.ok)console.log('::notice title=Warning source sync status::'+JSON.stringify(await statusResponse.json()));
   console.error('::error::Read-only warning validation could not obtain a stable stock snapshot');process.exit(1);

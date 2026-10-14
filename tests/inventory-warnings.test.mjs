@@ -51,6 +51,7 @@ test('warning endpoint never downloads the large transaction ledgers', async () 
   globalThis.fetch = async url => {
     urls.push(String(url));
     if(String(url).includes('inventory_sync_status'))return Response.json(['kartu_stok','rpl','bulky','barang_masuk','barang_keluar'].map(source=>({source,status:'success',source_version:'v1',last_success_at:'2026-10-13T06:51:00Z',locked_at:null})));
+    if (String(url).includes('/rpc/inventory_warning_movement_context')) return Response.json({movements:[],activity:[]});
     if (String(url).includes('/rpc/inventory_warning_ledger_review')) return new Response(JSON.stringify([{ sku:'OUT-1', nama_barang:'Outbound',qty:1,source_row_number:17,tanggal:'2026-10-13' }]), { status:200 });
     return new Response('[]', { status:200 });
   };

@@ -29,11 +29,15 @@ export async function loadWarningData(env){
    offset+=batch.length;
   }
  }));
- let ledger=[];let ledgerError=false;
+ let ledger=[];let ledgerError=false;let movement=null;let movementError=false;
  try{
   const response=await fetch(`${config.url}/rest/v1/rpc/inventory_warning_ledger_review`,{method:'POST',headers:{apikey:config.key,Authorization:`Bearer ${config.key}`,'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(20000)});
   const body=await response.json();if(!response.ok||!Array.isArray(body))throw new Error('Ledger review unavailable');ledger=body;
  }catch{ledgerError=true;}
+ try{
+  const response=await fetch(`${config.url}/rest/v1/rpc/inventory_warning_movement_context`,{method:'POST',headers:{apikey:config.key,Authorization:`Bearer ${config.key}`,'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(20000)});
+  const body=await response.json();if(!response.ok||!Array.isArray(body?.movements)||!Array.isArray(body?.activity))throw new Error('Movement context unavailable');movement=body;
+ }catch{movementError=true;}
  let after=[];try{after=await sync();}catch{}
  const rows={kartuStok:[],rpl:[],bulky:[],barangMasuk:[],barangKeluar:[]},unavailableSources=[],verification=[];
  sources.forEach(([name,source],index)=>{
@@ -48,7 +52,10 @@ export async function loadWarningData(env){
   if(!stable)unavailableSources.push(key);
  }
  const ledgerReady=!unavailableSources.length;
+ const movementReady=ledgerReady&&!movementError;
+ if(movementError)unavailableSources.push('movement_impact');
+ if(!movementReady)movement=null;
  if(!ledgerReady)ledger=[]; // A failed/changed stock source cannot prove absence.
  if(results.every(result=>result.status==='rejected')){const error=new Error('All warning stock sources unavailable');error.failures=sources.map(([,source])=>({source:source.table}));throw error;}
- return {rows,ledger,unavailableSources:[...new Set(unavailableSources)],verification,ledgerReady};
+ return {rows,ledger,unavailableSources:[...new Set(unavailableSources)],verification,ledgerReady,movement,movementReady};
 }
