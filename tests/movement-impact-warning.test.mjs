@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {movementImpactFindings,normalizeMovementLocation} from '../functions/api/_movement-warning.js';
 import {normalizeWarningSku,warningNumber,loadInventoryWarnings} from '../functions/api/_inventory-warnings.js';
+import {businessDateKey} from '../functions/api/_inventory-analytics.js';
 import {fingerprint} from '../supabase/functions/warning-whatsapp/handler.js';
 const move=overrides=>({sku:'682200007014',nama_barang:'TR PROKLEEN',qty:10,from_location:'C18-1',to_location:'C01-1',keterangan:'INTERNAL STOCK TRANSFER',status:'Movement',tanggal:'2026-10-09',synced_at:'2026-10-13T04:05:04.256Z',source_row_number:23547,...overrides});
 const stock=()=>[{sku:'682200007014',lokasi_bulky:'C18-1',stok_awal:35,stok_akhir:10,internal_stock_transfer:0,replenishment:0,pengeluaran:25,source_row_number:2285},{sku:'682200007014',lokasi_bulky:'C01-1',stok_awal:null,stok_akhir:0,internal_stock_transfer:0,replenishment:0,pengeluaran:0,source_row_number:1735}];
@@ -39,8 +40,8 @@ test('invisible SKU characters match, but leading-zero identifiers never merge',
 function mock(t,{changed=false,unavailable=false}={}){
  const original=globalThis.fetch;t.after(()=>globalThis.fetch=original);let read=0;
  globalThis.fetch=async input=>{const url=String(input);
-  if(url.includes('inventory_sync_status')){read++;return Response.json(['kartu_stok','rpl','bulky','barang_masuk','barang_keluar'].map(source=>({source,status:'success',locked_at:null,last_success_at:options.stockCheckedAt,source_version:changed&&read===2&&source==='barang_masuk'?'v2':'v1'})));}
-  if(url.includes('inventory_warning_movement_context'))return unavailable?Response.json({},{status:503}):Response.json({movements:[move()],activity:[]});
+  if(url.includes('inventory_sync_status')){read++;return Response.json(['kartu_stok','rpl','bulky','barang_masuk','barang_keluar'].map(source=>({source,status:'success',locked_at:null,last_success_at:new Date(Date.now()-5*60000).toISOString(),source_version:changed&&read===2&&source==='barang_masuk'?'v2':'v1'})));}
+  if(url.includes('inventory_warning_movement_context'))return unavailable?Response.json({},{status:503}):Response.json({movements:[move({tanggal:businessDateKey(),synced_at:new Date(Date.now()-10*60000).toISOString()})],activity:[]});
   if(url.includes('/rpc/'))return Response.json([]);
   return Response.json(url.includes('inventory_kartu_stok')?stock():[]);
  };
@@ -53,3 +54,5 @@ test('legitimate received movement has positive opening stock and a zero destina
 test('destination registered in RPL counts as valid stock evidence and cannot become a false missing-location warning',()=>{const rows=stock().slice(0,1);rows[0].internal_stock_transfer=10;rows.push({...stock()[1],warningSource:'RPL',stok_awal:10,stok_akhir:10});assert.equal(check([move()],rows).findings.length,0);});
 test('known impact in a parallel stock source suppresses the assertion that the source movement never had an impact',()=>{const rows=stock();rows[1].stok_awal=10;rows[1].stok_akhir=10;rows.push({...rows[0],warningSource:'BULKY',internal_stock_transfer:10,stok_akhir:0});assert.equal(check([move()],rows).findings.length,0);});
 test('omitted opening fields from a compatibility read cannot turn into a blank-formula warning',()=>{const rows=stock();rows[0].internal_stock_transfer=10;delete rows[1].stok_awal;assert.equal(check([move()],rows).findings.length,0);});
+
+test('parallel stock snapshots are evidence and are never summed as if they were additional physical stock',()=>{const rows=stock();rows.push({...rows[0],warningSource:'BULKY'});const found=check([move()],rows).findings[0];assert.match(found.evidence,/saldo 10;/);assert.doesNotMatch(found.evidence,/saldo 20/);});
