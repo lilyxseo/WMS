@@ -16,6 +16,7 @@ on:
       - 'scripts/deploy-warning-rules.mjs'
       - 'scripts/audit-inventory-warnings.mjs'
       - 'supabase/migrations/20261013020000_verified_inventory_warning_review.sql'
+      - 'supabase/migrations/20261014000000_movement_impact_warning.sql'
       - '.github/workflows/deploy-app-google-auth.yml'
   workflow_dispatch:
 permissions:
