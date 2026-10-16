@@ -1,5 +1,5 @@
-@import url("./base.css");
-@import url("./layout.css");
-@import url("./components.css");
-@import url("./pages.css");
-@import url("./responsive.css");
+@import url("./base.css?v=__APP_VERSION__");
+@import url("./layout.css?v=__APP_VERSION__");
+@import url("./components.css?v=__APP_VERSION__");
+@import url("./pages.css?v=__APP_VERSION__");
+@import url("./responsive.css?v=__APP_VERSION__");

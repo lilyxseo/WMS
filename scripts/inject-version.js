@@ -17,4 +17,7 @@ if (html.includes("__APP_VERSION__")) {
 
 fs.writeFileSync(filePath, html);
 
+const stylePath="./assets/css/style.css";
+const style=fs.readFileSync(stylePath,"utf8").replaceAll("__APP_VERSION__",version);
+fs.writeFileSync(stylePath,style);
 console.log("Version injected:", version);
