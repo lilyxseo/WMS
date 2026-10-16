@@ -1,14 +1,14 @@
 /* Separate readable accent text from the solid fill used with white labels. */
-html[data-accent="red"] body{--primary:#f87171;--primary-2:#b91c1c}
-html[data-accent="blue"] body{--primary:#60a5fa;--primary-2:#1d4ed8}
-html[data-accent="green"] body{--primary:#34d399;--primary-2:#047857}
-html[data-accent="purple"] body{--primary:#c084fc;--primary-2:#7e22ce}
-html[data-accent="amber"] body{--primary:#fbbf24;--primary-2:#92400e}
-html[data-theme="light"][data-accent="red"] body{--primary:#b91c1c}
-html[data-theme="light"][data-accent="blue"] body{--primary:#1d4ed8}
-html[data-theme="light"][data-accent="green"] body{--primary:#047857}
-html[data-theme="light"][data-accent="purple"] body{--primary:#7e22ce}
-html[data-theme="light"][data-accent="amber"] body{--primary:#92400e}
+html[data-accent="red"],html[data-accent="red"] body{--primary:#f87171;--primary-2:#b91c1c}
+html[data-accent="blue"],html[data-accent="blue"] body{--primary:#60a5fa;--primary-2:#1d4ed8}
+html[data-accent="green"],html[data-accent="green"] body{--primary:#34d399;--primary-2:#047857}
+html[data-accent="purple"],html[data-accent="purple"] body{--primary:#c084fc;--primary-2:#7e22ce}
+html[data-accent="amber"],html[data-accent="amber"] body{--primary:#fbbf24;--primary-2:#92400e}
+html[data-theme="light"][data-accent="red"],html[data-theme="light"][data-accent="red"] body{--primary:#b91c1c}
+html[data-theme="light"][data-accent="blue"],html[data-theme="light"][data-accent="blue"] body{--primary:#1d4ed8}
+html[data-theme="light"][data-accent="green"],html[data-theme="light"][data-accent="green"] body{--primary:#047857}
+html[data-theme="light"][data-accent="purple"],html[data-theme="light"][data-accent="purple"] body{--primary:#7e22ce}
+html[data-theme="light"][data-accent="amber"],html[data-theme="light"][data-accent="amber"] body{--primary:#92400e}
 html[data-accent] body{--accent-soft:color-mix(in srgb,var(--primary) 10%,var(--panel));--accent-border:color-mix(in srgb,var(--primary) 35%,var(--line));--primary-color:var(--primary-2);--input-bg:var(--panel-soft);--card-bg:var(--panel);--border-color:var(--line);--login-input-icon:var(--primary);--login-signup-link:var(--primary);--login-divider:var(--muted);accent-color:var(--primary-2)}
 html[data-theme="light"][data-accent] body{--bg:#f8fafc;--panel:#fff;--panel-soft:#f1f5f9;--text:#172033;--muted:#526176;--shadow:0 10px 28px rgba(15,23,42,.1)}
 html[data-accent] .sidebar{background:var(--panel);color:var(--text)}
