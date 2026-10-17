@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {onRequestGet,onRequestPost} from '../functions/api/stock-entry.js';
 import {validateEntries,firstEmptyLedgerRow,buildLedgerRequests,selectLedgerSheets} from '../functions/api/_stock-entry.js';
-import {newEntry,entryTotals,gridDestination,entryDate,gridJump,entryNow,selectionBounds,gridFillPatches} from '../assets/js/stock-entry.js';
+import {newEntry,entryTotals,gridDestination,entryDate,gridJump,entryNow,selectionBounds,gridFillPatches,createGridHistory,filterEntryChoices} from '../assets/js/stock-entry.js';
 const env={SUPABASE_URL:'https://project.supabase.co',SUPABASE_SECRET_KEY:'sb_secret_test',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_test',SHEET_ID_2026:'sheet-2026'};
 const id='c73c2ce5-2b42-49e5-9361-a86b36b842a7';
 const entry=(overrides={})=>({...newEntry(),from:'STORE A',to:'A10-2',sku:'001',namaBarang:'MERLYN WHITE',qty:3,...overrides});
@@ -67,3 +67,17 @@ test('Ctrl R fills each selected row from its own left column; single cells use 
  assert.deepEqual(gridFillPatches(rows,{anchor:{row:0,col:2},active:{row:0,col:2}},'right'),[{row:0,col:2,value:'A'}]);
  assert.deepEqual(gridFillPatches(rows,{anchor:{row:0,col:0},active:{row:0,col:0}},'down'),[]);assert.deepEqual(gridFillPatches(rows,{anchor:{row:0,col:0},active:{row:0,col:0}},'right'),[]);
 });
+
+test('Undo groups cell typing and derived values, restores selection and clones snapshots',()=>{
+ const history=createGridHistory(),state=value=>({rows:[entry({from:value})],selection:{anchor:{row:0,col:1},active:{row:0,col:1}}});const before=state(''),first=state('A'),last=state('AB');
+ history.record(before,first,'cell-1');history.record(first,last,'cell-1');last.rows[0].from='mutated';
+ assert.equal(history.undo().rows[0].from,'');assert.equal(history.undo(),null);const redone=history.redo();assert.equal(redone.rows[0].from,'AB');assert.deepEqual(redone.selection,before.selection);redone.rows[0].from='outside';history.undo();assert.equal(history.redo().rows[0].from,'AB');
+});
+test('new edits after Undo discard Redo; no-op edits retain history and limits are bounded',()=>{
+ const history=createGridHistory(2),state=value=>({rows:[entry({qty:value})],selection:null});
+ history.record(state(0),state(1));history.record(state(1),state(2));history.record(state(2),state(3));assert.equal(history.undo().rows[0].qty,2);assert.equal(history.undo().rows[0].qty,1);assert.equal(history.undo(),null);
+ history.record(state(1),state(1));assert.equal(history.redo().rows[0].qty,2);history.undo();history.record(state(1),state(9));assert.equal(history.redo(),null);assert.equal(history.undo().rows[0].qty,1);
+});
+test('clearing history after a saved batch prevents Undo from resurrecting committed input',()=>{const history=createGridHistory();history.record({rows:[]},{rows:[entry()]});history.clear();assert.equal(history.undo(),null);assert.equal(history.redo(),null);});
+
+test('dropdown search matches substrings case-insensitively and returns no invented values',()=>{assert.deepEqual(filterEntryChoices(['Barang Masuk','Barang Keluar'],'KE'),['Barang Keluar']);assert.deepEqual(filterEntryChoices(['ABI','ENGGAL','EPRIL'],'eng'),['ENGGAL']);assert.deepEqual(filterEntryChoices(['RECEIPT','PENGELUARAN'],' xyz '),[]);assert.equal(filterEntryChoices(['ABI','ENGGAL'],'').length,2);});
