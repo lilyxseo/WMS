@@ -30,7 +30,7 @@ function fixture(t,{role='PIC Inventory',googleError=0,throwWrite=false,holdWrit
  };return {jobs,writes,metadata,receipts:()=>receipts};
 }
 test('entry grid totals and navigation cover Tab wrapping, Shift Tab and arrow boundaries',()=>{assert.deepEqual(gridDestination(0,8,'Tab'),{row:1,col:0});assert.equal(gridDestination(0,0,'Tab',true),null);assert.deepEqual(gridDestination(2,0,'Tab',true),{row:1,col:8});assert.deepEqual(gridDestination(3,5,'Enter',true),{row:2,col:5});assert.equal(gridDestination(0,0,'ArrowUp'),null);assert.deepEqual(entryTotals([entry({used:true}),entry({used:true,qty:2}),newEntry()]),{rows:2,sku:1,qty:5});});
-test('validation rejects invalid quantities, statuses, missing cells and mismatched descriptions',()=>{for(const change of [{qty:0},{qty:Infinity},{from:''},{sku:''},{status:'Movement'},{pic:'Unknown'},{tanggal:'bad'},{status:'Barang Keluar',keterangan:'RECEIPT'}])assert.throws(()=>validateEntries([entry(change)]));assert.throws(()=>validateEntries(Array.from({length:101},()=>entry())));assert.equal(validateEntries([entry({status:'Barang Keluar',keterangan:'PENGELUARAN'})])[0].qty,3);});
+test('validation rejects invalid quantities, statuses, missing cells and mismatched descriptions',()=>{for(const change of [{qty:0},{qty:Infinity},{from:''},{sku:''},{status:'Movement'},{pic:'Unknown'},{tanggal:'bad'},{status:'Barang Keluar',keterangan:'RECEIPT'}])assert.throws(()=>validateEntries([entry(change)]));assert.throws(()=>validateEntries(Array.from({length:1001},()=>entry())));assert.equal(validateEntries([entry({status:'Barang Keluar',keterangan:'PENGELUARAN'})])[0].qty,3);});
 test('first empty business row ignores dropdown-only rows and never overwrites populated data',()=>{assert.equal(firstEmptyLedgerRow([header,['date','from','to','sku','name',1],['','','','','','','Barang Masuk','ABI']]),2);assert.throws(()=>firstEmptyLedgerRow([['wrong']]));const requests=buildLedgerRequests({sheetId:1},2,[entry({from:'=HYPERLINK("bad")'})]);assert.equal(requests[0].insertDimension.range.startIndex,2);assert.equal(requests[1].updateCells.rows[0].values[1].userEnteredValue.stringValue,'=HYPERLINK("bad")');assert.equal(typeof requests[1].updateCells.rows[0].values[0].userEnteredValue.numberValue,'number');assert.equal(requests[2].repeatCell.cell.userEnteredFormat.numberFormat.type,'DATE');});
 test('ledger mapping handles the deployed capital-I outbound name and refuses ambiguous tabs',()=>{const sheets=[{properties:{title:'Barang KeIuar',sheetId:2}}];assert.equal(selectLedgerSheets(sheets,[entry({status:'Barang Keluar'})])['Barang Keluar'].sheetId,2);assert.throws(()=>selectLedgerSheets([...sheets,{properties:{title:'Barang Keluar'}}],[entry({status:'Barang Keluar'})]));});
 test('anonymous and read-only users cannot save, even with a forged role',async t=>{const f=fixture(t,{role:'User'});assert.equal((await onRequestPost({env,request:req({id,entries:[entry()],role:'Developer'},'')})).status,401);assert.equal((await onRequestPost({env,request:req({id,entries:[entry()],role:'Developer'})})).status,403);assert.equal(f.writes.length,0);});
@@ -87,7 +87,7 @@ test('PDF input uses only SKU, authoritative master name and qty, preserving lea
  assert.deepEqual(pdfEntryItems(items,[{sku:'001',namaBarang:'MASTER NAME'},{sku:'001',namaBarang:'MASTER NAME'}]),[{sku:'001',namaBarang:'MASTER NAME',qty:'8'},{sku:'002',namaBarang:'',qty:'2'}]);
  assert.deepEqual(pdfEntryItems([items[0]],[{sku:'001',namaBarang:'NAME A'},{sku:'001',namaBarang:'NAME B'}]),[{sku:'001',namaBarang:'',qty:'8'}]);
  for(const qty of [0,-1,Infinity,NaN])assert.throws(()=>pdfEntryItems([{sku:'001',qty}],[]));
- assert.throws(()=>pdfEntryItems([],[]));assert.throws(()=>pdfEntryItems(Array.from({length:101},()=>items[0]),[]));
+ assert.throws(()=>pdfEntryItems([],[]));assert.throws(()=>pdfEntryItems(Array.from({length:1001},()=>items[0]),[]));
 });
 test('PDF master lookup requires authentication and exact SKU filters, pages all locations and never writes',async t=>{
  fixture(t);const base=globalThis.fetch,queries=[];
@@ -105,4 +105,14 @@ test('clearing a reversed grid range touches only selected cells, avoids derived
  assert.equal(cleared[0].sku,'');assert.equal(cleared[0].namaBarang,'');assert.equal(cleared[0].qty,'');assert.equal(cleared[0].from,'STORE A');assert.equal(cleared[0].status,'Barang Masuk');assert.equal(cleared[0].used,true);assert.equal(cleared[2],rows[2]);assert.equal(rows[0].sku,'001');assert.notEqual(cleared[0],rows[0]);
  const all=gridClearRows(rows,{anchor:{row:0,col:0},active:{row:1,col:8}});assert.equal(all[0].used,false);assert.equal(all[0].edited,true);assert.equal(all[0].tanggal,'');assert.equal(all[1].keterangan,'');assert.equal(all[2].sku,'001');
  const status=gridClearRows(rows,{anchor:{row:0,col:6},active:{row:1,col:6}});assert.equal(status[0].status,'');assert.equal(status[0].keterangan,'RECEIPT');
+});
+
+
+test('large iSeller PDF batches above 100 rows are accepted by both form and ledger validation',()=>{
+ const items=Array.from({length:430},(_,index)=>({sku:String(index).padStart(5,'0'),namaProduk:'PDF NAME',qty:1})),master=items.map(item=>({sku:item.sku,namaBarang:'MASTER NAME'})),mapped=pdfEntryItems(items,master);
+ assert.equal(mapped.length,430);assert.equal(validateEntries(mapped.map(item=>entry(item))).length,430);assert.equal(validateEntries(Array.from({length:1000},()=>entry())).length,1000);
+});
+
+test('430-row ledger submission is saved in one atomic Google batch without truncation',async t=>{
+ const {writes}=fixture(t);const response=await onRequestPost({request:req({id,entries:Array.from({length:430},()=>entry())}),env});assert.equal(response.status,200);const out=await response.json();assert.equal(out.result.count,430);assert.equal(out.result.qty,1290);assert.equal(writes.length,1);assert.equal(writes[0].requests.find(request=>request.updateCells).updateCells.rows.length,430);
 });

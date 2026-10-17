@@ -2,7 +2,7 @@ import {getNoteIdentity} from './_note-identity.js';
 import {getSecretSupabaseConfig} from './_supabase-config.js';
 import {getGoogleAccessToken} from './_google-auth.js';
 import {buildInventorySearchQuery} from './_inventory-search.js';
-import {STATUSES,PICS,defaultPic,validateEntries,normalize,selectLedgerSheets,firstEmptyLedgerRow,buildLedgerRequests,quoteSheet} from './_stock-entry.js';
+import {MAX_ENTRY_ROWS,STATUSES,PICS,defaultPic,validateEntries,normalize,selectLedgerSheets,firstEmptyLedgerRow,buildLedgerRequests,quoteSheet} from './_stock-entry.js';
 const json=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'no-store'}});
 const uuid=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 async function db(env,path,options={}){
@@ -55,7 +55,7 @@ export async function onRequestGet({request,env}){
    const rows=await db(env,'inventory_kartu_stok?select=sku,nama_barang,lokasi_bulky,stok_akhir'+buildInventorySearchQuery(q,['sku','nama_barang'])+'&order=sku.asc&limit=200');
    const grouped=new Map();for(const row of rows){const key=normalize(row.sku);if(!key)continue;const item=grouped.get(key)||{sku:row.sku,namaBarang:row.nama_barang,locations:[]};if(row.lokasi_bulky&&!item.locations.some(l=>l.name===row.lokasi_bulky))item.locations.push({name:row.lokasi_bulky,qty:row.stok_akhir});grouped.set(key,item);}return json({success:true,items:[...grouped.values()].slice(0,20)});
   }
-  return json({success:true,statuses:STATUSES,pics:PICS,pic:defaultPic(who.role),canWrite:canWrite(who),defaults:{from:'',to:''},maxRows:100});
+  return json({success:true,statuses:STATUSES,pics:PICS,pic:defaultPic(who.role),canWrite:canWrite(who),defaults:{from:'',to:''},maxRows:MAX_ENTRY_ROWS});
  }catch{return json({success:false,message:'Form input belum dapat dimuat. Coba kembali nanti.'},503);}
 }
 export async function onRequestPost({request,env}){
