@@ -78,7 +78,9 @@ export async function onRequestPost({request,env}){
   const metadata=await readGoogle(token,sheet,'?fields=sheets.properties');
   const ledgers=selectLedgerSheets(metadata.sheets||[],entries),requests=[],results=[];
   for(const [status,properties] of Object.entries(ledgers)){
-   const selected=entries.filter(row=>row.status===status),columns=status==='Barang Masuk'?'O':'P';
+   const selected=entries.filter(row=>row.status===status),available=Number(properties.gridProperties?.columnCount)||16;
+   if(available<9)throw new Error(`Tab ${status} harus memiliki minimal 9 kolom A:I.`);
+   const columns=String.fromCharCode(64+Math.min(available,status==='Barang Masuk'?15:16));
    const read=await readGoogle(token,sheet,'/values/'+encodeURIComponent(`${quoteSheet(properties.title)}!A:${columns}`));
    const start=firstEmptyLedgerRow(read.values||[]);requests.push(...buildLedgerRequests(properties,start,selected));results.push({status,count:selected.length,sheet:properties.title});
   }

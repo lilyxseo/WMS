@@ -7,7 +7,7 @@ const id='c73c2ce5-2b42-49e5-9361-a86b36b842a7';
 const entry=(overrides={})=>({...newEntry(),sku:'001',namaBarang:'MERLYN WHITE',qty:3,...overrides});
 const header=['TANGGAL','FROM','TO','SKU','Nama barang','Qty','Status','PIC','KETERANGAN'];
 const req=(body,token='valid')=>new Request('https://app.example/api/stock-entry',{method:body?'POST':'GET',headers:token?{Authorization:`Bearer ${token}`}:{},...(body?{body:JSON.stringify(body)}:{})});
-function fixture(t,{role='PIC Inventory',googleError=0,throwWrite=false,holdWrite}={}){
+function fixture(t,{role='PIC Inventory',googleError=0,throwWrite=false,holdWrite,gridColumns=16}={}){
  const original=globalThis.fetch;t.after(()=>globalThis.fetch=original);const jobs=new Map(),writes=[],metadata=new Map();let receipts=0;
  globalThis.fetch=async(input,options={})=>{
   const url=new URL(input);
@@ -23,8 +23,8 @@ function fixture(t,{role='PIC Inventory',googleError=0,throwWrite=false,holdWrit
   if(url.host==='sheets.googleapis.com'){
    if(url.pathname.endsWith('/developerMetadata:search')){const key=JSON.parse(options.body).dataFilters[0].developerMetadataLookup.metadataKey;receipts++;return Response.json({matchedDeveloperMetadata:metadata.has(key)?[{developerMetadata:metadata.get(key)}]:[]});}
    if(url.pathname.endsWith(':batchUpdate')){writes.push(JSON.parse(options.body));if(holdWrite)await holdWrite();if(googleError)return Response.json({error:{message:'Denied'}},{status:googleError});for(const item of writes.at(-1).requests){if(item.createDeveloperMetadata){const m=item.createDeveloperMetadata.developerMetadata;metadata.set(m.metadataKey,m);}}if(throwWrite)throw new Error('Lost response after Google commit');return Response.json({replies:[]});}
-   if(url.pathname.includes('/values/'))return Response.json({values:[header,['old','FROM','TO','002','Other',1],[],['later','FROM','TO','003','Later',2]]});
-   return Response.json({sheets:[{properties:{sheetId:1,title:'Barang Masuk'}},{properties:{sheetId:2,title:'Barang KeIuar'}}]});
+   if(url.pathname.includes('/values/')){const range=decodeURIComponent(url.pathname.split('/values/')[1]);assert.ok(range.endsWith(':'+String.fromCharCode(64+Math.min(gridColumns,range.includes('Barang Masuk')?15:16))));return Response.json({values:[header,['old','FROM','TO','002','Other',1],[],['later','FROM','TO','003','Later',2]]});}
+   return Response.json({sheets:[{properties:{sheetId:1,title:'Barang Masuk',gridProperties:{columnCount:gridColumns,rowCount:1000}}},{properties:{sheetId:2,title:'Barang KeIuar',gridProperties:{columnCount:gridColumns,rowCount:1000}}}]});
   }
   throw new Error(`Unexpected ${url}`);
  };return {jobs,writes,metadata,receipts:()=>receipts};
@@ -45,3 +45,5 @@ test('expired preparation can be released but an in-flight write cannot be stole
 test('request status is scoped to verified owner and never leaks another author receipt',async t=>{const f=fixture(t);f.jobs.set(id,{id,owner:'someone-else',status:'saved',result:{count:99}});const response=await onRequestGet({env,request:new Request('https://app.example/api/stock-entry?id='+id,{headers:{Authorization:'Bearer valid'}})});assert.equal(response.status,404);assert.equal((await response.json()).result,undefined);assert.equal(f.receipts(),0);});
 
 test('spreadsheet timestamp paste accepts displayed M/D/YYYY values and preserves wall time',()=>{assert.equal(entryDate('10/17/2026 10:03:31'),'2026-10-17T10:03:31');assert.equal(entryDate('10/17/2026 1:03 PM'),'2026-10-17T13:03:00');assert.equal(entryDate('2026-10-17'),'2026-10-17T00:00:00');assert.throws(()=>validateEntries([entry({tanggal:'2026-02-31T12:00:00'})]));});
+
+test('ledger range respects tabs that only contain the nine form columns',async t=>{const f=fixture(t,{gridColumns:9});const response=await onRequestPost({env,request:req({id,entries:[entry()]})});assert.equal(response.status,200);assert.equal(f.writes.length,1);});
