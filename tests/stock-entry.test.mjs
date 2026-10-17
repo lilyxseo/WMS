@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {onRequestGet,onRequestPost} from '../functions/api/stock-entry.js';
 import {validateEntries,firstEmptyLedgerRow,buildLedgerRequests,selectLedgerSheets} from '../functions/api/_stock-entry.js';
-import {newEntry,entryTotals,gridDestination,entryDate,gridJump,entryNow} from '../assets/js/stock-entry.js';
+import {newEntry,entryTotals,gridDestination,entryDate,gridJump,entryNow,selectionBounds,gridFillPatches} from '../assets/js/stock-entry.js';
 const env={SUPABASE_URL:'https://project.supabase.co',SUPABASE_SECRET_KEY:'sb_secret_test',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_test',SHEET_ID_2026:'sheet-2026'};
 const id='c73c2ce5-2b42-49e5-9361-a86b36b842a7';
 const entry=(overrides={})=>({...newEntry(),from:'STORE A',to:'A10-2',sku:'001',namaBarang:'MERLYN WHITE',qty:3,...overrides});
@@ -53,4 +53,17 @@ test('Ctrl arrows traverse contiguous data, gaps and grid edges like a spreadshe
  const rows=Array.from({length:8},()=>newEntry());rows[0].sku='A';rows[1].sku='B';rows[2].sku='C';rows[5].sku='D';
  assert.deepEqual(gridJump(rows,0,3,'ArrowDown'),{row:2,col:3});assert.deepEqual(gridJump(rows,2,3,'ArrowDown'),{row:5,col:3});assert.deepEqual(gridJump(rows,5,3,'ArrowDown'),{row:7,col:3});assert.deepEqual(gridJump(rows,5,3,'ArrowUp'),{row:2,col:3});assert.deepEqual(gridJump(rows,2,3,'ArrowUp'),{row:0,col:3});assert.deepEqual(gridJump(rows,0,0,'ArrowLeft'),{row:0,col:0});
  rows[0].from='FROM';rows[0].to='TO';assert.deepEqual(gridJump(rows,0,0,'ArrowRight'),{row:0,col:3});assert.deepEqual(gridJump(rows,0,3,'ArrowRight'),{row:0,col:6});assert.deepEqual(gridJump(rows,0,6,'ArrowRight'),{row:0,col:8});
+});
+
+test('range bounds work in reverse and Ctrl D fills from the top row across selected columns',()=>{
+ const rows=[entry({from:'A',to:'B'}),entry({from:'C',to:'D'}),entry({from:'E',to:'F'})],selection={anchor:{row:2,col:2},active:{row:0,col:1}};
+ assert.deepEqual(selectionBounds(selection),{top:0,bottom:2,left:1,right:2});
+ assert.deepEqual(gridFillPatches(rows,selection,'down'),[{row:1,col:1,value:'A'},{row:1,col:2,value:'B'},{row:2,col:1,value:'A'},{row:2,col:2,value:'B'}]);assert.equal(rows[2].from,'E');
+});
+test('Ctrl R fills each selected row from its own left column; single cells use adjacent source',()=>{
+ const rows=[entry({from:'A',to:'B'}),entry({from:'C',to:'D'})];
+ assert.deepEqual(gridFillPatches(rows,{anchor:{row:0,col:1},active:{row:1,col:2}},'right'),[{row:0,col:2,value:'A'},{row:1,col:2,value:'C'}]);
+ assert.deepEqual(gridFillPatches(rows,{anchor:{row:1,col:1},active:{row:1,col:1}},'down'),[{row:1,col:1,value:'A'}]);
+ assert.deepEqual(gridFillPatches(rows,{anchor:{row:0,col:2},active:{row:0,col:2}},'right'),[{row:0,col:2,value:'A'}]);
+ assert.deepEqual(gridFillPatches(rows,{anchor:{row:0,col:0},active:{row:0,col:0}},'down'),[]);assert.deepEqual(gridFillPatches(rows,{anchor:{row:0,col:0},active:{row:0,col:0}},'right'),[]);
 });
