@@ -20,6 +20,7 @@
   <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
   <link rel="stylesheet" href="/assets/css/style.css?v=__APP_VERSION__" />
   <link rel="stylesheet" href="/assets/css/accent-colors.css?v=__APP_VERSION__" />
+  <link rel="stylesheet" href="/assets/css/stock-entry.css?v=__APP_VERSION__" />
   <link rel="stylesheet" href="/assets/css/settings.css?v=__APP_VERSION__" />
   <link rel="icon" href="/assets/goto.svg" sizes="any" />
 </head>
@@ -233,6 +234,7 @@
           </button>
           <div class="sidebar-submenu" id="submenu-data" data-menu-panel="data">
             <button class="side-link nav-item submenu-item" data-page="search" data-route="/search" title="Cari SKU"><i data-lucide="search"></i><span>Cari SKU</span></button>
+            <button class="side-link nav-item submenu-item" data-page="sheet-input" data-route="/sheet-input" title="Form Input"><i data-lucide="table-2"></i><span>Form Input</span></button>
             <button class="side-link nav-item submenu-item" data-page="barang-masuk" data-route="/barang-masuk" title="Barang Masuk"><i data-lucide="package-plus"></i><span>Barang Masuk</span></button>
             <button class="side-link nav-item submenu-item" data-page="barang-keluar" data-route="/barang-keluar" title="Barang Keluar"><i data-lucide="package-plus"></i><span>Barang Keluar</span></button>
             <button class="side-link nav-item submenu-item" data-page="sku-notes" data-route="/sku-notes" title="Semua Catatan"><i data-lucide="notebook-pen"></i><span>Semua Catatan</span></button>
@@ -326,8 +328,8 @@
     </div>
     <section id="page-detail" class="panel page hidden"><h3 class="page-title">Detail SKU</h3><div id="detail"></div></section>
 
-    <section id="page-barang-masuk" class="panel page transaction-page hidden"><div class="transaction-page-heading"><h3 class="page-title">Barang Masuk</h3><div class="transaction-page-actions"><button class="btn-ghost" type="button" data-mv-action="export" data-mv-mode="in"><i data-lucide="download"></i><span>Export CSV</span></button></div></div><div class="movement-layout"><div class="movement-toolbar transaction-search"><input id="inSearch" class="search-lg" type="search" aria-label="Cari di semua kolom Barang Masuk" placeholder="Cari di semua kolom..."/></div><div id="inResults" class="movement-results"></div></div></section>
-    <section id="page-barang-keluar" class="panel page transaction-page hidden"><div class="transaction-page-heading"><h3 class="page-title">Barang Keluar</h3><div class="transaction-page-actions"><button class="btn-ghost" type="button" data-mv-action="export" data-mv-mode="out"><i data-lucide="download"></i><span>Export CSV</span></button></div></div><div class="movement-layout"><div class="movement-toolbar transaction-search"><input id="outSearch" class="search-lg" type="search" aria-label="Cari di semua kolom Barang Keluar" placeholder="Cari di semua kolom..."/></div><div id="outResults" class="movement-results"></div></div></section>
+    <section id="page-barang-masuk" class="panel page transaction-page hidden"><div class="transaction-page-heading"><h3 class="page-title">Barang Masuk</h3><div class="transaction-page-actions"><button type="button" class="btn-primary" onclick="navigateTo('/sheet-input')">Form Input</button><button class="btn-ghost" type="button" data-mv-action="export" data-mv-mode="in"><i data-lucide="download"></i><span>Export CSV</span></button></div></div><div class="movement-layout"><div class="movement-toolbar transaction-search"><input id="inSearch" class="search-lg" type="search" aria-label="Cari di semua kolom Barang Masuk" placeholder="Cari di semua kolom..."/></div><div id="inResults" class="movement-results"></div></div></section>
+    <section id="page-barang-keluar" class="panel page transaction-page hidden"><div class="transaction-page-heading"><h3 class="page-title">Barang Keluar</h3><div class="transaction-page-actions"><button type="button" class="btn-primary" onclick="navigateTo('/sheet-input')">Form Input</button><button class="btn-ghost" type="button" data-mv-action="export" data-mv-mode="out"><i data-lucide="download"></i><span>Export CSV</span></button></div></div><div class="movement-layout"><div class="movement-toolbar transaction-search"><input id="outSearch" class="search-lg" type="search" aria-label="Cari di semua kolom Barang Keluar" placeholder="Cari di semua kolom..."/></div><div id="outResults" class="movement-results"></div></div></section>
     <section id="page-stats" class="panel page hidden"><h3 class="page-title">Dashboard Akurasi Stok</h3><div id="statsCards" class="grid stats"></div><div id="statsChart"></div></section>
     <section id="page-abc-analisis" class="panel page hidden">
       <h3 class="page-title">ABC Analisis</h3>
@@ -387,7 +389,7 @@
       </div>
     </section>
     
-    <section id="page-sheet-input" class="panel page hidden"><h3 class="page-title">Input Google Sheet</h3><div class="card sheet-input-card"><form id="sheetInputForm" class="sheet-input-form" novalidate><div class="sheet-grid"><label>Tanggal<input type="date" id="sheetTanggal" /></label><label>SKU *<input type="text" id="sheetSku" required /></label><label>Nama Barang *<input type="text" id="sheetNamaBarang" required /></label><label>Qty *<input type="number" id="sheetQty" min="0" step="1" required /></label><label>Lokasi *<input type="text" id="sheetLokasi" required /></label><label>Keterangan<textarea id="sheetKeterangan" rows="3" placeholder="Opsional"></textarea></label></div><button id="sheetSubmitBtn" type="submit" class="btn-primary sheet-submit-btn"><span class="sheet-submit-label">Simpan</span><span class="btn-spinner" aria-hidden="true" hidden></span></button></form></div></section>
+    <section id="page-sheet-input" class="panel page hidden"><h3 class="page-title">Form Input</h3><p class="subtitle">Input Barang Masuk dan Barang Keluar seperti spreadsheet.</p><div id="stockEntryApp"></div></section>
 
     <section id="page-settings" class="panel page hidden">
       <h3 class="page-title">Pengaturan & Informasi Sistem</h3>
