@@ -9,16 +9,16 @@ export function validateEntries(entries){
  return entries.map((row,index)=>{
   const out=Object.fromEntries(['tanggal','from','to','sku','namaBarang','status','pic','keterangan'].map(key=>[key,text(row?.[key])])),qty=Number(row?.qty);
   if(!out.from||!out.to||!out.sku||!out.namaBarang||!Number.isFinite(qty)||qty<=0||qty>Number.MAX_SAFE_INTEGER)throw new Error(`Baris ${index+1}: From, To, SKU, Nama barang, dan Qty > 0 wajib diisi.`);
-  if(Number.isFinite(Date.parse(out.tanggal+'Z'))&&new Date(out.tanggal+'Z').toISOString().slice(0,out.tanggal.length)!==out.tanggal)throw new Error(`Baris ${index+1}: tanggal tidak valid.`);
   if(Object.values(out).some(v=>v.length>250))throw new Error(`Baris ${index+1}: teks terlalu panjang.`);
-  if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(out.tanggal)||!Number.isFinite(Date.parse(out.tanggal+'+07:00')))throw new Error(`Baris ${index+1}: tanggal tidak valid.`);
+  // Accept old timestamp drafts during rollout, but all new forms send a date.
+  const date=out.tanggal.split('T')[0];
+  if(!/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2})?)?$/.test(out.tanggal)||!Number.isFinite(Date.parse(date+'T00:00:00Z'))||new Date(date+'T00:00:00Z').toISOString().slice(0,10)!==date)throw new Error(`Baris ${index+1}: tanggal tidak valid.`);
   if(!STATUSES.includes(out.status)||!PICS.includes(out.pic))throw new Error(`Baris ${index+1}: Status/PIC tidak valid.`);
   if(!['RECEIPT','PENGELUARAN'].includes(out.keterangan))throw new Error(`Baris ${index+1}: Keterangan tidak valid.`);
   if(out.keterangan!==(out.status==='Barang Masuk'?'RECEIPT':'PENGELUARAN'))throw new Error(`Baris ${index+1}: Keterangan tidak sesuai Status.`);
   return {...out,qty};
  });
 }
-export function sheetTimestamp(value){const [date,time]=value.split('T'),[y,m,d]=date.split('-');return `${Number(m)}/${Number(d)}/${y} ${time.length===5?time+':00':time}`;}
 export const quoteSheet=name=>`'${name.replaceAll("'","''")}'`;
 export function selectLedgerSheets(sheets,entries){
  const result={};
@@ -40,7 +40,7 @@ export function firstEmptyLedgerRow(values){
  return row; // zero based; dropdowns/formulas in G:P do not make an otherwise empty entry occupied.
 }
 export function buildLedgerRequests(sheet,start,entries){
- const values=entries.map(r=>[(Date.parse(r.tanggal+'Z')/86400000)+25569,r.from,r.to,r.sku,r.namaBarang,r.qty,r.status,r.pic,r.keterangan]);
+ const values=entries.map(r=>[(Date.parse(r.tanggal.split('T')[0]+'T00:00:00Z')/86400000)+25569,r.from,r.to,r.sku,r.namaBarang,r.qty,r.status,r.pic,r.keterangan]);
  const rowCount=Number(sheet.gridProperties?.rowCount)||0,extra=rowCount?Math.max(0,start+values.length+1-rowCount):0;
  return [
   ...(extra?[{appendDimension:{sheetId:sheet.sheetId,dimension:'ROWS',length:extra}}]:[]),
@@ -48,6 +48,6 @@ export function buildLedgerRequests(sheet,start,entries){
   // records instead of overwriting a row another writer has just filled.
   {insertDimension:{range:{sheetId:sheet.sheetId,dimension:'ROWS',startIndex:start,endIndex:start+values.length},inheritFromBefore:rowCount?false:start>0}},
   {updateCells:{start:{sheetId:sheet.sheetId,rowIndex:start,columnIndex:0},rows:values.map(row=>({values:row.map(value=>({userEnteredValue:typeof value==='number'?{numberValue:value}:{stringValue:value}}))})),fields:'userEnteredValue'}},
-  {repeatCell:{range:{sheetId:sheet.sheetId,startRowIndex:start,endRowIndex:start+values.length,startColumnIndex:0,endColumnIndex:1},cell:{userEnteredFormat:{numberFormat:{type:'DATE_TIME',pattern:'M/d/yyyy HH:mm:ss'}}},fields:'userEnteredFormat.numberFormat'}},
+  {repeatCell:{range:{sheetId:sheet.sheetId,startRowIndex:start,endRowIndex:start+values.length,startColumnIndex:0,endColumnIndex:1},cell:{userEnteredFormat:{numberFormat:{type:'DATE',pattern:'M/d/yyyy'}}},fields:'userEnteredFormat.numberFormat'}},
  ];
 }

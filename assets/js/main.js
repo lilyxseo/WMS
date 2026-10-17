@@ -1,4 +1,4 @@
-import { mountStockEntry } from './stock-entry.js';
+import { mountStockEntry } from './stock-entry.js?v=__APP_VERSION__';
 import { mountAccentColors } from './accent-colors.js';
 import { mountSettingsDatabase, databaseStatus } from './settings-database.js';
 import { isInventoryPicRole } from './utils/role-access.js';
