@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {onRequestGet,onRequestPost} from '../functions/api/stock-entry.js';
 import {validateEntries,firstEmptyLedgerRow,buildLedgerRequests,selectLedgerSheets} from '../functions/api/_stock-entry.js';
-import {newEntry,entryTotals,gridDestination,entryDate,gridJump,entryNow,selectionBounds,gridFillPatches,createGridHistory,filterEntryChoices,pdfEntryItems} from '../assets/js/stock-entry.js';
+import {newEntry,entryTotals,gridDestination,entryDate,gridJump,entryNow,selectionBounds,gridFillPatches,createGridHistory,filterEntryChoices,pdfEntryItems,gridClearRows} from '../assets/js/stock-entry.js';
 const env={SUPABASE_URL:'https://project.supabase.co',SUPABASE_SECRET_KEY:'sb_secret_test',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_test',SHEET_ID_2026:'sheet-2026'};
 const id='c73c2ce5-2b42-49e5-9361-a86b36b842a7';
 const entry=(overrides={})=>({...newEntry(),from:'STORE A',to:'A10-2',sku:'001',namaBarang:'MERLYN WHITE',qty:3,...overrides});
@@ -97,4 +97,12 @@ test('PDF master lookup requires authentication and exact SKU filters, pages all
  const response=await onRequestGet({request:new Request(url,{headers:{Authorization:'Bearer valid'}}),env});assert.equal(response.status,200);assert.equal((await response.json()).items.length,1001);
  assert.equal(queries.length,2);assert.equal(queries[0].searchParams.get('sku'),'in.("001","SKU\\"with\\\\quotes")');assert.equal(queries[1].searchParams.get('offset'),'1000');
  for(const skus of ['bad','[]',JSON.stringify(Array(101).fill('001'))])assert.equal((await onRequestGet({request:new Request('https://app.example/api/stock-entry?'+new URLSearchParams({skus}),{headers:{Authorization:'Bearer valid'}}),env})).status,400);
+});
+
+
+test('clearing a reversed grid range touches only selected cells, avoids derived-field clearing, and drops empty transactions',()=>{
+ const rows=[entry({used:true}),entry({used:true}),entry({used:true})],selection={anchor:{row:1,col:5},active:{row:0,col:3}},cleared=gridClearRows(rows,selection);
+ assert.equal(cleared[0].sku,'');assert.equal(cleared[0].namaBarang,'');assert.equal(cleared[0].qty,'');assert.equal(cleared[0].from,'STORE A');assert.equal(cleared[0].status,'Barang Masuk');assert.equal(cleared[0].used,true);assert.equal(cleared[2],rows[2]);assert.equal(rows[0].sku,'001');assert.notEqual(cleared[0],rows[0]);
+ const all=gridClearRows(rows,{anchor:{row:0,col:0},active:{row:1,col:8}});assert.equal(all[0].used,false);assert.equal(all[0].edited,true);assert.equal(all[0].tanggal,'');assert.equal(all[1].keterangan,'');assert.equal(all[2].sku,'001');
+ const status=gridClearRows(rows,{anchor:{row:0,col:6},active:{row:1,col:6}});assert.equal(status[0].status,'');assert.equal(status[0].keterangan,'RECEIPT');
 });
