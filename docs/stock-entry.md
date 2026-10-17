@@ -7,6 +7,7 @@ Buka **Data → Form Input** atau tombol **Form Input** di halaman Barang Masuk/
 - Tanggal hari ini (WIB) langsung tampil tanpa jam. From dan To kosong tanpa nilai default. PIC dari `APP_CONFIG.PIC_BY_ROLE`. Semuanya dapat diganti per baris seperti form spreadsheet.
 - Status `Barang Masuk` memakai `RECEIPT`; `Barang Keluar` memakai `PENGELUARAN`. Keterangan mengikuti perubahan Status.
 - Ctrl+panah melompat ke ujung blok data, sel terisi berikutnya setelah celah, atau batas grid. Tab/Shift+Tab berpindah antar kolom; panah atas/bawah antar baris. Panah kiri/kanan di ujung teks berpindah kolom. Enter turun, Shift+Enter naik. Alt+panah bawah membuka dropdown native. Saat saran barang terbuka, panah/Enter memilih saran dan Escape menutupnya.
+- Shift+panah memilih rentang sel; Ctrl+Shift+panah memperluas rentang sampai batas data. Ctrl+D mengisi ke bawah dari baris teratas; Ctrl+R mengisi ke kanan dari kolom paling kiri. Pada satu sel, Ctrl+D/Ctrl+R menyalin dari sel di atas/kiri. Ctrl+C menyalin rentang sebagai TSV.
 - Paste blok TSV dari spreadsheet dimulai di sel aktif. Maksimal 100 baris per penyimpanan. Baris kosong diabaikan, baris yang sudah diubah wajib lengkap.
 - Tombol Simpan menampilkan tinjauan total sebelum menulis. Draft tersimpan per akun/browser dan tetap ada setelah refresh.
 
