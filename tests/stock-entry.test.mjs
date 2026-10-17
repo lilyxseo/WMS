@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {onRequestGet,onRequestPost} from '../functions/api/stock-entry.js';
 import {validateEntries,firstEmptyLedgerRow,buildLedgerRequests,selectLedgerSheets} from '../functions/api/_stock-entry.js';
-import {newEntry,entryTotals,gridDestination,entryDate,gridJump,entryNow,selectionBounds,gridFillPatches,createGridHistory,filterEntryChoices} from '../assets/js/stock-entry.js';
+import {newEntry,entryTotals,gridDestination,entryDate,gridJump,entryNow,selectionBounds,gridFillPatches,createGridHistory,filterEntryChoices,pdfEntryItems} from '../assets/js/stock-entry.js';
 const env={SUPABASE_URL:'https://project.supabase.co',SUPABASE_SECRET_KEY:'sb_secret_test',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_test',SHEET_ID_2026:'sheet-2026'};
 const id='c73c2ce5-2b42-49e5-9361-a86b36b842a7';
 const entry=(overrides={})=>({...newEntry(),from:'STORE A',to:'A10-2',sku:'001',namaBarang:'MERLYN WHITE',qty:3,...overrides});
@@ -81,3 +81,20 @@ test('new edits after Undo discard Redo; no-op edits retain history and limits a
 test('clearing history after a saved batch prevents Undo from resurrecting committed input',()=>{const history=createGridHistory();history.record({rows:[]},{rows:[entry()]});history.clear();assert.equal(history.undo(),null);assert.equal(history.redo(),null);});
 
 test('dropdown search matches substrings case-insensitively and returns no invented values',()=>{assert.deepEqual(filterEntryChoices(['Barang Masuk','Barang Keluar'],'KE'),['Barang Keluar']);assert.deepEqual(filterEntryChoices(['ABI','ENGGAL','EPRIL'],'eng'),['ENGGAL']);assert.deepEqual(filterEntryChoices(['RECEIPT','PENGELUARAN'],' xyz '),[]);assert.equal(filterEntryChoices(['ABI','ENGGAL'],'').length,2);});
+
+test('PDF input uses only SKU, authoritative master name and qty, preserving leading zeros',()=>{
+ const items=[{sku:'001',namaProduk:'WRONG PDF NAME',qty:8,from:'PDF FROM',to:'PDF TO',pic:'WINDI',tanggal:'2000-01-01',catatan:'PDF NOTE'},{sku:'002',namaProduk:'UNKNOWN NAME',qty:2}];
+ assert.deepEqual(pdfEntryItems(items,[{sku:'001',namaBarang:'MASTER NAME'},{sku:'001',namaBarang:'MASTER NAME'}]),[{sku:'001',namaBarang:'MASTER NAME',qty:'8'},{sku:'002',namaBarang:'',qty:'2'}]);
+ assert.deepEqual(pdfEntryItems([items[0]],[{sku:'001',namaBarang:'NAME A'},{sku:'001',namaBarang:'NAME B'}]),[{sku:'001',namaBarang:'',qty:'8'}]);
+ for(const qty of [0,-1,Infinity,NaN])assert.throws(()=>pdfEntryItems([{sku:'001',qty}],[]));
+ assert.throws(()=>pdfEntryItems([],[]));assert.throws(()=>pdfEntryItems(Array.from({length:101},()=>items[0]),[]));
+});
+test('PDF master lookup requires authentication and exact SKU filters, pages all locations and never writes',async t=>{
+ fixture(t);const base=globalThis.fetch,queries=[];
+ globalThis.fetch=async(url,options)=>{const parsed=new URL(url);if(parsed.pathname==='/rest/v1/inventory_kartu_stok'){assert.equal(options?.method||'GET','GET');queries.push(parsed);return Response.json(parsed.searchParams.get('offset')==='0'?Array.from({length:1000},()=>({sku:'001',nama_barang:'MASTER'})):[{sku:'001',nama_barang:'MASTER'}]);}return base(url,options);};
+ const url='https://app.example/api/stock-entry?'+new URLSearchParams({skus:JSON.stringify(['001','SKU"with\\quotes'])});
+ assert.equal((await onRequestGet({request:new Request(url),env})).status,401);
+ const response=await onRequestGet({request:new Request(url,{headers:{Authorization:'Bearer valid'}}),env});assert.equal(response.status,200);assert.equal((await response.json()).items.length,1001);
+ assert.equal(queries.length,2);assert.equal(queries[0].searchParams.get('sku'),'in.("001","SKU\\"with\\\\quotes")');assert.equal(queries[1].searchParams.get('offset'),'1000');
+ for(const skus of ['bad','[]',JSON.stringify(Array(101).fill('001'))])assert.equal((await onRequestGet({request:new Request('https://app.example/api/stock-entry?'+new URLSearchParams({skus}),{headers:{Authorization:'Bearer valid'}}),env})).status,400);
+});

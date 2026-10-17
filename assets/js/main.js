@@ -3767,7 +3767,7 @@ async function handleBalikanScanResult(decodedText){if(navigator.vibrate)navigat
 function bindSheetInputForm(){
  const root=document.getElementById('stockEntryApp');if(!root||stockEntryController||!inventoryDraftOwner())return;
  const generation=authRequestGeneration;
- stockEntryController=mountStockEntry(root,{owner:inventoryDraftOwner(),isCurrent:()=>generation===authRequestGeneration,confirm:showConfirmModal,onSaved:async data=>{
+ stockEntryController=mountStockEntry(root,{owner:inventoryDraftOwner(),isCurrent:()=>generation===authRequestGeneration,confirm:showConfirmModal,parsePdf:readTransferPdf,onSaved:async data=>{
   if(generation!==authRequestGeneration)return;
   invalidateInventoryDerivedCaches();LOADED_DETAIL_PAGES.clear();detailHydrationNeedsRefresh=true;
   logActivitySafe({action:'CREATE',module:'Form Input',detail:`Input ${data.result.count} baris, ${data.result.qty} qty`,status:'SUCCESS',metadata:{requestId:data.id,ledgers:data.result.ledgers}});
@@ -3840,19 +3840,27 @@ async function getActivityLogAccessHeaders(){const devRaw=localStorage.getItem("
 function getPdfJsLib(){
 if(window.pdfjsLib)return Promise.resolve(window.pdfjsLib);
 if(window.__pdfjsLibPromise)return window.__pdfjsLibPromise;
-window.__pdfjsLibPromise=new Promise((resolve,reject)=>{
-const script=document.createElement("script");
-script.src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.6.82/pdf.min.mjs";
-script.type="module";
-script.onload=()=>{};
-script.onerror=()=>reject(new Error("Gagal memuat pdf.js"));
-const modScript=document.createElement("script");
-modScript.type="module";
-modScript.textContent='import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.6.82/pdf.min.mjs"; pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.6.82/pdf.worker.min.mjs"; window.pdfjsLib = pdfjsLib;';
-document.head.appendChild(modScript);
-setTimeout(()=>window.pdfjsLib?resolve(window.pdfjsLib):reject(new Error("pdf.js belum siap")),500);
-});
+window.__pdfjsLibPromise=import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.6.82/pdf.min.mjs').then(lib=>{
+lib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.6.82/pdf.worker.min.mjs';window.pdfjsLib=lib;return lib;
+}).catch(error=>{window.__pdfjsLibPromise=null;throw error;});
 return window.__pdfjsLibPromise;
+}
+async function readTransferPdf(file){
+const pdfjs=await getPdfJsLib(),task=pdfjs.getDocument({data:await file.arrayBuffer()});let pdf;
+try{
+pdf=await task.promise;
+const pdfRows=[],textRows=[];let textItemCount=0;
+for(let p=1;p<=pdf.numPages;p++){
+const page=await pdf.getPage(p),tc=await page.getTextContent();textItemCount+=tc.items.length;
+const pageRows=groupPdfItemsByRows(tc.items);pdfRows.push(...pageRows);
+pageRows.forEach(row=>{const text=row.items.map(x=>x.str).join(' ').replace(/\s+/g,' ').trim();if(text)textRows.push(text);});
+page.cleanup();
+}
+let csvRows=pdfRowsToCsvRows(pdfRows);if(!csvRows.length)csvRows=textRowsToTransferCsvRows(textRows);
+let parsed=parseTransferCsvRows(parseCsvText(rowsToCsv(csvRows)));
+if(!parsed.items.length){const fallback=textRowsToTransferCsvRows(textRows);if(fallback.length){csvRows=fallback;parsed=parseTransferCsvRows(parseCsvText(rowsToCsv(csvRows)));}}
+return {...parsed,csvRows,textRows,textItemCount,pageCount:pdf.numPages};
+}finally{await task.destroy();}
 }
 function isSkuCandidate(text){return /^[A-Za-z0-9][A-Za-z0-9\-\/.]{2,}$/.test(String(text||"").trim());}
 function getNamaProdukBySkuFromKartuStock(sku){
@@ -4258,24 +4266,10 @@ async function parsePdfTransferFile(){
 const file=PDF_TRANSFER_STATE.selectedFile||document.getElementById('pdfTransferFile')?.files?.[0];if(!file)return toast('Pilih file PDF dulu','error');
 PDF_TRANSFER_STATE.selectedFile=file;PDF_TRANSFER_STATE.isParsing=true;PDF_TRANSFER_STATE.logs=[];PDF_TRANSFER_STATE.warnings=[];PDF_TRANSFER_STATE.items=[];PDF_TRANSFER_STATE.failedRows=[];PDF_TRANSFER_STATE.detectedColumns=[];PDF_TRANSFER_STATE.csvRows=[];PDF_TRANSFER_STATE.csvText='';PDF_TRANSFER_STATE.debugRows=[];PDF_TRANSFER_STATE.lastFileName=file.name||'';renderImportPdfTransferPage();
 try{
-const pdfjs=await getPdfJsLib();const buf=await file.arrayBuffer();const pdf=await pdfjs.getDocument({data:buf}).promise;const allItems=[];const textRows=[];const pdfRows=[];PDF_TRANSFER_STATE.logs.push(`PDF page count: ${pdf.numPages}`);
-for(let p=1;p<=pdf.numPages;p++){
-const page=await pdf.getPage(p);const tc=await page.getTextContent();allItems.push(...tc.items);
-const pageRows=groupPdfItemsByRows(tc.items);
-pdfRows.push(...pageRows);
-pageRows.forEach(row=>{const rowText=row.items.map(x=>x.str).join(' ').replace(/\s+/g,' ').trim();if(rowText)textRows.push(rowText);});
-}
-PDF_TRANSFER_STATE.logs.push(`Total text items PDF: ${allItems.length}`);
+const parsed=await readTransferPdf(file),{textRows,csvRows}=parsed;
+PDF_TRANSFER_STATE.logs.push(`PDF page count: ${parsed.pageCount}`,`Total text items PDF: ${parsed.textItemCount}`);
 PDF_TRANSFER_STATE.debugRows=textRows.slice(0,80);
-let csvRows=pdfRowsToCsvRows(pdfRows);
-if(!csvRows.length){
-csvRows=textRowsToTransferCsvRows(textRows);
-if(csvRows.length)PDF_TRANSFER_STATE.logs.push('Fallback CSV dari baris tabel PDF dipakai karena struktur kolom PDF tidak terdeteksi.');
-else PDF_TRANSFER_STATE.logs.push(`CSV fallback belum menemukan tabel. Sample PDF rows: ${textRows.slice(0,12).join(' || ')||'-'}`);
-}
-PDF_TRANSFER_STATE.csvRows=csvRows;
-PDF_TRANSFER_STATE.csvText=rowsToCsv(csvRows);
-PDF_TRANSFER_STATE.rawText=PDF_TRANSFER_STATE.csvText;
+PDF_TRANSFER_STATE.csvRows=csvRows;PDF_TRANSFER_STATE.csvText=rowsToCsv(csvRows);PDF_TRANSFER_STATE.rawText=PDF_TRANSFER_STATE.csvText;
 PDF_TRANSFER_STATE.logs.push(`Total row CSV: ${csvRows.length}`);
 const header={};const findVal=(label)=>{const rx=new RegExp(`(?:${label})\\s*[:\\-]?\\s*(.+)$`,'i');const hit=textRows.find(r=>rx.test(r));return hit?(hit.match(rx)?.[1]||'').trim():''};
 const topRows=textRows.slice(0,12);const transferTop=topRows.find(r=>/transfer(?:\s+number)?\s*[:#-]?\s*#?t-\d+/i.test(r))||"";
@@ -4283,18 +4277,6 @@ header.nomorTransfer=(transferTop.match(/(#?T-\d+)/i)?.[1]||findVal('Nomor Trans
 header.dari=cleanupTransferHeaderValue(findVal('Dari'));
 header.kepada=cleanupTransferHeaderValue(findVal('Kepada'));
 header.nomorReferensi=findVal('Nomor Referensi|No Referensi|Reference');
-let parsed=parseTransferCsvRows(parseCsvText(PDF_TRANSFER_STATE.csvText));
-if(!parsed.items.length){
-const fallbackCsvRows=textRowsToTransferCsvRows(textRows);
-if(fallbackCsvRows.length&&rowsToCsv(fallbackCsvRows)!==PDF_TRANSFER_STATE.csvText){
-PDF_TRANSFER_STATE.logs.push('Fallback CSV repair dipakai karena CSV awal tidak menghasilkan row valid.');
-csvRows=fallbackCsvRows;
-PDF_TRANSFER_STATE.csvRows=csvRows;
-PDF_TRANSFER_STATE.csvText=rowsToCsv(csvRows);
-PDF_TRANSFER_STATE.rawText=PDF_TRANSFER_STATE.csvText;
-parsed=parseTransferCsvRows(parseCsvText(PDF_TRANSFER_STATE.csvText));
-}
-}
 PDF_TRANSFER_STATE.header=header;
 PDF_TRANSFER_STATE.items=parsed.items;
 PDF_TRANSFER_STATE.warnings=parsed.warnings;
