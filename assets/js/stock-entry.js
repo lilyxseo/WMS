@@ -1,3 +1,4 @@
+export const ENTRY_MAX_ROWS=1000;
 export const ENTRY_FIELDS=['tanggal','from','to','sku','namaBarang','qty','status','pic','keterangan'];
 const LABELS=['Tanggal','From','To','SKU','Nama barang','Qty','Status','PIC','Keterangan'];
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -39,6 +40,14 @@ export function gridFillPatches(rows,selection,direction){
  }
  return patches;
 }
+export function gridClearRows(rows,selection){
+ const bounds=selectionBounds(selection);
+ return rows.map((row,index)=>{
+  if(index<bounds.top||index>bounds.bottom)return row;
+  const next={...row,edited:true};for(let col=bounds.left;col<=bounds.right;col++)next[ENTRY_FIELDS[col]]='';
+  next.used=['from','to','sku','namaBarang','qty'].some(field=>String(next[field]).trim()!=='');return next;
+ });
+}
 export function createGridHistory(limit=100){
  const clone=value=>JSON.parse(JSON.stringify(value));let entries=[],position=0;
  return {
@@ -58,7 +67,7 @@ export function createGridHistory(limit=100){
 export function filterEntryChoices(options,query=''){const value=String(query).trim().toLocaleLowerCase('id-ID');return options.filter(option=>String(option).toLocaleLowerCase('id-ID').includes(value));}
 export function pdfEntryItems(items,master){
  if(!Array.isArray(items)||!items.length)throw new Error('Tidak ada data SKU/qty yang terbaca. Gunakan PDF dengan teks yang dapat dipilih.');
- if(items.length>100)throw new Error('Maksimal 100 baris per input. PDF belum dimasukkan.');
+ if(items.length>ENTRY_MAX_ROWS)throw new Error('Maksimal 1000 baris per input. PDF belum dimasukkan.');
  const names=new Map();for(const item of master){const sku=String(item.sku??'').trim(),name=String(item.namaBarang??'').trim();if(!names.has(sku))names.set(sku,new Set());if(name)names.get(sku).add(name);}
  return items.map((item,index)=>{
   const sku=String(item.sku??'').trim(),qty=Number(item.qty),options=names.get(sku);
@@ -75,7 +84,7 @@ export function mountStockEntry(root,{owner,fetchFn=fetch,confirm,parsePdf,onSav
  const capture=()=>({rows:rows.map(row=>({...row})),selection:selection?JSON.parse(JSON.stringify(selection)):null});
  const record=(before,group=null)=>history.record(before,capture(),group);
  const alive=()=>!disposed&&isCurrent();
- try{const saved=JSON.parse(localStorage.getItem(key)||'null');if(saved?.version===1&&Array.isArray(saved.rows)&&saved.rows.length<=100){rows=saved.rows.map(row=>row.used===true||row.edited===true?({...newEntry(),...Object.fromEntries(ENTRY_FIELDS.map(f=>[f,String(row?.[f]??'')])),tanggal:row.used===true?entryDate(row.tanggal):entryNow(),used:row.used===true,edited:row.edited===true}):newEntry());while(rows.length<20)rows.push(newEntry());pending=saved.pending||null;}}catch{}
+ try{const saved=JSON.parse(localStorage.getItem(key)||'null');if(saved?.version===1&&Array.isArray(saved.rows)&&saved.rows.length<=ENTRY_MAX_ROWS){rows=saved.rows.map(row=>row.used===true||row.edited===true?({...newEntry(),...Object.fromEntries(ENTRY_FIELDS.map(f=>[f,String(row?.[f]??'')])),tanggal:row.used===true?entryDate(row.tanggal):entryNow(),used:row.used===true,edited:row.edited===true,pdfWarning:String(row.pdfWarning||'')}):newEntry());while(rows.length<20)rows.push(newEntry());pending=saved.pending||null;}}catch{}
  function persist(){try{localStorage.setItem(key,JSON.stringify({version:1,rows,pending}));storageError=false;return true;}catch{storageError=true;setMessage('Draft tidak dapat disimpan di perangkat. Aktifkan penyimpanan browser sebelum mengirim.');return false;}}
  function setMessage(text){message=text;const el=root.querySelector('[data-entry-message]');if(el)el.textContent=text;}
  function updateTotals(){const total=entryTotals(rows);for(const name of ['rows','sku','qty']){const el=root.querySelector(`[data-entry-total="${name}"]`);if(el)el.textContent=total[name].toLocaleString('id-ID');}const save=root.querySelector('[data-entry-save]');if(save)save.disabled=!config?.canWrite||busy||!!pending||!total.rows;}
@@ -84,7 +93,7 @@ export function mountStockEntry(root,{owner,fetchFn=fetch,confirm,parsePdf,onSav
   if(['status','pic','keterangan'].includes(field))return `<div class="stock-entry-choice"><input ${common} type="text" data-entry-choice role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" value="${esc(value)}" autocomplete="off" spellcheck="false"><button type="button" data-entry-toggle data-row="${index}" data-col="${col}" tabindex="-1" aria-label="Pilihan ${LABELS[col]} baris ${index+1}" ${disabled?'disabled':''}>▾</button></div>`;
   return `<input ${common} type="${field==='tanggal'?'date':'text'}" ${field==='qty'?'inputmode="decimal"':''} value="${esc(value)}"  autocomplete="off" spellcheck="false" ${['sku','namaBarang'].includes(field)?'role="combobox" aria-autocomplete="list" aria-expanded="false"':''}>`;
  }
- function render(){if(!alive())return;closeLookup();root.innerHTML=`<div class="stock-entry-toolbar"><div class="stock-entry-totals"><span>Total SKU<strong data-entry-total="sku">0</strong></span><span>Total qty<strong data-entry-total="qty">0</strong></span><span>Baris diisi<strong data-entry-total="rows">0</strong></span></div><div class="row">${!config?`<button class="btn-ghost" data-entry-config-retry ${configLoading?'disabled':''}>Muat konfigurasi</button>`:''}<button class="btn-ghost" data-entry-pdf ${busy||pending||!config?.canWrite||!parsePdf?'disabled':''}>Import PDF</button><input type="file" data-entry-pdf-file accept=".pdf,application/pdf" hidden><button class="btn-ghost" data-entry-add ${busy||pending||!config?.canWrite||rows.length>=100?'disabled':''}>+ 10 baris</button><button class="btn-ghost" data-entry-clear ${busy||pending||!config?.canWrite?'disabled':''}>Kosongkan</button>${pending?'<button class="btn-primary" data-entry-check '+(busy?'disabled':'')+'>Periksa status</button>':'<button class="btn-primary stock-entry-save" data-entry-save>Simpan</button>'}</div></div><p class="subtitle stock-entry-help">Tab / Shift+Tab pindah kolom · Ctrl+panah lompat batas data · Shift+panah pilih rentang · Ctrl+D isi bawah · Ctrl+R isi kanan · Ctrl+Z Undo · Ctrl+Y Redo · ↑ ↓ pindah baris · ← → di ujung teks pindah kolom · Enter turun · Alt+↓ buka dropdown. Paste dari spreadsheet didukung.</p><p class="stock-entry-message" data-entry-message role="status" aria-live="polite">${esc(message||(!config?'Memuat konfigurasi…':!config.canWrite?'Akses baca saja. Hanya PIC atau Developer yang dapat menginput.':pending?'Ada pengiriman yang belum dikonfirmasi. Periksa status sebelum melanjutkan.':'Draft otomatis tersimpan di perangkat. Tanggal menggunakan WIB.'))}</p><div class="stock-entry-scroll"><table class="stock-entry-grid" role="grid" aria-label="Form Input" aria-multiselectable="true"><thead><tr><th scope="col">#</th>${LABELS.map((label,i)=>`<th scope="col" class="entry-col-${ENTRY_FIELDS[i]}">${label}</th>`).join('')}<th scope="col">Aksi</th></tr></thead><tbody>${rows.map((row,i)=>`<tr><th scope="row">${i+1}</th>${ENTRY_FIELDS.map((_,col)=>`<td role="gridcell">${cell(row,i,col)}</td>`).join('')}<td><button class="btn-ghost entry-remove" data-entry-remove="${i}" aria-label="Kosongkan baris ${i+1}" ${busy||pending||!config?.canWrite?'disabled':''}>×</button></td></tr>`).join('')}</tbody></table></div><div class="stock-entry-lookup" data-entry-lookup hidden></div>`;updateTotals();paintSelection();}
+ function render(){if(!alive())return;closeLookup();root.innerHTML=`<div class="stock-entry-toolbar"><div class="stock-entry-totals"><span>Total SKU<strong data-entry-total="sku">0</strong></span><span>Total qty<strong data-entry-total="qty">0</strong></span><span>Baris diisi<strong data-entry-total="rows">0</strong></span></div><div class="row">${!config?`<button class="btn-ghost" data-entry-config-retry ${configLoading?'disabled':''}>Muat konfigurasi</button>`:''}<button class="btn-ghost" data-entry-pdf ${busy||pending||!config?.canWrite||!parsePdf?'disabled':''}>Import PDF</button><input type="file" data-entry-pdf-file accept=".pdf,application/pdf" hidden><button class="btn-ghost" data-entry-add ${busy||pending||!config?.canWrite||rows.length>=ENTRY_MAX_ROWS?'disabled':''}>+ 10 baris</button><button class="btn-ghost" data-entry-clear ${busy||pending||!config?.canWrite?'disabled':''}>Kosongkan</button>${pending?'<button class="btn-primary" data-entry-check '+(busy?'disabled':'')+'>Periksa status</button>':'<button class="btn-primary stock-entry-save" data-entry-save>Simpan</button>'}</div></div><p class="subtitle stock-entry-help">Tab / Shift+Tab pindah kolom · Ctrl+panah lompat batas data · Shift+panah pilih rentang · Backspace/Delete hapus rentang · Ctrl+D isi bawah · Ctrl+R isi kanan · Ctrl+Z Undo · Ctrl+Y Redo · ↑ ↓ pindah baris · ← → di ujung teks pindah kolom · Enter turun · Alt+↓ buka dropdown. Paste dari spreadsheet didukung.</p><p class="stock-entry-message" data-entry-message role="status" aria-live="polite">${esc(message||(!config?'Memuat konfigurasi…':!config.canWrite?'Akses baca saja. Hanya PIC atau Developer yang dapat menginput.':pending?'Ada pengiriman yang belum dikonfirmasi. Periksa status sebelum melanjutkan.':(rows.find(row=>row.used&&row.pdfWarning)?.pdfWarning||'Draft otomatis tersimpan di perangkat. Tanggal menggunakan WIB.')))}</p><div class="stock-entry-scroll"><table class="stock-entry-grid" role="grid" aria-label="Form Input" aria-multiselectable="true"><thead><tr><th scope="col">#</th>${LABELS.map((label,i)=>`<th scope="col" class="entry-col-${ENTRY_FIELDS[i]}">${label}</th>`).join('')}<th scope="col">Aksi</th></tr></thead><tbody>${rows.map((row,i)=>`<tr><th scope="row">${i+1}</th>${ENTRY_FIELDS.map((_,col)=>`<td role="gridcell">${cell(row,i,col)}</td>`).join('')}<td><button class="btn-ghost entry-remove" data-entry-remove="${i}" aria-label="Kosongkan baris ${i+1}" ${busy||pending||!config?.canWrite?'disabled':''}>×</button></td></tr>`).join('')}</tbody></table></div><div class="stock-entry-lookup" data-entry-lookup hidden></div>`;updateTotals();paintSelection();}
  function paintSelection(){
   const bounds=selection?selectionBounds(selection):null;
   root.querySelectorAll('[data-entry-cell]').forEach(input=>{const row=Number(input.dataset.row),col=Number(input.dataset.col),selected=!!bounds&&row>=bounds.top&&row<=bounds.bottom&&col>=bounds.left&&col<=bounds.right;const td=input.closest('td');td.classList.toggle('stock-entry-selected',selected);td.setAttribute('aria-selected',String(selected));});
@@ -145,6 +154,12 @@ export function mountStockEntry(root,{owner,fetchFn=fetch,confirm,parsePdf,onSav
  listen('keydown',event=>{
   if(!event.isComposing&&(event.ctrlKey||event.metaKey)&&!event.altKey&&((event.key.toLowerCase()==='z')||(!event.shiftKey&&event.key.toLowerCase()==='y'))){event.preventDefault();restoreHistory(event.key.toLowerCase()==='y'||event.shiftKey);return;}
   const input=event.target.closest('[data-entry-cell]');if(!input||event.isComposing||busy||pending)return;
+  if(!event.ctrlKey&&!event.metaKey&&!event.altKey&&['Backspace','Delete'].includes(event.key)&&selection){
+   const bounds=selectionBounds(selection);if(bounds.top!==bounds.bottom||bounds.left!==bounds.right){
+    event.preventDefault();if(!config?.canWrite)return;
+    const before=capture();closeLookup();rows=gridClearRows(rows,selection);editSession++;record(before);persist();render();focus(selection.active.row,selection.active.col,false,true);setMessage('Isi rentang dihapus. Ctrl+Z untuk mengembalikan.');return;
+   }
+  }
   if(input.hasAttribute('data-entry-choice')&&event.altKey&&event.key==='ArrowDown'&&!event.ctrlKey&&!event.metaKey){event.preventDefault();showChoices(input,true);return;}
   if(lookup?.kind==='choice'&&event.key==='Tab'&&!event.ctrlKey&&!event.metaKey&&!event.altKey){event.preventDefault();choose(event.shiftKey);return;}
   if((event.ctrlKey||event.metaKey)&&!event.altKey&&!event.shiftKey&&['d','r'].includes(event.key.toLowerCase())){event.preventDefault();fillSelection(input,event.key.toLowerCase()==='d'?'down':'right');return;}
@@ -156,12 +171,12 @@ export function mountStockEntry(root,{owner,fetchFn=fetch,confirm,parsePdf,onSav
   if(event.ctrlKey||event.metaKey||event.altKey)return;
   if(event.shiftKey&&!['Tab','Enter'].includes(event.key))return;
   if(input.type==='text'&&['ArrowLeft','ArrowRight'].includes(event.key)){const all=input.selectionStart===0&&input.selectionEnd===input.value.length;if(!all&&(event.key==='ArrowLeft'?input.selectionStart>0:input.selectionEnd<input.value.length))return;}
-  const dest=gridDestination(Number(input.dataset.row),Number(input.dataset.col),event.key,event.shiftKey);if(!dest||dest.row<0||dest.row>=100)return;
+  const dest=gridDestination(Number(input.dataset.row),Number(input.dataset.col),event.key,event.shiftKey);if(!dest||dest.row<0||dest.row>=ENTRY_MAX_ROWS)return;
   event.preventDefault();closeLookup();if(dest.row>=rows.length){rows.push(newEntry(config.pic));persist();render();}focus(dest.row,dest.col);
  });
  listen('copy',event=>{if(!selection||!event.target.closest('[data-entry-cell]'))return;const b=selectionBounds(selection);if(b.top===b.bottom&&b.left===b.right)return;event.preventDefault();event.clipboardData.setData('text/plain',rows.slice(b.top,b.bottom+1).map(row=>ENTRY_FIELDS.slice(b.left,b.right+1).map(field=>row[field]).join('\t')).join('\n'));});
  listen('paste',event=>{
-  const input=event.target.closest('[data-entry-cell]');if(!input||busy||pending||!config?.canWrite)return;const text=event.clipboardData.getData('text/plain');if(!/[\t\n\r]/.test(text))return;event.preventDefault();const block=text.replace(/\r\n?/g,'\n').replace(/\n$/,'').split('\n').map(line=>line.split('\t')),startRow=Number(input.dataset.row),startCol=Number(input.dataset.col);if(startRow+block.length>100){setMessage('Maksimal 100 baris per input. Paste dibatalkan.');return;}
+  const input=event.target.closest('[data-entry-cell]');if(!input||busy||pending||!config?.canWrite)return;const text=event.clipboardData.getData('text/plain');if(!/[\t\n\r]/.test(text))return;event.preventDefault();const block=text.replace(/\r\n?/g,'\n').replace(/\n$/,'').split('\n').map(line=>line.split('\t')),startRow=Number(input.dataset.row),startCol=Number(input.dataset.col);if(startRow+block.length>ENTRY_MAX_ROWS){setMessage('Maksimal 1000 baris per input. Paste dibatalkan.');return;}
   const before=capture();while(rows.length<startRow+block.length)rows.push(newEntry(config.pic));block.forEach((line,i)=>line.slice(0,ENTRY_FIELDS.length-startCol).forEach((value,j)=>updateField(startRow+i,startCol+j,value,true)));persist();render();focus(startRow,startCol);record(before);setMessage(`${block.length} baris ditempel. Periksa SKU, Nama barang, dan Status sebelum menyimpan.`);
  });
  listen('mousedown',event=>{if(event.target.closest('[data-entry-toggle]')){event.preventDefault();return;}if(event.target.closest('[data-entry-option]')){event.preventDefault();return;}const input=event.target.closest('[data-entry-cell]');if(input){const row=Number(input.dataset.row),col=Number(input.dataset.col);if(event.shiftKey&&selection){event.preventDefault();focus(row,col,true);}else{selection={anchor:{row,col},active:{row,col}};paintSelection();}}});
@@ -175,7 +190,7 @@ export function mountStockEntry(root,{owner,fetchFn=fetch,confirm,parsePdf,onSav
   if(event.target.closest('[data-entry-save]'))return review();
   if(event.target.closest('[data-entry-check]'))return void check();
   if(busy||pending||!config?.canWrite)return;
-  if(event.target.closest('[data-entry-add]')){const before=capture(),first=rows.length,target=Math.min(100,rows.length+10);while(rows.length<target)rows.push(newEntry(config.pic));persist();render();focus(first,1);record(before);return;}
+  if(event.target.closest('[data-entry-add]')){const before=capture(),first=rows.length,target=Math.min(ENTRY_MAX_ROWS,rows.length+10);while(rows.length<target)rows.push(newEntry(config.pic));persist();render();focus(first,1);record(before);return;}
   const remove=event.target.closest('[data-entry-remove]');if(remove){const before=capture();const index=Number(remove.dataset.entryRemove);rows[index]=newEntry(config.pic);persist();render();focus(index,3);record(before);return;}
   if(event.target.closest('[data-entry-clear]'))confirm({title:'Kosongkan form?',message:'Hapus seluruh draft input di perangkat ini?',confirmText:'Kosongkan',cancelText:'Batal',onConfirm:()=>{if(busy||pending||!alive())return;const before=capture();rows=Array.from({length:20},()=>newEntry(config.pic));persist();render();focus(0,1);record(before);}});
  });
@@ -183,27 +198,29 @@ export function mountStockEntry(root,{owner,fetchFn=fetch,confirm,parsePdf,onSav
   if(!alive()||busy||pending||!config?.canWrite||!parsePdf)return;
   if(!/\.pdf$/i.test(file.name||'')&&file.type!=='application/pdf'){setMessage('Pilih file PDF.');return;}
   if(file.size>20*1024*1024){setMessage('Ukuran PDF maksimal 20 MB.');return;}
-  busy=true;closeLookup();render();setMessage('Membaca PDF dan mencocokkan SKU dengan Kartu Stok…');
+  busy=true;closeLookup();render();setMessage(`Membaca ${file.name||'PDF'}…`);
   try{
    const parsed=await parsePdf(file);if(!alive())return;
-   if(parsed.failedRows?.length)throw new Error(`${parsed.failedRows.length} baris PDF belum terbaca dengan benar. Periksa PDF; draft belum diubah.`);
+   const skipped=parsed.failedRows?.length||0;
+   setMessage(`PDF terbaca: ${parsed.items?.length||0} item. Mencocokkan SKU dengan Kartu Stok…`);
    pdfEntryItems(parsed.items,[]);
    const skus=[...new Set(parsed.items.map(item=>String(item.sku).trim()))],master=[];
-   for(let index=0;index<skus.length;index+=25){const response=await fetchFn('/api/stock-entry?'+new URLSearchParams({skus:JSON.stringify(skus.slice(index,index+25))})),data=await response.json();if(!alive())return;if(!response.ok||!data.success)throw new Error('Kartu Stok belum dapat dibaca. Draft belum diubah; coba import lagi.');master.push(...data.items);}
+   for(let index=0;index<skus.length;index+=25){const response=await fetchFn('/api/stock-entry?'+new URLSearchParams({skus:JSON.stringify(skus.slice(index,index+25))}),{signal:AbortSignal.timeout(30000)}),data=await response.json();if(!alive())return;if(!response.ok||!data.success)throw new Error('Kartu Stok belum dapat dibaca. Draft belum diubah; coba import lagi.');master.push(...data.items);}
    const imported=pdfEntryItems(parsed.items,master),available=rows.flatMap((row,index)=>!row.used&&!['from','to','sku','namaBarang','qty'].some(field=>String(row[field]).trim())?[index]:[]);
-   if(imported.length>available.length+100-rows.length)throw new Error('Baris kosong tidak cukup. Maksimal 100 baris; draft belum diubah.');
+   if(imported.length>available.length+ENTRY_MAX_ROWS-rows.length)throw new Error('Baris kosong tidak cukup. Maksimal 1000 baris; draft belum diubah.');
    const before=capture();while(available.length<imported.length){available.push(rows.length);rows.push(newEntry(config.pic));}
-   imported.forEach((item,index)=>Object.assign(rows[available[index]],item,{used:true,edited:true}));
+   imported.forEach((item,index)=>Object.assign(rows[available[index]],item,{used:true,edited:true,pdfWarning:skipped?`PERIKSA PDF ${file.name||''}: ${skipped} baris tidak terbaca dan belum diimpor. Cocokkan total sebelum Simpan.`:''}));
    selection={anchor:{row:available[0],col:3},active:{row:available[imported.length-1],col:5}};record(before);persist();
    const unknown=imported.filter(item=>!item.namaBarang).length;
-   message=`${imported.length} baris PDF masuk ke draft. Lengkapi From/To dan periksa Status sebelum Simpan.${unknown?` ${unknown} SKU belum memiliki nama master yang pasti; pilih ulang SKU tersebut.`:''}`;
+   message=`${file.name||'PDF'}: ${imported.length} baris PDF masuk ke draft. Lengkapi From/To dan periksa Status sebelum Simpan.${unknown?` ${unknown} SKU belum memiliki nama master yang pasti; pilih ulang SKU tersebut.`:''}${skipped?` PERIKSA PDF: ${skipped} baris tidak terbaca dan belum diimpor. Cocokkan total sebelum Simpan.`:''}`;
   }catch(error){if(alive())message=error?.message||'PDF gagal dibaca. Draft belum diubah.';}
-  finally{if(alive()){busy=false;render();if(selection)focus(selection.active.row,selection.active.col,false,true);}}
+  finally{if(alive()){busy=false;render();root.querySelector('[data-entry-message]')?.scrollIntoView({block:'nearest'});if(selection)focus(selection.anchor.row,selection.anchor.col,false,true);}}
  }
  function entries(){return rows.filter(row=>row.used).map(row=>Object.fromEntries(ENTRY_FIELDS.map(field=>[field,field==='qty'?Number(row[field]):String(row[field]).trim()])));}
  function review(){if(!config?.canWrite||busy||pending)return;const list=entries();if(!list.length)return;for(let i=0;i<rows.length;i++){const row=rows[i];if(!row.used)continue;const invalid=!row.tanggal?0:!row.from.trim()?1:!row.to.trim()?2:!row.sku.trim()?3:!row.namaBarang.trim()?4:!Number.isFinite(Number(row.qty))||Number(row.qty)<=0?5:!config.statuses.includes(row.status)?6:!config.pics.includes(row.pic)?7:row.keterangan!==(row.status==='Barang Masuk'?'RECEIPT':'PENGELUARAN')?8:-1;if(invalid>=0){setMessage(`Baris ${i+1}: periksa ${LABELS[invalid]}.`);focus(i,invalid);return;}}
-  const total=entryTotals(rows),inCount=list.filter(row=>row.status==='Barang Masuk').length;
-  confirm({title:'Simpan transaksi?',message:`${list.length} baris • ${total.sku} SKU • ${total.qty.toLocaleString('id-ID')} qty. Barang Masuk: ${inCount}; Barang Keluar: ${list.length-inCount}. Data akan dipindahkan ke ledger sesuai Status.`,confirmText:'Simpan',cancelText:'Kembali',onConfirm:()=>{if(alive()&&!busy&&!pending)void send();}});
+  const pdfWarnings=[...new Set(rows.filter(row=>row.used&&row.pdfWarning).map(row=>row.pdfWarning))].join(' ');
+   const total=entryTotals(rows),inCount=list.filter(row=>row.status==='Barang Masuk').length;
+  confirm({title:'Simpan transaksi?',message:`${list.length} baris • ${total.sku} SKU • ${total.qty.toLocaleString('id-ID')} qty. Barang Masuk: ${inCount}; Barang Keluar: ${list.length-inCount}. Data akan dipindahkan ke ledger sesuai Status.${pdfWarnings?' '+pdfWarnings:''}`,confirmText:'Simpan',cancelText:'Kembali',onConfirm:()=>{if(alive()&&!busy&&!pending)void send();}});
  }
  async function complete(data){history.clear();pending=null;rows=Array.from({length:20},()=>newEntry(config?.pic));persist();message=`Berhasil menyimpan ${data.result.count} baris (${data.result.qty.toLocaleString('id-ID')} qty).`;render();const savedMessage=message;void Promise.resolve(onSaved(data)).catch(()=>{if(alive()&&!pending&&message===savedMessage)setMessage(savedMessage+' Penyegaran WMS belum selesai; ledger sudah tersimpan.');});}
  async function send(){if(!alive()||busy||pending)return;pending={id:crypto.randomUUID(),entries:entries()};if(!persist()){pending=null;return;}busy=true;closeLookup();render();setMessage('Menyimpan transaksi…');try{const response=await fetchFn('/api/stock-entry',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(pending)}),data=await response.json();if(!alive())return;if(response.ok&&data.success){await complete(data);return;}if(data.retryable){pending=null;persist();}setMessage(data.message||'Penyimpanan belum terkonfirmasi. Gunakan Periksa status.');}catch{if(alive())setMessage('Koneksi terputus. Gunakan Periksa status sebelum mencoba lagi.');}finally{if(alive()){busy=false;render();}}}

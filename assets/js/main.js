@@ -3840,8 +3840,8 @@ async function getActivityLogAccessHeaders(){const devRaw=localStorage.getItem("
 function getPdfJsLib(){
 if(window.pdfjsLib)return Promise.resolve(window.pdfjsLib);
 if(window.__pdfjsLibPromise)return window.__pdfjsLibPromise;
-window.__pdfjsLibPromise=import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.6.82/pdf.min.mjs').then(lib=>{
-lib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.6.82/pdf.worker.min.mjs';window.pdfjsLib=lib;return lib;
+window.__pdfjsLibPromise=import('/assets/vendor/pdfjs/4.6.82/pdf.min.mjs').then(lib=>{
+lib.GlobalWorkerOptions.workerSrc='/assets/vendor/pdfjs/4.6.82/pdf.worker.min.mjs';window.pdfjsLib=lib;return lib;
 }).catch(error=>{window.__pdfjsLibPromise=null;throw error;});
 return window.__pdfjsLibPromise;
 }

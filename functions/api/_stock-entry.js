@@ -1,11 +1,12 @@
 import {APP_CONFIG} from '../../assets/js/config.js';
+export const MAX_ENTRY_ROWS=1000;
 export const STATUSES=['Barang Masuk','Barang Keluar'];
 export const PICS=[...new Set(Object.values(APP_CONFIG.PIC_BY_ROLE))];
 export const text=v=>String(v??'').trim();
 export const normalize=v=>text(v).toUpperCase().replace(/\s+/g,' ');
 export function defaultPic(role){const value=text(role).toLowerCase();return Object.entries(APP_CONFIG.PIC_BY_ROLE).find(([key])=>value.includes(key))?.[1]||APP_CONFIG.PIC_BY_ROLE.inventory;}
 export function validateEntries(entries){
- if(!Array.isArray(entries)||!entries.length||entries.length>100)throw new Error('Isi 1–100 baris per penyimpanan.');
+ if(!Array.isArray(entries)||!entries.length||entries.length>MAX_ENTRY_ROWS)throw new Error('Isi 1–1000 baris per penyimpanan.');
  return entries.map((row,index)=>{
   const out=Object.fromEntries(['tanggal','from','to','sku','namaBarang','status','pic','keterangan'].map(key=>[key,text(row?.[key])])),qty=Number(row?.qty);
   if(!out.from||!out.to||!out.sku||!out.namaBarang||!Number.isFinite(qty)||qty<=0||qty>Number.MAX_SAFE_INTEGER)throw new Error(`Baris ${index+1}: From, To, SKU, Nama barang, dan Qty > 0 wajib diisi.`);
