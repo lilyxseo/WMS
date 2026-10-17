@@ -76,14 +76,14 @@ export async function onRequestPost({request,env}){
    }else return await recover(env,job);
   }
   owned=true;
-  // Verify names against the authoritative stock card. A stale or edited display
-  // name must never silently write a different product to the ledger.
+  // Existing SKUs must match the authoritative stock card. For SKUs absent
+  // from the master, keep the supplied PDF name (validated as required text).
   const skus=[...new Set(entries.map(row=>row.sku))],master=[];
   for(let index=0;index<skus.length;index+=25){
    const group=skus.slice(index,index+25).map(sku=>'"'+sku.replaceAll('\\','\\\\').replaceAll('"','\\"')+'"').join(',');
    for(let offset=0;;offset+=1000){const batch=await db(env,'inventory_kartu_stok?'+new URLSearchParams({select:'sku,nama_barang',sku:`in.(${group})`,order:'sku.asc,source_row_number.asc',limit:'1000',offset:String(offset)}));master.push(...batch);if(batch.length<1000)break;}
   }
-  for(const row of entries)if(!master.some(item=>item.sku===row.sku&&normalize(item.nama_barang)===normalize(row.namaBarang)))throw new Error(`SKU/nama barang ${row.sku} tidak sesuai Kartu Stok. Pilih ulang barang.`);
+  for(const row of entries)if(master.some(item=>item.sku===row.sku)&&!master.some(item=>item.sku===row.sku&&normalize(item.nama_barang)===normalize(row.namaBarang)))throw new Error(`SKU/nama barang ${row.sku} tidak sesuai Kartu Stok. Pilih ulang barang.`);
   const token=await getGoogleAccessToken(env);
   const metadata=await readGoogle(token,sheet,'?fields=sheets.properties');
   const ledgers=selectLedgerSheets(metadata.sheets||[],entries),requests=[],results=[];
