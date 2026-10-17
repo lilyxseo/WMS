@@ -72,7 +72,7 @@ export function pdfEntryItems(items,master){
  return items.map((item,index)=>{
   const sku=String(item.sku??'').trim(),qty=Number(item.qty),options=names.get(sku);
   if(!sku||!Number.isFinite(qty)||qty<=0)throw new Error(`Baris PDF ${index+1}: SKU/qty tidak valid. PDF belum dimasukkan.`);
-  return {sku,namaBarang:options?.size===1?[...options][0]:'',qty:String(qty)};
+  return {sku,namaBarang:options?.size===1?[...options][0]:!options?String(item.namaProduk??'').trim():'',qty:String(qty)};
  });
 }
 export function mountStockEntry(root,{owner,fetchFn=fetch,confirm,parsePdf,onSaved=()=>{},isCurrent=()=>true}={}){
@@ -212,7 +212,7 @@ export function mountStockEntry(root,{owner,fetchFn=fetch,confirm,parsePdf,onSav
    imported.forEach((item,index)=>Object.assign(rows[available[index]],item,{used:true,edited:true,pdfWarning:skipped?`PERIKSA PDF ${file.name||''}: ${skipped} baris tidak terbaca dan belum diimpor. Cocokkan total sebelum Simpan.`:''}));
    selection={anchor:{row:available[0],col:3},active:{row:available[imported.length-1],col:5}};record(before);persist();
    const unknown=imported.filter(item=>!item.namaBarang).length;
-   message=`${file.name||'PDF'}: ${imported.length} baris PDF masuk ke draft. Lengkapi From/To dan periksa Status sebelum Simpan.${unknown?` ${unknown} SKU belum memiliki nama master yang pasti; pilih ulang SKU tersebut.`:''}${skipped?` PERIKSA PDF: ${skipped} baris tidak terbaca dan belum diimpor. Cocokkan total sebelum Simpan.`:''}`;
+   message=`${file.name||'PDF'}: ${imported.length} baris PDF masuk ke draft. Lengkapi From/To dan periksa Status sebelum Simpan.${unknown?` ${unknown} SKU belum memiliki nama yang pasti; periksa nama barang tersebut.`:''}${skipped?` PERIKSA PDF: ${skipped} baris tidak terbaca dan belum diimpor. Cocokkan total sebelum Simpan.`:''}`;
   }catch(error){if(alive())message=error?.message||'PDF gagal dibaca. Draft belum diubah.';}
   finally{if(alive()){busy=false;render();root.querySelector('[data-entry-message]')?.scrollIntoView({block:'nearest'});if(selection)focus(selection.anchor.row,selection.anchor.col,false,true);}}
  }

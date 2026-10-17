@@ -84,7 +84,7 @@ test('dropdown search matches substrings case-insensitively and returns no inven
 
 test('PDF input uses only SKU, authoritative master name and qty, preserving leading zeros',()=>{
  const items=[{sku:'001',namaProduk:'WRONG PDF NAME',qty:8,from:'PDF FROM',to:'PDF TO',pic:'WINDI',tanggal:'2000-01-01',catatan:'PDF NOTE'},{sku:'002',namaProduk:'UNKNOWN NAME',qty:2}];
- assert.deepEqual(pdfEntryItems(items,[{sku:'001',namaBarang:'MASTER NAME'},{sku:'001',namaBarang:'MASTER NAME'}]),[{sku:'001',namaBarang:'MASTER NAME',qty:'8'},{sku:'002',namaBarang:'',qty:'2'}]);
+ assert.deepEqual(pdfEntryItems(items,[{sku:'001',namaBarang:'MASTER NAME'},{sku:'001',namaBarang:'MASTER NAME'}]),[{sku:'001',namaBarang:'MASTER NAME',qty:'8'},{sku:'002',namaBarang:'UNKNOWN NAME',qty:'2'}]);
  assert.deepEqual(pdfEntryItems([items[0]],[{sku:'001',namaBarang:'NAME A'},{sku:'001',namaBarang:'NAME B'}]),[{sku:'001',namaBarang:'',qty:'8'}]);
  for(const qty of [0,-1,Infinity,NaN])assert.throws(()=>pdfEntryItems([{sku:'001',qty}],[]));
  assert.throws(()=>pdfEntryItems([],[]));assert.throws(()=>pdfEntryItems(Array.from({length:1001},()=>items[0]),[]));
@@ -115,4 +115,8 @@ test('large iSeller PDF batches above 100 rows are accepted by both form and led
 
 test('430-row ledger submission is saved in one atomic Google batch without truncation',async t=>{
  const {writes}=fixture(t);const response=await onRequestPost({request:req({id,entries:Array.from({length:430},()=>entry())}),env});assert.equal(response.status,200);const out=await response.json();assert.equal(out.result.count,430);assert.equal(out.result.qty,1290);assert.equal(writes.length,1);assert.equal(writes[0].requests.find(request=>request.updateCells).updateCells.rows.length,430);
+});
+
+test('PDF name fallback saves SKUs absent from master while keeping required names and known SKU validation',async t=>{
+ const {writes}=fixture(t);const response=await onRequestPost({request:req({id,entries:[entry({sku:'NEW-001',namaBarang:'PRODUCT FROM PDF'})]}),env});assert.equal(response.status,200);const cells=writes[0].requests.find(request=>request.updateCells).updateCells.rows[0].values;assert.equal(cells[3].userEnteredValue.stringValue,'NEW-001');assert.equal(cells[4].userEnteredValue.stringValue,'PRODUCT FROM PDF');assert.throws(()=>validateEntries([entry({sku:'NEW-001',namaBarang:''})]));
 });
