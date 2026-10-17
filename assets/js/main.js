@@ -1,3 +1,4 @@
+import { mountStockEntry } from './stock-entry.js';
 import { mountAccentColors } from './accent-colors.js';
 import { mountSettingsDatabase, databaseStatus } from './settings-database.js';
 import { isInventoryPicRole } from './utils/role-access.js';
@@ -415,6 +416,7 @@ const DASHBOARD_SECTION_ERROR={summary:'',recent:'',insight:''};
 const DASHBOARD_LOAD_STATE={summary:'idle',recent:'idle',insight:'idle'};
 const DASHBOARD_REQUESTS={summary:null,recent:null,insight:null,generation:0,controllers:{summary:null,recent:null,insight:null}};
 let dashboardSummaryRequestId=0;
+let stockEntryController=null;
 let settingsDatabaseController=null;
 let inventorySyncStatusRequestId=0;
 let inventorySyncStatusState="idle";
@@ -705,6 +707,7 @@ void clearCache();
 ++dashboardSummaryRequestId;
 ++inventorySyncStatusRequestId;
 settingsDatabaseController?.dispose();settingsDatabaseController=null;
+stockEntryController?.dispose();stockEntryController=null;
 BALIKAN_STATE.requestId+=1;BALIKAN_STATE.requestController?.abort();window.currentTripSheet='';window.BALIKAN_ROWS=[];BALIKAN_STATE.sheetCache={};BALIKAN_STATE.dynamicColumnCache={};
 user=null;
 devProfile=null;
@@ -1099,6 +1102,7 @@ if(page==="activity-log")renderActivityLogPage();
 if(page==="sku-notes")renderAllSkuNotesPage();
 if(page==="tools-dev")renderToolsDevPage();
 if(page==="settings")renderSettingsPage();
+if(page==="sheet-input")bindSheetInputForm();
 if(page==="arsip")renderArchivePage();
 if(page==="asset-store")renderAssetStorePage();
 if(page==="balikan-store")renderBalikanTable(true);
@@ -3761,14 +3765,16 @@ window.openBalikanScanner=openBalikanScanner;
 async function handleBalikanScanResult(decodedText){if(navigator.vibrate)navigator.vibrate(100);let result;try{result=await resolveScannedSku(decodedText);}catch(err){console.error("Barcode lookup failed",err);toast("Gagal mencari barcode. Silakan coba lagi.","error");return;}const {scanned,sku,mapped}=result;if(!scanned){toast("Barcode tidak ditemukan","error");return;}window.balikanSearchKeyword=sku;BALIKAN_STATE.exactScanSku=sku;const searchInput=document.querySelector("#balikanSearchInput");if(searchInput)searchInput.value=sku;saveBalikanSearchHistory(sku);const row=(window.BALIKAN_ROWS||[]).find(item=>String(item.sku||"").trim().toLowerCase()===String(sku||"").trim().toLowerCase());if(!mapped){BALIKAN_STATE.highlightRowNumber=null;toast("Barcode tidak ditemukan","error");renderBalikanTable(false);return;}if(!row){BALIKAN_STATE.highlightRowNumber=null;toast("SKU tidak ditemukan di Balikan Store: "+sku,"error");renderBalikanTable(false);return;}BALIKAN_STATE.highlightRowNumber=Number(row.rowNumber);BALIKAN_STATE.highlightSheetName=getBalikanActiveSheetName(row);renderBalikanTable(false);if(BALIKAN_STATE.autoCheckOnScan!==false){await toggleBalikanCheck(getBalikanActiveSheetName(row),Number(row.rowNumber),true);showToast('SKU berhasil discan dan dicentang: '+sku,'success');}else{showToast('SKU berhasil discan: '+sku,'success');}setTimeout(()=>{const el=document.getElementById(getBalikanDomRowId(row.rowNumber,getBalikanActiveSheetName(row)));if(el){el.scrollIntoView({behavior:"smooth",block:"center"});el.classList.add("row-highlight");}},300);}
 
 function bindSheetInputForm(){
-const form=document.getElementById("sheetInputForm");
-if(!form||form.dataset.bound==="1")return;
-const submitBtn=document.getElementById("sheetSubmitBtn");
-const labelEl=submitBtn?.querySelector(".sheet-submit-label");
-const spinnerEl=submitBtn?.querySelector(".btn-spinner");
-const setLoading=(loading)=>{if(!submitBtn)return;submitBtn.disabled=loading;submitBtn.classList.toggle("is-loading",loading);if(labelEl)labelEl.textContent=loading?"Menyimpan":"Simpan";if(spinnerEl)spinnerEl.hidden=!loading;};
-form.addEventListener("submit",async(e)=>{e.preventDefault();const tanggal=document.getElementById("sheetTanggal")?.value||"";const sku=(document.getElementById("sheetSku")?.value||"").trim();const nama_barang=(document.getElementById("sheetNamaBarang")?.value||"").trim();const qtyRaw=(document.getElementById("sheetQty")?.value||"").trim();const lokasi=(document.getElementById("sheetLokasi")?.value||"").trim();const keterangan=(document.getElementById("sheetKeterangan")?.value||"").trim();const qty=Number(qtyRaw);if(!sku||!nama_barang||!lokasi||Number.isNaN(qty)){toast("SKU, Nama Barang, Qty, dan Lokasi wajib diisi.","error");return;}setLoading(true);try{const res=await fetch('/api/sheet-input',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({tanggal,sku,nama_barang,qty,lokasi,keterangan})});const json=await res.json();if(!res.ok||!json?.success)throw new Error(json?.error||'Gagal menyimpan data');toast(json?.message||"Data berhasil disimpan.","success");form.reset();}catch(err){toast(err?.message||"Terjadi kesalahan saat menyimpan.","error");}finally{setLoading(false);}});
-form.dataset.bound="1";
+ const root=document.getElementById('stockEntryApp');if(!root||stockEntryController||!inventoryDraftOwner())return;
+ const generation=authRequestGeneration;
+ stockEntryController=mountStockEntry(root,{owner:inventoryDraftOwner(),isCurrent:()=>generation===authRequestGeneration,confirm:showConfirmModal,onSaved:async data=>{
+  if(generation!==authRequestGeneration)return;
+  invalidateInventoryDerivedCaches();LOADED_DETAIL_PAGES.clear();detailHydrationNeedsRefresh=true;
+  logActivitySafe({action:'CREATE',module:'Form Input',detail:`Input ${data.result.count} baris, ${data.result.qty} qty`,status:'SUCCESS',metadata:{requestId:data.id,ledgers:data.result.ledgers}});
+  const sources=data.result.ledgers.map(item=>item.status==='Barang Masuk'?'barangMasuk':'barangKeluar');
+  const synced=await syncInventorySourcesForRefresh({onlySources:sources,shouldContinue:()=>generation===authRequestGeneration});
+  if(!synced.success)throw new Error('Ledger tersimpan; sinkronisasi database belum selesai.');
+ }});
 }
 
 

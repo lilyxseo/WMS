@@ -1,0 +1,28 @@
+name: Deploy stock entry receipts
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/20261017000000_stock_entry_batches.sql'
+      - 'scripts/deploy-stock-entry.mjs'
+      - '.github/workflows/deploy-stock-entry.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: stock-entry-schema
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test tests/stock-entry*.test.mjs
+      - name: Deploy request receipts
+        env:
+          SUPABASE_PROJECT_REF: udullprykzdskrxmbbkj
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: node scripts/deploy-stock-entry.mjs
