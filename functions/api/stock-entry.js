@@ -39,6 +39,16 @@ export async function onRequestGet({request,env}){
   const who=await identity(request,env);if(!who)return json({success:false,message:'Silakan login kembali.'},401);
   const url=new URL(request.url),id=url.searchParams.get('id');
   if(id){if(!uuid(id))return json({success:false,message:'ID tidak valid.'},400);const jobs=await db(env,jobPath(id)+`&owner=eq.${encodeURIComponent(who.id)}&limit=1`);if(!jobs.length)return json({success:false,status:'not_found',retryable:true,message:'Transaksi belum diterima; input dapat dicoba kembali.'},404);return await recover(env,jobs[0]);}
+  if(url.searchParams.has('skus')){
+   let skus;try{skus=JSON.parse(url.searchParams.get('skus'));}catch{return json({success:false,message:'SKU tidak valid.'},400);}
+   if(!Array.isArray(skus)||!skus.length||skus.length>100||skus.some(sku=>typeof sku!=='string'||!sku.trim()||sku.length>150))return json({success:false,message:'Maksimal 100 SKU valid.'},400);
+   const master=[];
+   for(let index=0;index<skus.length;index+=25){
+    const group=[...new Set(skus.slice(index,index+25))].map(sku=>'"'+sku.replaceAll('\\','\\\\').replaceAll('"','\\"')+'"').join(',');
+    for(let offset=0;;offset+=1000){const batch=await db(env,'inventory_kartu_stok?'+new URLSearchParams({select:'sku,nama_barang',sku:`in.(${group})`,order:'sku.asc,source_row_number.asc',limit:'1000',offset:String(offset)}));master.push(...batch);if(batch.length<1000)break;}
+   }
+   return json({success:true,items:master.map(item=>({sku:item.sku,namaBarang:item.nama_barang}))});
+  }
   const q=String(url.searchParams.get('q')||'').trim();
   if(q){
    if(q.length<2||q.length>150)return json({success:false,message:'Pencarian 2–150 karakter.'},400);

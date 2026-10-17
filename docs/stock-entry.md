@@ -10,6 +10,7 @@ Buka **Data → Form Input** atau tombol **Form Input** di halaman Barang Masuk/
 - Shift+panah memilih rentang sel; Ctrl+Shift+panah memperluas rentang sampai batas data. Ctrl+D mengisi ke bawah dari baris teratas; Ctrl+R mengisi ke kanan dari kolom paling kiri. Pada satu sel, Ctrl+D/Ctrl+R menyalin dari sel di atas/kiri. Ctrl+C menyalin rentang sebagai TSV.
 - Ctrl+Z membatalkan perubahan draft; Ctrl+Y/Ctrl+Shift+Z mengulanginya. Satu kali paste atau fill adalah satu langkah. Riwayat Undo/Redo berlaku selama halaman terbuka dan direset setelah transaksi berhasil disimpan; tidak membatalkan transaksi di ledger.
 - Paste blok TSV dari spreadsheet dimulai di sel aktif. Maksimal 100 baris per penyimpanan. Baris kosong diabaikan, baris yang sudah diubah wajib lengkap.
+- **Import PDF** memakai parser yang sama dengan halaman Import PDF, lalu memasukkan SKU/qty ke baris kosong tanpa menimpa draft. Nama selalu diambil dari Kartu Stok berdasarkan SKU; SKU tidak dikenal atau memiliki nama master ambigu dibiarkan tanpa nama agar diperiksa. From/To, tanggal, Status, PIC, dan Keterangan dari PDF tidak digunakan. Nilai form/template yang sudah ada dipertahankan. PDF harus berisi teks, maksimal 20 MB dan 100 item; baris gagal/qty tidak valid membatalkan import tanpa mengubah draft. Satu import dapat dibatalkan dengan Ctrl+Z dan tetap memerlukan konfirmasi Simpan untuk menulis ledger.
 - Tombol Simpan menampilkan tinjauan total sebelum menulis. Draft tersimpan per akun/browser dan tetap ada setelah refresh.
 
 ## Penyimpanan
