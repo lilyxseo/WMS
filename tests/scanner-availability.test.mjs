@@ -5,8 +5,8 @@ import { readFile } from 'node:fs/promises';
 const mainSource = await readFile(new URL('../assets/js/main.js', import.meta.url), 'utf8');
 const htmlSource = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 
-test('scanner library uses a pinned version and retries through a fallback CDN', () => {
-  assert.match(htmlSource, /html5-qrcode@2\.3\.8\/html5-qrcode\.min\.js/);
+test('scanner library loads on demand with a pinned version and fallback CDN', () => {
+  assert.doesNotMatch(htmlSource, /<script[^>]+src="[^"]*html5-qrcode/);
   assert.match(mainSource, /const SCANNER_LIBRARY_URLS=\[/);
   assert.match(mainSource, /cdn\.jsdelivr\.net\/npm\/html5-qrcode@2\.3\.8/);
   assert.match(mainSource, /unpkg\.com\/html5-qrcode@2\.3\.8/);
