@@ -72,7 +72,7 @@ test('cached Stock Aging rows remain visible during a background refresh',()=>{
 });
 test('Reject loading preserves the transaction toolbar and column headings',()=>{
  const root=new Element(),state={activeTab:'masuk',loading:true,lastSync:0,stock:[],masuk:[],keluar:[],filters:{masukSearch:''}};
- const ctx=vm.createContext({BARANG_REJECT_STATE:state,REJECT_IN_COLUMNS:[['SKU'],['Qty']],document:{getElementById:id=>id==='barangRejectApp'?root:new Element(),querySelectorAll:()=>[]},window:{},getBarangRejectNavPage:()=>'',canCrud:()=>true,syncActiveSidebarParent(){},ensureBarangRejectLoaded(){},renderRejectToolbar:()=>'<input id="rejectSearch">',orderRejectSheetRows:r=>r,paginateReject:r=>r,thRejectStatic:x=>`<th>${x}</th>`,rejectPager:()=>'',bindBarangRejectEvents(){},esc:x=>x});
+ const ctx=vm.createContext({getActivePage:()=> 'barang-reject',BARANG_REJECT_STATE:state,REJECT_IN_COLUMNS:[['SKU'],['Qty']],document:{getElementById:id=>id==='barangRejectApp'?root:new Element(),querySelectorAll:()=>[]},window:{},getBarangRejectNavPage:()=>'',canCrud:()=>true,syncActiveSidebarParent(){},ensureBarangRejectLoaded(){},renderRejectToolbar:()=>'<input id="rejectSearch">',orderRejectSheetRows:r=>r,paginateReject:r=>r,thRejectStatic:x=>`<th>${x}</th>`,rejectPager:()=>'',bindBarangRejectEvents(){},esc:x=>x});
  vm.runInContext(between('function renderDataSkeletonRows','function renderPageDataStatus'),ctx);
  vm.runInContext(between('function renderRejectIn','function renderRejectOut'),ctx);
  vm.runInContext(between('function renderBarangRejectPage','\n',),ctx);
