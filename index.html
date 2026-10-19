@@ -320,14 +320,15 @@
     </div>
     <div class="side-footer sidebar-footer">
       <div class="account-card">
-        <div class="account-avatar"><i data-lucide="user-round"></i></div>
+        <button type="button" class="account-avatar" data-open-profile aria-label="Buka profil"><span id="sidebarProfileInitials" aria-hidden="true">—</span></button>
         <button type="button" class="account-meta account-profile-link" data-open-profile aria-label="Buka profil">
-          <strong>Abi Baydarus</strong>
-          <small>PIC Inventory</small>
+          <strong>Akun Anda</strong>
+          <small>—</small>
           <span id="sidebarApi" class="account-status"></span>
         </button>
         <button class="icon-btn account-more" title="Akun" aria-label="Menu akun" type="button" data-account-menu-toggle><i data-lucide="ellipsis"></i></button>
         <div class="account-menu" data-account-menu hidden>
+          <button class="account-menu-item" data-open-profile type="button"><i data-lucide="user-round"></i><span>Profil Saya</span></button>
           <button class="account-menu-item logout-btn" data-logout-btn type="button">
             <i data-lucide="log-out"></i>
             <span>Logout</span>
@@ -419,12 +420,25 @@
     
     <section id="page-sheet-input" class="panel page hidden"><h3 class="page-title">Form Input</h3><p class="subtitle">Input Barang Masuk dan Barang Keluar seperti spreadsheet.</p><div id="stockEntryApp"></div></section>
 
-    <section id="page-profile" class="panel page hidden">
-      <div class="card profile-card"><header class="section-header"><div><h3 class="page-title">Profil Saya</h3><p class="subtitle">Kelola info pribadi dan nomor WhatsApp untuk bot. Email dan role mengikuti akun terdaftar.</p></div></header>
-        <form id="profileForm" class="profile-form">
-          <div class="profile-fields"><label>Nama lengkap<input name="full_name" autocomplete="name" maxlength="100" required disabled></label><label>Username<input name="username" autocomplete="username" maxlength="100" required disabled></label><label>Email<input name="email" type="email" readonly></label><label>Role<input name="role" readonly></label><label class="profile-phone">Nomor WhatsApp<input name="phone" type="tel" autocomplete="tel" placeholder="6281234567890" disabled><small>Gunakan nomor Anda yang aktif di WhatsApp. Kosongkan untuk melepas nomor dari profil.</small></label></div>
-          <p id="profileStatus" role="status" aria-live="polite"></p><div class="profile-actions"><button class="btn-ghost" type="button" id="profileReload">Muat ulang</button><button class="btn-primary" type="submit" id="profileSave" disabled>Simpan perubahan</button></div>
-        </form>
+    <section id="page-profile" class="page hidden">
+      <div class="profile-shell">
+        <header class="profile-page-head"><div><p class="profile-eyebrow">SISTEM / AKUN</p><h1>Profil Saya</h1><p>Info pribadi dan nomor WhatsApp Anda, dalam satu tempat.</p></div><button class="btn-ghost profile-refresh" type="button" id="profileReload"><i data-lucide="refresh-cw" aria-hidden="true"></i>Muat ulang</button></header>
+        <div class="profile-layout">
+          <aside class="profile-identity" aria-label="Ringkasan akun">
+            <div class="profile-identity-top"><div class="profile-avatar" id="profileAvatar" aria-hidden="true">—</div><h2 id="profileDisplayName">Akun Anda</h2><span class="profile-role" id="profileRoleBadge">—</span><p id="profileDisplayEmail">—</p></div>
+            <div class="profile-identity-bottom"><span class="profile-info-label">WHATSAPP UNTUK BOT</span><span class="profile-phone-badge" id="profilePhoneBadge" data-connected="false"><span aria-hidden="true"></span>Belum dimuat</span><p id="profilePhoneSummary">Nomor WhatsApp akan ditampilkan setelah profil dimuat.</p></div>
+            <p class="profile-private-note"><i data-lucide="shield-check" aria-hidden="true"></i>Anda hanya dapat mengubah profil sendiri.</p>
+          </aside>
+          <form id="profileForm" class="profile-form">
+            <section class="profile-section" aria-labelledby="profilePersonalTitle"><header class="profile-section-head"><span class="profile-section-icon"><i data-lucide="user-round" aria-hidden="true"></i></span><div><h2 id="profilePersonalTitle">Informasi pribadi</h2><p>Nama Anda digunakan pada catatan dan aktivitas WMS.</p></div></header>
+              <div class="profile-fields"><label>Nama lengkap<input name="full_name" autocomplete="name" maxlength="100" required disabled></label><label>Username<input name="username" autocomplete="username" maxlength="100" required disabled></label><label>Email <span class="profile-locked">Dikelola akun</span><input name="email" type="email" readonly></label><label>Role <span class="profile-locked">Dikelola admin</span><input name="role" readonly></label></div>
+            </section>
+            <section class="profile-section" aria-labelledby="profileWhatsAppTitle"><header class="profile-section-head"><span class="profile-section-icon"><i data-lucide="message-circle" aria-hidden="true"></i></span><div><h2 id="profileWhatsAppTitle">WhatsApp untuk bot</h2><p>Gunakan nomor aktif milik Anda agar bot mengenali profil ini.</p></div></header>
+              <div class="profile-fields"><label class="profile-phone">Nomor WhatsApp<input name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="Contoh: 0812 3456 7890" aria-describedby="profilePhoneHelp" disabled><small id="profilePhoneHelp">Nomor 08 akan diubah ke format 628 secara otomatis. Kosongkan untuk melepas nomor.</small></label></div>
+            </section>
+            <footer class="profile-form-footer"><p id="profileStatus" role="status" aria-live="polite" data-state="loading">Memuat profil…</p><div class="profile-actions"><button class="btn-ghost" type="button" id="profileCancel" disabled>Batalkan</button><button class="btn-primary" type="submit" id="profileSave" disabled>Simpan perubahan</button></div></footer>
+          </form>
+        </div>
       </div>
     </section>
     <section id="page-settings" class="panel page hidden">

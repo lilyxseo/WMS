@@ -565,6 +565,7 @@ if(error){console.error("Gagal mengambil profile user",error);return null;}
 return data||null;
 }
 
+function profileInitials(name){return String(name||'').trim().split(/\s+/).filter(Boolean).slice(0,2).map(word=>Array.from(word)[0]).join('').toLocaleUpperCase('id-ID')||'—';}
 function renderSidebarProfile(profile,authUser){
 const accountMeta=document.querySelector(".account-meta");
 if(!accountMeta)return;
@@ -575,6 +576,7 @@ const fallbackUsername=String(profile?.username||"").trim();
 const displayName=String(profile?.full_name||profile?.name||"").trim()||fallbackUsername||fallbackEmail;
 const displayRole=String(profile?.role||"").trim()||"User";
 if(nameEl)nameEl.textContent=displayName||"-";
+const initials=document.getElementById('sidebarProfileInitials');if(initials)initials.textContent=profileInitials(displayName);
 if(roleEl)roleEl.textContent=displayRole;
 }
 
@@ -758,7 +760,7 @@ showAuthMode("login");
 form.dataset.bound="1";
 }
 function bindNav(){
-document.querySelector("[data-open-profile]")?.addEventListener("click",()=>{navigateTo("/profile");closeSidebarMobile();});
+document.querySelectorAll("[data-open-profile]").forEach(button=>button.addEventListener("click",()=>{const menu=document.querySelector("[data-account-menu]");if(menu)menu.hidden=true;navigateTo("/profile");closeSidebarMobile();}));
 document.querySelectorAll(".side-link[data-route]").forEach(btn=>btn.addEventListener("click",()=>{if(btn.dataset.route==="/activity-log"&&!isActivityLogAllowed()){navigateTo("/dashboard");closeSidebarMobile();return;}if(btn.dataset.route==="/tools-dev"&&!isToolsDevAllowed()){navigateTo("/dashboard");closeSidebarMobile();return;}navigateTo(btn.dataset.route);closeSidebarMobile();}));
 document.querySelectorAll("[data-sidebar-parent]").forEach(btn=>btn.addEventListener("click",()=>toggleSidebarMenu(btn.dataset.sidebarParent)));
 }
@@ -4565,30 +4567,45 @@ document.getElementById("abcNext")?.addEventListener("click",()=>{if(isAllPageSi
 }
 
 let personalProfileRequest=0,personalProfileSaving=false;
+function updatePersonalProfileSummary(profile){
+ const name=profile.full_name||profile.username||'Akun Anda';
+ const text=(id,value)=>{const element=document.getElementById(id);if(element)element.textContent=value;};
+ text('profileAvatar',profileInitials(name));text('profileDisplayName',name);text('profileRoleBadge',profile.role||'Pengguna');text('profileDisplayEmail',profile.email||'Email belum tersedia');
+ const badge=document.getElementById('profilePhoneBadge');if(badge){badge.dataset.connected=String(!!profile.phone);badge.innerHTML='<span aria-hidden="true"></span>';badge.append(document.createTextNode(profile.phone?'Nomor tersimpan':'Belum ada nomor'));}
+ text('profilePhoneSummary',profile.phone?'+'+profile.phone:'Tambahkan nomor agar bot dapat mengenali akun Anda.');
+}
 async function loadPersonalProfile(){
- const form=document.getElementById('profileForm'),status=document.getElementById('profileStatus');if(!form||personalProfileSaving)return;
- const request=++personalProfileRequest,generation=authRequestGeneration;
- form.reset();form.onsubmit=null;status.textContent='Memuat profil…';form.querySelectorAll('input,button[type=submit]').forEach(input=>input.disabled=true);
+ const form=document.getElementById('profileForm'),status=document.getElementById('profileStatus'),reload=document.getElementById('profileReload'),cancel=document.getElementById('profileCancel');if(!form||personalProfileSaving)return;
+ const request=++personalProfileRequest,generation=authRequestGeneration,fields=['full_name','username','phone'];
+ const message=(text,state='idle')=>{status.textContent=text;status.dataset.state=state;};
+ form.reset();form.onsubmit=null;form.oninput=null;message('Memuat profil…','loading');form.setAttribute('aria-busy','true');reload.disabled=true;cancel.disabled=true;if(window.lucide)window.lucide.createIcons();
+ updatePersonalProfileSummary({});
+ form.querySelectorAll('input,button[type=submit]').forEach(input=>input.disabled=true);
  try{
   const response=await fetch('/api/profile',{headers:await getAuthHeaders(),cache:'no-store'}),data=await response.json();
   if(request!==personalProfileRequest||generation!==authRequestGeneration)return;
   if(!response.ok||!data.success)throw Error(data.message||'Gagal memuat profil.');
-  const profile=data.profile;for(const field of ['full_name','username','email','role','phone'])form.elements.namedItem(field).value=profile[field]||'';
-  form.elements.full_name.disabled=false;form.elements.username.disabled=false;form.elements.phone.disabled=!profile.phoneAvailable;document.getElementById('profileSave').disabled=false;
-  status.textContent=profile.phoneAvailable?'':'Kolom nomor WhatsApp belum tersedia. Hubungi administrator.';
+  let profile=data.profile;
+  const button=document.getElementById('profileSave');
+  const dirty=()=>fields.some(field=>String(form.elements.namedItem(field).value)!==String(profile[field]||''));
+  const controls=()=>{const changed=dirty();button.disabled=personalProfileSaving||!changed;cancel.disabled=personalProfileSaving||!changed;reload.disabled=personalProfileSaving;fields.forEach(field=>form.elements.namedItem(field).disabled=personalProfileSaving||(field==='phone'&&!profile.phoneAvailable));};
+  const fill=()=>{for(const field of [...fields,'email','role'])form.elements.namedItem(field).value=profile[field]||'';form.elements.email.disabled=false;form.elements.role.disabled=false;updatePersonalProfileSummary(profile);controls();};
+  fill();message(profile.phoneAvailable?'Semua perubahan telah tersimpan.':'Kolom nomor WhatsApp belum tersedia. Hubungi administrator.',profile.phoneAvailable?'idle':'error');
+  form.oninput=()=>{controls();message(dirty()?'Ada perubahan yang belum disimpan.':'Semua perubahan telah tersimpan.');};
+  cancel.onclick=()=>{if(personalProfileSaving)return;fill();message('Perubahan dibatalkan.');};
+  reload.onclick=()=>{if(dirty())showConfirmModal({title:'Muat ulang profil?',message:'Perubahan yang belum disimpan akan dibatalkan.',confirmText:'Muat ulang',cancelText:'Kembali',onConfirm:()=>loadPersonalProfile()});else loadPersonalProfile();};
   form.onsubmit=async e=>{
-   e.preventDefault();if(personalProfileSaving||generation!==authRequestGeneration)return;personalProfileSaving=true;
-   const button=document.getElementById('profileSave');button.disabled=true;button.textContent='Menyimpan…';status.textContent='';
+   e.preventDefault();if(personalProfileSaving||!dirty()||generation!==authRequestGeneration)return;
    const payload={full_name:form.elements.full_name.value,username:form.elements.username.value};if(profile.phoneAvailable)payload.phone=form.elements.phone.value;
+   personalProfileSaving=true;controls();button.textContent='Menyimpan…';form.setAttribute('aria-busy','true');message('Menyimpan perubahan…','loading');
    try{
     const response=await fetch('/api/profile',{method:'PATCH',headers:{...await getAuthHeaders(),'Content-Type':'application/json'},body:JSON.stringify(payload)}),data=await response.json();
     if(generation!==authRequestGeneration)return;if(!response.ok||!data.success)throw Error(data.message||'Gagal menyimpan profil.');
-    for(const field of ['full_name','username','phone'])form.elements.namedItem(field).value=data.profile[field]||'';
-    renderSidebarProfile(data.profile,user);setCurrentUser({...getCurrentUser(),...toUserSnapshot(data.profile,user)});status.textContent='Profil berhasil diperbarui.';
+    profile=data.profile;fill();renderSidebarProfile(profile,user);setCurrentUser({...getCurrentUser(),...toUserSnapshot(profile,user)});message('Profil berhasil diperbarui.','success');
     logActivitySafe({action:'UPDATE_PROFILE',module:'Profil',detail:'Memperbarui profil pribadi',status:'SUCCESS'});
-   }catch(error){if(generation===authRequestGeneration)status.textContent=error.message;}
-   finally{personalProfileSaving=false;if(generation===authRequestGeneration){button.disabled=false;button.textContent='Simpan perubahan';}}
+   }catch(error){if(generation===authRequestGeneration)message(error.message,'error');}
+   finally{personalProfileSaving=false;if(generation===authRequestGeneration){controls();button.textContent='Simpan perubahan';form.setAttribute('aria-busy','false');}}
   };
- }catch(error){if(request===personalProfileRequest&&generation===authRequestGeneration)status.textContent=error.message;}
- document.getElementById('profileReload').onclick=()=>loadPersonalProfile();
+ }catch(error){if(request===personalProfileRequest&&generation===authRequestGeneration){message(error.message,'error');reload.onclick=()=>loadPersonalProfile();}}
+ finally{if(request===personalProfileRequest&&generation===authRequestGeneration){form.setAttribute('aria-busy','false');reload.disabled=false;}}
 }
