@@ -101,7 +101,7 @@ export async function handleBarangMasukRequest({ request, env }) {
     console.info('[BarangMasuk] countMs', 0, '(included in rows query)');
     console.info('[BarangMasukAPI] query-ok');
 
-    const includeSummary = url.searchParams.get('includeSummary') !== '0';
+    const includeSummary = !['0','false'].includes(url.searchParams.get('includeSummary'));
     let syncStatus = null;
     const summaryStartedAt = Date.now();
     let summary = result.summary;

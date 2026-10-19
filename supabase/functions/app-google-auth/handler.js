@@ -34,7 +34,8 @@ export async function handleAppGoogleAuth(request, env, fetchFn = fetch) {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || typeof payload.access_token !== 'string' || !payload.access_token) {
-      return json({ success: false, code: 'OAUTH_AUTHENTICATION_FAILED' }, 502);
+      const code=({invalid_grant:'OAUTH_REFRESH_TOKEN_REJECTED',invalid_client:'OAUTH_INVALID_CLIENT',unauthorized_client:'OAUTH_INVALID_CLIENT'})[payload.error]||'OAUTH_AUTHENTICATION_FAILED';
+      return json({ success: false, code }, 502);
     }
     return json({ access_token: payload.access_token });
   } catch {

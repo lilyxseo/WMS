@@ -13,6 +13,9 @@ on:
       - 'supabase/migrations/20261013000000_shared_sku_notes.sql'
       - 'supabase/migrations/20261013010000_delete_own_sku_notes.sql'
       - 'scripts/deploy-sku-notes.mjs'
+      - 'scripts/deploy-transaction-search.mjs'
+      - 'supabase/migrations/20261019000000_transaction_search.sql'
+      - 'supabase/migrations/20261019010000_warning_snapshot_signatures.sql'
       - 'scripts/deploy-warning-rules.mjs'
       - 'scripts/audit-inventory-warnings.mjs'
       - 'supabase/migrations/20261013020000_verified_inventory_warning_review.sql'
@@ -40,6 +43,11 @@ jobs:
           deno-version: '2.9.6'
       - name: Test application
         run: node --test tests/*.test.mjs
+      - name: Deploy indexed transaction search
+        if: github.ref == 'refs/heads/main'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: node scripts/deploy-transaction-search.mjs
       - name: Deploy shared SKU notes schema
         if: github.ref == 'refs/heads/main'
         env:
@@ -50,16 +58,20 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: node scripts/deploy-warning-rules.mjs
-      - name: Validate warning detection without data writes
-        if: github.ref == 'refs/heads/main'
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: node scripts/audit-inventory-warnings.mjs --validate --require-ledger
       - name: Check Gmail Edge Function
         run: deno check supabase/functions/app-google-auth/index.ts
       - uses: supabase/setup-cli@v1
         with:
           version: '2.120.0'
+      - name: Deploy Gmail authentication
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase functions deploy app-google-auth --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
+      - name: Validate warning detection without data writes
+        if: github.ref == 'refs/heads/main'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: node scripts/audit-inventory-warnings.mjs --validate --require-ledger
       - name: Check warning notification function
         run: deno check supabase/functions/warning-whatsapp/index.ts
       - name: Configure warning notifications
@@ -78,10 +90,6 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: node scripts/deploy-warning-notifications.mjs
-      - name: Deploy Gmail authentication
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: supabase functions deploy app-google-auth --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
       - name: Verify authentication without spreadsheet writes
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -105,7 +113,7 @@ jobs:
             method: 'POST', headers: { apikey: key, 'X-WMS-Server-Key': key }, signal: AbortSignal.timeout(30000),
           });
           const payload = await response.json();
-          const code = ['OAUTH_CONFIG_MISSING', 'OAUTH_AUTHENTICATION_FAILED', 'SERVER_KEY_REJECTED', 'SERVER_KEY_INVALID'].includes(payload.code) ? payload.code : 'NO_CODE';
+          const code = ['OAUTH_CONFIG_MISSING', 'OAUTH_AUTHENTICATION_FAILED', 'OAUTH_REFRESH_TOKEN_REJECTED', 'OAUTH_INVALID_CLIENT', 'SERVER_KEY_REJECTED', 'SERVER_KEY_INVALID'].includes(payload.code) ? payload.code : 'NO_CODE';
           ensure(response.status === 200, `Gmail authentication failed: HTTP ${response.status}, ${code}`);
           ensure(typeof payload.access_token === 'string' && payload.access_token, 'Google access token missing');
           console.log('Gmail OAuth verified; no spreadsheet writes performed.');

@@ -36,7 +36,7 @@ test('most important insight keeps its heading and content in one flowing line',
 
 test('normal transaction routes request a server page and preserve backend totals', () => {
   const loader = main.slice(main.indexOf('async function loadTransactionTablePage'), main.indexOf('function normalizeMovementRows'));
-  assert.match(loader, /URLSearchParams\(\{page:String\(nextPage\),limit:String\(nextLimit\),sort,includeSummary:String\(!cachedSummary\)\}\)/);
+  assert.match(loader, /URLSearchParams\(\{page:String\(nextPage\),limit:String\(nextLimit\),sort,includeSummary:cachedSummary\?'0':'1'\}\)/);
   assert.match(loader, /applyTransactionPayload\(mode/);
   assert.match(loader, /TRANSACTION_PAGE_CACHE\.set\(source,key/);
   assert.doesNotMatch(loader, /mode=full|slice\(/);

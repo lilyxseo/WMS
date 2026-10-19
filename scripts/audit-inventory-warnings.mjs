@@ -49,7 +49,7 @@ if(process.argv.includes('--validate')||process.argv.includes('--movement-previe
   if(result.verification.filter(item=>process.argv.includes('--require-ledger')||process.argv.includes('--movement-preview')||['kartu_stok','rpl','bulky'].includes(item.source)).every(item=>item.ready))break;
   await new Promise(resolve=>setTimeout(resolve,5000));
  }
- const report={summary:result.summary,partial:result.partial,coverage:result.verification.map(item=>({source:item.source,ready:item.ready,rowCount:item.rowCount,reason:item.reason,readStatus:item.readStatus,readCode:item.readCode})),checks:result.checks};
+ const report={summary:result.summary,partial:result.partial,coverage:result.verification.map(item=>({source:item.source,ready:item.ready,stale:!!item.stale,rowCount:item.rowCount,reason:item.reason,readStatus:item.readStatus,readCode:item.readCode})),checks:result.checks};
  console.log('::notice title=Warning validation::'+JSON.stringify(report));
  if(process.argv.includes('--movement-preview')){const findings=result.rows.filter(row=>row.category.startsWith('MOVEMENT_'));console.log('::notice title=Movement detection preview::'+JSON.stringify({total:findings.length,reportedSkuDetected:findings.some(row=>row.sku==='682200007014'),sample:findings.slice(0,25).map(row=>({sku:row.sku,category:row.category,issue:row.issue,evidence:row.evidence}))}));}
  if(result.verification.filter(item=>process.argv.includes('--require-ledger')||process.argv.includes('--movement-preview')||['kartu_stok','rpl','bulky'].includes(item.source)).some(item=>!item.ready)){

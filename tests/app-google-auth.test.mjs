@@ -48,7 +48,7 @@ test('invalid server keys, incomplete OAuth and revoked refresh tokens fail clos
   oauthCalls++; return Response.json({error:'invalid_grant', error_description:'private-refresh'}, {status:400});
  });
  assert.equal(revoked.status, 502); assert.equal(oauthCalls, 1);
- assert.doesNotMatch(await revoked.text(), /private-refresh|private-client/);
+ const revokedBody=await revoked.text();assert.equal(JSON.parse(revokedBody).code,'OAUTH_REFRESH_TOKEN_REJECTED');assert.doesNotMatch(revokedBody, /private-refresh|private-client/);
 });
 
 test('Pages requests a Gmail token with server credentials and never falls back to its old service account', async () => {

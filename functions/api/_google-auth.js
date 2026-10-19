@@ -14,7 +14,8 @@ export async function getGoogleAccessToken(env, fetchFn = fetch) {
   }
   const data = await response.json().catch(() => ({}));
   if (!response.ok || typeof data.access_token !== 'string' || !data.access_token) {
-    throw new Error('Autentikasi Gmail di Supabase gagal. Periksa konfigurasi OAuth dan akses server aplikasi.');
+    const messages={OAUTH_REFRESH_TOKEN_REJECTED:'Refresh token Gmail ditolak Google. Hubungkan ulang Gmail dan perbarui GOOGLE_OAUTH_REFRESH_TOKEN di Supabase.',OAUTH_INVALID_CLIENT:'Client OAuth Gmail ditolak Google. Periksa Client ID dan Client Secret di Supabase.'};
+    throw new Error(messages[data.code]||'Autentikasi Gmail di Supabase gagal. Periksa konfigurasi OAuth dan akses server aplikasi.');
   }
   return data.access_token;
 }

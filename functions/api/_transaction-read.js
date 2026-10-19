@@ -33,9 +33,10 @@ export function exactTotal(response, fallback = 0) {
   return total && total !== '*' ? Number(total) : fallback;
 }
 
-export async function supabaseRows(config, path, { count = false } = {}) {
+export async function supabaseRows(config, path, { count = false, method = 'GET', body, signal } = {}) {
   const response = await fetch(`${config.url}/rest/v1/${path}`, {
-    headers: { apikey: config.key, Authorization: `Bearer ${config.key}`, ...(count ? { Prefer: 'count=exact' } : {}) },
+    method, ...(body?{body:JSON.stringify(body)}:{}), signal:signal||AbortSignal.timeout(20000),
+    headers: { apikey: config.key, Authorization: `Bearer ${config.key}`, ...(body?{'Content-Type':'application/json'}:{}), ...(count ? { Prefer: 'count=exact' } : {}) },
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
@@ -129,14 +130,26 @@ export async function transactionPage(config, table, {
   // PostgREST applies the search/status filters first. All matching rows are
   // then read in bounded batches so normalization and sorting happen server-side
   // across the complete result set before this function slices the requested page.
+  if(search.length>500)throw new RangeError('Pencarian maksimal 500 karakter.');
   const selectedSort = transactionSort(sort === 'latest' && direction ? (direction === 'asc' ? 'oldest' : 'latest') : sort);
+  const searchRpc = search.trim() && ['inventory_barang_masuk','inventory_barang_keluar'].includes(table)
+    ? 'rpc/wms_search_'+table.replace('inventory_','') : '';
+  let useSearchRpc=Boolean(searchRpc);
   const rows = [];
-  let sourceTotal = null;
-  for (let offset = 0; ; offset += TRANSACTION_READ_BATCH_SIZE) {
-    const result = await supabaseRows(config, `${table}?select=${columns}${filterQuery}&order=source_row_number.desc&offset=${offset}&limit=${TRANSACTION_READ_BATCH_SIZE}`, { count: offset === 0 });
+  let sourceTotal = null, lastBatchSize=TRANSACTION_READ_BATCH_SIZE;
+  for (let offset = 0; ; offset += lastBatchSize) {
+    const query=`?select=${columns}${filterQuery}&order=source_row_number.desc&offset=${offset}&limit=${TRANSACTION_READ_BATCH_SIZE}`;
+    let result;
+    try { result=await supabaseRows(config,(useSearchRpc?searchRpc:table)+query,{count:offset===0,...(useSearchRpc?{method:'POST',body:{p_query:search}}:{})}); }
+    catch(error){
+      // Old deployments remain readable during rollout. Never turn a timeout or
+      // permission failure into another full scan.
+      if(!useSearchRpc||!['PGRST202','42883'].includes(error.code))throw error;
+      useSearchRpc=false;rows.length=0;sourceTotal=null;offset=0;lastBatchSize=0;continue;
+    }
     if (offset === 0) sourceTotal = exactTotal(result.response, result.payload.length);
-    rows.push(...result.payload);
-    if (result.payload.length < TRANSACTION_READ_BATCH_SIZE || rows.length >= sourceTotal) break;
+    rows.push(...result.payload);lastBatchSize=result.payload.length;
+    if (!result.payload.length || rows.length >= sourceTotal) break;
   }
   const ordered = orderTransactionRows(rows, selectedSort);
   const filtered = ordered.filter(({ row, parsedDate }) => transactionRowMatchesSearch(row, search, searchFields)
