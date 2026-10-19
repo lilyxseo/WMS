@@ -2,6 +2,15 @@
 -- Pages. Existing date normalization/natural ordering stays in the read layer.
 -- No stock or ledger rows are changed.
 create extension if not exists pg_trgm with schema extensions;
+-- Deployed ledgers may use date/timestamp rather than text. Their normal casts
+-- depend on DateStyle/TimeZone and cannot be indexed. Pin those settings inside
+-- the renderer so its output is deterministic across sessions.
+create or replace function public.wms_transaction_search_value(value anyelement)
+returns text language sql immutable parallel safe
+set datestyle='ISO, MDY' set timezone='UTC'
+as $$ select coalesce(value::text,''); $$;
+revoke all on function public.wms_transaction_search_value(anyelement) from public,anon,authenticated;
+grant execute on function public.wms_transaction_search_value(anyelement) to service_role;
 do $migration$
 declare
  table_name text;
@@ -12,7 +21,7 @@ declare
 begin
  select n.nspname into trigram_schema from pg_extension e join pg_namespace n on n.oid=e.extnamespace where e.extname='pg_trgm';
  foreach table_name in array array['inventory_barang_masuk','inventory_barang_keluar'] loop
-  select string_agg(format($column$coalesce(%I::text, '')$column$,f.name), $separator$ || ' ' || $separator$ order by f.position)
+  select string_agg(format($column$public.wms_transaction_search_value(%I)$column$,f.name), $separator$ || ' ' || $separator$ order by f.position)
   into expression
   from unnest(array['tanggal','from_location','to_location','sku','nama_barang','qty','status','pic','keterangan','no_iseller','netsuite','keterangan_lainnya','lokasi_surat_jalan','stockout','status_lanjutan','no_iseller_awal','dokumen']) with ordinality as f(name,position)
   join pg_attribute a on a.attrelid=format('public.%I',table_name)::regclass and a.attname=f.name and a.attnum>0 and not a.attisdropped;

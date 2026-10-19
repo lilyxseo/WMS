@@ -2,7 +2,7 @@ import { mountStockEntry } from './stock-entry.js?v=__APP_VERSION__';
 import { mountAccentColors } from './accent-colors.js';
 import { mountSettingsDatabase, databaseStatus } from './settings-database.js';
 import { isInventoryPicRole } from './utils/role-access.js';
-import { warningRowsMarkup, warningVerificationMarkup } from './warning-view.js';
+import { warningRowsMarkup, warningVerificationMarkup } from './warning-view.js?v=__APP_VERSION__';
 import { mountAllSkuNotes } from './all-sku-notes.js';
 import { mountSkuNotes } from './sku-notes.js';
 import { restoreSession, getAuthenticatedUser, bindLogoutButtons, loginWithEmailPassword, supabase, getAuthHeaders } from "./supabase.js";
