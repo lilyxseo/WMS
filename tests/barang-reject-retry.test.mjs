@@ -26,3 +26,8 @@ test('rendering Reject cannot schedule network requests',()=>{
  assert.doesNotMatch(fn('renderBarangRejectPage'),/ensureBarangRejectLoaded|queueMicrotask|fetch\(/);
  assert.match(source,/if\(page==="barang-reject"\)\{ensureBarangRejectLoaded\(\);renderBarangRejectPage\(\);return;\}/);
 });
+
+test('Refresh binds one handler across repeated renders',()=>{
+ assert.match(fn('bindBarangRejectEvents'),/refreshBtn\.onclick=/);
+ assert.doesNotMatch(fn('bindBarangRejectEvents'),/refreshBtn\.addEventListener/);
+});
