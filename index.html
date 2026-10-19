@@ -200,10 +200,6 @@
         </button>
       </form>
 
-      <p class="signup-line" aria-label="Informasi layanan">
-        <a href="/privacy-policy/">Kebijakan Privasi</a> · <a href="/terms-of-service/">Ketentuan Layanan</a>
-      </p>
-
       <p class="signup-line" id="loginLine" hidden>
         Sudah punya akun?
         <a href="#" id="loginLink">Login</a>
@@ -315,6 +311,7 @@
             <button class="side-link nav-item submenu-item" data-page="activity-log" data-route="/activity-log" title="Activity Log"><i data-lucide="scroll-text"></i><span>Activity Log</span></button>
             <button class="side-link nav-item submenu-item" data-page="tools-dev" data-route="/tools-dev" title="Tools Dev"><i data-lucide="wrench"></i><span>Tools Dev</span></button>
             <a class="side-link nav-item submenu-item apk-download-link" href="assets/goto.apk" download title="Download APK"><svg class="android-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5-1.5-2M16 5l1.5-2M6 9h12M5 10v7a2 2 0 0 0 2 2h1v2M19 10v7a2 2 0 0 1-2 2h-1v2M5 11H3v5M19 11h2v5M8 19h8M9 7h.01M15 7h.01" /></svg><span>Download APK</span></a>
+            <button class="side-link nav-item submenu-item" data-page="profile" data-route="/profile" title="Profil"><i data-lucide="user-round"></i><span>Profil</span></button>
             <button class="side-link nav-item submenu-item" data-page="settings" data-route="/settings" title="Pengaturan"><i data-lucide="settings"></i><span>Pengaturan</span></button>
           </div>
         </section>
@@ -324,11 +321,11 @@
     <div class="side-footer sidebar-footer">
       <div class="account-card">
         <div class="account-avatar"><i data-lucide="user-round"></i></div>
-        <div class="account-meta">
+        <button type="button" class="account-meta account-profile-link" data-open-profile aria-label="Buka profil">
           <strong>Abi Baydarus</strong>
           <small>PIC Inventory</small>
           <span id="sidebarApi" class="account-status"></span>
-        </div>
+        </button>
         <button class="icon-btn account-more" title="Akun" aria-label="Menu akun" type="button" data-account-menu-toggle><i data-lucide="ellipsis"></i></button>
         <div class="account-menu" data-account-menu hidden>
           <button class="account-menu-item logout-btn" data-logout-btn type="button">
@@ -422,6 +419,14 @@
     
     <section id="page-sheet-input" class="panel page hidden"><h3 class="page-title">Form Input</h3><p class="subtitle">Input Barang Masuk dan Barang Keluar seperti spreadsheet.</p><div id="stockEntryApp"></div></section>
 
+    <section id="page-profile" class="panel page hidden">
+      <div class="card profile-card"><header class="section-header"><div><h3 class="page-title">Profil Saya</h3><p class="subtitle">Kelola info pribadi dan nomor WhatsApp untuk bot. Email dan role mengikuti akun terdaftar.</p></div></header>
+        <form id="profileForm" class="profile-form">
+          <div class="profile-fields"><label>Nama lengkap<input name="full_name" autocomplete="name" maxlength="100" required disabled></label><label>Username<input name="username" autocomplete="username" maxlength="100" required disabled></label><label>Email<input name="email" type="email" readonly></label><label>Role<input name="role" readonly></label><label class="profile-phone">Nomor WhatsApp<input name="phone" type="tel" autocomplete="tel" placeholder="6281234567890" disabled><small>Gunakan nomor Anda yang aktif di WhatsApp. Kosongkan untuk melepas nomor dari profil.</small></label></div>
+          <p id="profileStatus" role="status" aria-live="polite"></p><div class="profile-actions"><button class="btn-ghost" type="button" id="profileReload">Muat ulang</button><button class="btn-primary" type="submit" id="profileSave" disabled>Simpan perubahan</button></div>
+        </form>
+      </div>
+    </section>
     <section id="page-settings" class="panel page hidden">
       <h3 class="page-title">Pengaturan & Informasi Sistem</h3>
       <p class="settings-page-description">Kelola sinkronisasi database, tampilan, dan data perangkat.</p>
