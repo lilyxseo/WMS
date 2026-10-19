@@ -12,10 +12,21 @@ export function stableWarningSource(before,after,key){
  const a=before.find(row=>row.source===key),b=after.find(row=>row.source===key);
  return !!(a&&b&&a.status==='success'&&b.status==='success'&&a.last_success_at&&b.last_success_at&&!a.locked_at&&!b.locked_at&&(a.source_version||a.last_success_at)===(b.source_version||b.last_success_at));
 }
+export function verifiedWarningSnapshot(before,after,key,proofBefore=[],proofAfter=[]){
+ if(stableWarningSource(before,after,key))return {ready:true,stale:false};
+ const a=before.find(row=>row.source===key),b=after.find(row=>row.source===key);
+ const unchanged=a&&b&&a.status==='error'&&b.status==='error'&&!a.locked_at&&!b.locked_at&&a.last_success_at&&a.last_success_at===b.last_success_at&&a.source_version===b.source_version&&/^[a-f0-9]{64}$/.test(a.source_version||'');
+ const first=proofBefore.find(row=>row.source===key),last=proofAfter.find(row=>row.source===key);
+ const ready=!!(unchanged&&first&&last&&first.content_version===a.source_version&&last.content_version===a.source_version&&first.row_count===last.row_count);
+ return {ready,stale:ready};
+}
 export async function loadWarningData(env){
  const config=getSecretSupabaseConfig(env);
- const sync=()=>read(config,'inventory_sync_status?select=source,status,last_success_at,source_version,locked_at');
+ const sync=()=>read(config,'inventory_sync_status?select=*');
  let before=[];try{before=await sync();}catch{}
+ const signatures=async()=>{try{const response=await fetch(`${config.url}/rest/v1/rpc/inventory_warning_snapshot_signatures`,{method:'POST',headers:{apikey:config.key,Authorization:`Bearer ${config.key}`,'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(20000)});const body=await response.json();return response.ok&&Array.isArray(body)?body:[];}catch{return [];}};
+ const needsProof=before.some(row=>row.status==='error');
+ const proofBefore=needsProof?await signatures():[];
  const sources=Object.entries(WARNING_SOURCES);
  const results=await Promise.allSettled(sources.map(async([name,source])=>{
   let select=base+',stok_awal,internal_stock_transfer,replenishment,pengeluaran'+(name==='kartuStok'?'':',netsuite,selisih');
@@ -39,16 +50,17 @@ export async function loadWarningData(env){
   const body=await response.json();if(!response.ok||!Array.isArray(body?.movements)||!Array.isArray(body?.activity))throw new Error('Movement context unavailable');movement=body;
  }catch{movementError=true;}
  let after=[];try{after=await sync();}catch{}
+ const proofAfter=needsProof?await signatures():[];
  const rows={kartuStok:[],rpl:[],bulky:[],barangMasuk:[],barangKeluar:[]},unavailableSources=[],verification=[];
  sources.forEach(([name,source],index)=>{
-  const available=results[index].status==='fulfilled',stable=available&&stableWarningSource(before,after,source.key);
+  const available=results[index].status==='fulfilled',snapshot=verifiedWarningSnapshot(before,after,source.key,proofBefore,proofAfter),stable=available&&snapshot.ready;
   if(stable)rows[name]=results[index].value;
   else unavailableSources.push(source.table);
-  verification.push({source:source.key,ready:stable,readStatus:available?null:results[index].reason?.status||null,readCode:available?'':results[index].reason?.code||'',rowCount:stable?rows[name].length:null,lastSuccess:after.find(row=>row.source===source.key)?.last_success_at||null,reason:stable?'':available?'Sinkronisasi belum terverifikasi atau berubah saat pemeriksaan.':'Sumber tidak dapat dibaca.'});
+  verification.push({source:source.key,ready:stable,stale:stable&&snapshot.stale,readStatus:available?null:results[index].reason?.status||null,readCode:available?'':results[index].reason?.code||'',rowCount:stable?rows[name].length:null,lastSuccess:after.find(row=>row.source===source.key)?.last_success_at||null,reason:stable?(snapshot.stale?'Snapshot sinkronisasi terakhir terverifikasi; sinkronisasi terbaru gagal.':''):available?'Sinkronisasi belum terverifikasi atau berubah saat pemeriksaan.':'Sumber tidak dapat dibaca.'});
  });
  for(const key of ['barang_masuk','barang_keluar']){
-  const stable=!ledgerError&&stableWarningSource(before,after,key);
-  verification.push({source:key,ready:stable,lastSuccess:after.find(row=>row.source===key)?.last_success_at||null,reason:stable?'':'Riwayat transaksi belum terverifikasi.'});
+  const snapshot=verifiedWarningSnapshot(before,after,key,proofBefore,proofAfter),stable=!ledgerError&&snapshot.ready;
+  verification.push({source:key,ready:stable,stale:stable&&snapshot.stale,lastSuccess:after.find(row=>row.source===key)?.last_success_at||null,reason:stable?(snapshot.stale?'Snapshot riwayat terakhir terverifikasi; sinkronisasi terbaru gagal.':''):'Riwayat transaksi belum terverifikasi.'});
   if(!stable)unavailableSources.push(key);
  }
  const ledgerReady=!unavailableSources.length;
@@ -57,5 +69,6 @@ export async function loadWarningData(env){
  if(!movementReady)movement=null;
  if(!ledgerReady)ledger=[]; // A failed/changed stock source cannot prove absence.
  if(results.every(result=>result.status==='rejected')){const error=new Error('All warning stock sources unavailable');error.failures=sources.map(([,source])=>({source:source.table}));throw error;}
- return {rows,ledger,unavailableSources:[...new Set(unavailableSources)],verification,ledgerReady,movement,movementReady};
+ const staleSources=verification.filter(item=>item.stale).map(item=>item.source);
+ return {rows,ledger,staleSources,unavailableSources:[...new Set(unavailableSources)],verification,ledgerReady,movement,movementReady};
 }

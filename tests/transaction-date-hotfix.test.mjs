@@ -101,3 +101,15 @@ test('all transaction sorts are numeric/null safe, natural and stable', () => {
   assert.deepEqual(values('qty-desc', 'qty'), ['100', '20', '3', '']);
   assert.deepEqual(values('qty-asc', 'qty'), ['3', '20', '100', '']);
 });
+
+test('transaction search reads only database matches and follows reduced REST page caps without skipping data',async t=>{
+ const original=globalThis.fetch;t.after(()=>globalThis.fetch=original);const offsets=[];const matches=Array.from({length:5},(_,index)=>({tanggal:'10/19/2026',sku:'001',nama_barang:'Merlyn Green',qty:1,source_row_number:index}));
+ globalThis.fetch=async(input,options)=>{const url=new URL(input);assert.equal(url.pathname,'/rest/v1/rpc/wms_search_barang_masuk');assert.equal(options.method,'POST');assert.deepEqual(JSON.parse(options.body),{p_query:'merlyn green'});const offset=Number(url.searchParams.get('offset'));offsets.push(offset);return Response.json(matches.slice(offset,offset+2),{headers:{'content-range':`${offset}-${Math.min(offset+1,4)}/5`}});};
+ const result=await transactionPage({url:'https://project.test',key:'secret'},'inventory_barang_masuk',{search:'merlyn green',limit:2});assert.equal(result.total,5);assert.equal(result.rows.length,2);assert.equal(result.summary.totalQty,5);assert.deepEqual(offsets,[0,2,4]);
+});
+test('missing search migration falls back once; database errors never trigger a second full scan',async t=>{
+ const original=globalThis.fetch;t.after(()=>globalThis.fetch=original);let calls=0;
+ globalThis.fetch=async(input)=>{calls++;return String(input).includes('/rpc/')?Response.json({code:'PGRST202'},{status:404}):Response.json([{sku:'001',nama_barang:'Merlyn',tanggal:'2026-10-19'}],{headers:{'content-range':'0-0/1'}});};
+ const result=await transactionPage({url:'https://db.test',key:'secret'},'inventory_barang_keluar',{search:'merlyn'});assert.equal(result.total,1);assert.equal(calls,2);
+ calls=0;globalThis.fetch=async()=>{calls++;return Response.json({code:'57014',message:'Statement timeout'},{status:500});};await assert.rejects(()=>transactionPage({url:'https://db.test',key:'secret'},'inventory_barang_keluar',{search:'merlyn'}),/timeout/);assert.equal(calls,1);
+});

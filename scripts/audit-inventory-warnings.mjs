@@ -2,6 +2,23 @@
 // document URLs, or full transaction ledgers are exported.
 const project=process.env.SUPABASE_PROJECT_REF,token=process.env.SUPABASE_ACCESS_TOKEN;
 if(!project||!token)throw new Error('Audit configuration unavailable');
+if(process.argv.includes('--sync-health')){
+ const query=`select source,status,last_success_at,locked_at from public.inventory_sync_status order by source;
+ select source,status,started_at,source_row_count,
+ left(regexp_replace(regexp_replace(regexp_replace(coalesce(error_message,''),'https?://[^[:space:]]+','[URL]','g'),'[A-Za-z0-9_/-]{24,}','[REDACTED]','g'),'[^[:space:]]+@[^[:space:]]+','[EMAIL]','g'),220) as error
+ from public.inventory_sync_history where status='error' order by started_at desc limit 10`;
+ const response=await fetch(`https://api.supabase.com/v1/projects/${project}/database/query`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({query}),signal:AbortSignal.timeout(60000)});
+ if(!response.ok)throw new Error(`Sync health query failed: ${response.status}`);
+ console.log('::notice title=Sync health::'+JSON.stringify(await response.json()));
+ const keysResponse=await fetch(`https://api.supabase.com/v1/projects/${project}/api-keys?reveal=true`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(30000)});
+ if(!keysResponse.ok)throw new Error('Server health credential unavailable');
+ const key=(await keysResponse.json()).find(item=>String(item.api_key||'').startsWith('sb_secret_'))?.api_key;
+ if(!key)throw new Error('Server health credential unavailable');
+ const probe=await fetch(`https://${project}.supabase.co/functions/v1/app-google-auth`,{method:'POST',headers:{apikey:key,'X-WMS-Server-Key':key},signal:AbortSignal.timeout(30000)});
+ const data=await probe.json().catch(()=>({}));
+ console.log('::notice title=Google authentication health::'+JSON.stringify({status:probe.status,hasAccessToken:typeof data.access_token==='string',code:typeof data.code==='string'?data.code:null,error:typeof data.error==='string'?data.error.replace(/[A-Za-z0-9_/-]{24,}/g,'[REDACTED]').slice(0,120):null}));
+ process.exit(0);
+}
 if(process.argv.includes('--movement')){
  const query=`select jsonb_build_object(
  'stock',(select jsonb_agg(j) from (select 'Kartu Stok' as source,sku,lokasi_bulky,stok_awal,internal_stock_transfer,replenishment,pengeluaran,stok_akhir,source_row_number from public.inventory_kartu_stok where sku='682200007014' union all select 'BULKY',sku,lokasi_bulky,stok_awal,internal_stock_transfer,replenishment,pengeluaran,stok_akhir,source_row_number from public.inventory_bulky where sku='682200007014') j),
@@ -32,7 +49,7 @@ if(process.argv.includes('--validate')||process.argv.includes('--movement-previe
   if(result.verification.filter(item=>process.argv.includes('--require-ledger')||process.argv.includes('--movement-preview')||['kartu_stok','rpl','bulky'].includes(item.source)).every(item=>item.ready))break;
   await new Promise(resolve=>setTimeout(resolve,5000));
  }
- const report={summary:result.summary,partial:result.partial,coverage:result.verification.map(item=>({source:item.source,ready:item.ready,rowCount:item.rowCount,reason:item.reason,readStatus:item.readStatus,readCode:item.readCode})),checks:result.checks};
+ const report={summary:result.summary,partial:result.partial,coverage:result.verification.map(item=>({source:item.source,ready:item.ready,stale:!!item.stale,rowCount:item.rowCount,reason:item.reason,readStatus:item.readStatus,readCode:item.readCode})),checks:result.checks};
  console.log('::notice title=Warning validation::'+JSON.stringify(report));
  if(process.argv.includes('--movement-preview')){const findings=result.rows.filter(row=>row.category.startsWith('MOVEMENT_'));console.log('::notice title=Movement detection preview::'+JSON.stringify({total:findings.length,reportedSkuDetected:findings.some(row=>row.sku==='682200007014'),sample:findings.slice(0,25).map(row=>({sku:row.sku,category:row.category,issue:row.issue,evidence:row.evidence}))}));}
  if(result.verification.filter(item=>process.argv.includes('--require-ledger')||process.argv.includes('--movement-preview')||['kartu_stok','rpl','bulky'].includes(item.source)).some(item=>!item.ready)){
