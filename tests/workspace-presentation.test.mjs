@@ -26,3 +26,10 @@ test('dashboard recent section renders ten rows and retains navigation to the co
  vm.runInContext(between('function renderDashboardTableSection','function renderDashboardSheetTable'),context);
  const html=context.renderDashboardTableSection('Barang Masuk','',Array.from({length:50},(_,i)=>i),'');assert.equal(received.length,10);assert.equal(received[9],9);assert.ok(html.includes('/barang-masuk'));assert.ok(html.includes('Lihat semua'));
 });
+test('SKU navigation opens the full page and keeps browser history',()=>{
+ const routes=[],history={pushState:(_state,_title,path)=>routes.push(path)};
+ const context=vm.createContext({location:{pathname:'/search'},history,user:null,routeFromPath:path=>routes.push('route:'+path)});
+ vm.runInContext(between('function navigateTo(path)','function navigateToSku'),context);
+ context.navigateTo('/sku/ABC');assert.deepEqual(routes,['/sku/ABC','route:/sku/ABC']);
+ assert.doesNotMatch(source,/openSkuPreview|skuPreviewDialog/);
+});
