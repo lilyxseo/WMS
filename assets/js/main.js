@@ -4670,7 +4670,7 @@ function polishWorkspaceTables(root){
 function polishWorkspaceTools(root){
  const groups=[...(root.matches?.('.mv-filters,.mv-toolbar:not(.mv-bulkbar),.archive-filters')?[root]:[]),...(root.querySelectorAll?.('.mv-filters,.mv-toolbar:not(.mv-bulkbar),.archive-filters')||[])];
  for(const group of groups){
-  if(group.dataset.uiTools||!group.querySelector('select')||group.closest('#stockEntryApp'))continue;
+  if(group.dataset.uiTools||!group.querySelector('select')||group.closest('#stockEntryApp')||group.matches('.balikan-controls'))continue;
   group.dataset.uiTools='1';group.classList.add('workspace-tools');if([...group.children].some(child=>child.matches('input:not([type=checkbox])')))group.classList.add('workspace-tools-with-search');
   if(!group.id)group.id='workspaceTools'+(++workspaceToolsId);
   const button=document.createElement('button');button.type='button';button.className='btn-ghost workspace-filter-toggle';button.textContent='Filter & tampilan';button.setAttribute('aria-controls',group.id);button.setAttribute('aria-expanded','false');group.classList.add('workspace-tools-collapsible');
