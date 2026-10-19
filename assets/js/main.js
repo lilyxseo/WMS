@@ -863,9 +863,9 @@ if(!["dashboard","search"].includes(page)&&!LOADED_DETAIL_PAGES.has(page))void s
 }
 function pageTitleFromPath(path){return String(path||"/").replace(/^\//,"").split("/").filter(Boolean).map(x=>x.replaceAll("-"," ").replace(/\b\w/g,c=>c.toUpperCase())).join(" / ")||"Dashboard";}
 let lastLoggedPath=null;
-function navigateTo(path){if(path.startsWith('/sku/')&&!location.pathname.startsWith('/sku/')){openSkuPreview(decodeURIComponent(path.slice(5)));return;}const from=location.pathname;if(path===from){routeFromPath(path);return;}history.pushState({},"",path);routeFromPath(path);if(user&&path!==lastLoggedPath){lastLoggedPath=path;logPageView({...currentUserIdentity(),module:pageTitleFromPath(path),page:path,from,to:path,details:{from,to:path}});}}
+function navigateTo(path){const from=location.pathname;if(path===from){routeFromPath(path);return;}history.pushState({},"",path);routeFromPath(path);if(user&&path!==lastLoggedPath){lastLoggedPath=path;logPageView({...currentUserIdentity(),module:pageTitleFromPath(path),page:path,from,to:path,details:{from,to:path}});}}
 function navigateToSku(sku){const cleanSku=String(sku||"" ).trim();if(!cleanSku)return;navigateTo(`/sku/${encodeURIComponent(cleanSku)}`);}
-function goBackToPreviousPage(){if(document.getElementById('skuPreviewDialog')?.open){closeSkuPreview();return;}if(window.history.length>1){window.history.back();return;}navigateTo('/search');}
+function goBackToPreviousPage(){if(window.history.length>1){window.history.back();return;}navigateTo('/search');}
 function showLoginView(){
 syncBalikanShortcutListeners(false);
 if(isPreviewBypassLoginEnabled()){routeFromPath(location.pathname);return;}
@@ -884,7 +884,6 @@ bindLoginView();
 }
 
 function routeFromPath(path){
-if(document.getElementById('skuPreviewDialog')?.open)closeSkuPreview();
 if(!user){
 if(isPreviewBypassLoginEnabled()){history.replaceState({},"","/");return showPage("dashboard");}
 return showLoginView();
@@ -2058,7 +2057,7 @@ function selectQuickResult(sku){selectedQuickSku=sku||"";const picked=[...(lastR
 function changeSearchPage(delta){if(!delta)return;const totalPage=Math.max(1,Math.ceil(lastResults.length/SEARCH_STATE.pageSize));SEARCH_STATE.page=Math.max(1,Math.min(totalPage,SEARCH_STATE.page+delta));renderResults(lastResults,lastQuery);}
 function renderResults(items,query){if(!items.length){renderQuickResultCard(null,query,"empty");return renderState("results","Data tidak ditemukan.");}const total=items.length;const totalPage=Math.max(1,Math.ceil(total/SEARCH_STATE.pageSize));if(SEARCH_STATE.page>totalPage)SEARCH_STATE.page=totalPage;const startIdx=(SEARCH_STATE.page-1)*SEARCH_STATE.pageSize;const pageItems=items.slice(startIdx,startIdx+SEARCH_STATE.pageSize);const start=total?startIdx+1:0,end=Math.min(startIdx+SEARCH_STATE.pageSize,total);const resultsNode=document.getElementById("results");if(!resultsNode)return;resultsNode.innerHTML=`<div class='subtitle'>${total} hasil.</div><div class='result-list'></div><div class='mv-pagination'><span>Menampilkan ${start}–${end} dari ${total} data</span><div class='row'><button class='btn-ghost' data-search-page='-1'>Prev</button><button class='btn-ghost' data-search-page='1'>Next</button></div></div>`;const listNode=resultsNode.querySelector(".result-list");pageItems.forEach(r=>{const card=document.createElement("div");card.className="result-card";card.tabIndex=0;card.setAttribute("role","button");card.addEventListener("click",e=>{if(e.target.closest("button"))return;selectQuickResult(r.sku);});card.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();selectQuickResult(r.sku);}});const badgesHtml=r.sources.filter(s=>!['Barang Masuk','Barang Keluar'].includes(s)).map(s=>`<span class='badge ${badgeClass(s)}'>${esc(s)}</span>`).join(" ");card.innerHTML=`<div class='result-head'><div><strong data-highlight='nama'></strong><div>SKU: <span data-highlight='sku'></span></div></div><div>${badgesHtml}</div></div><div class='row'><button class='btn-ghost copy-mini-btn' data-copy-sku onclick="copySku(decodeURIComponent('${encAttr(r.sku)}'),this)"><span aria-hidden='true'>⧉</span><span>Copy SKU</span></button><button class='btn-primary' onclick="navigateTo('/sku/'+encodeURIComponent(decodeURIComponent('${encAttr(r.sku)}')))">Lihat Detail</button></div>`;const namaEl=card.querySelector("[data-highlight='nama']");const skuEl=card.querySelector("[data-highlight='sku']");highlightText(r.nama,query).forEach(node=>namaEl.append(node));highlightText(r.sku,query).forEach(node=>skuEl.append(node));listNode?.append(card);});}
 let allSkuNotesController=null;
-function confirmSkuNoteDelete(options){if(document.getElementById('skuPreviewDialog')?.open){showSkuPreviewConfirm(options);return;}if(document.getElementById('confirmModalRoot'))showConfirmModal(options);else toast('Dialog konfirmasi belum tersedia. Muat ulang halaman.','error');}
+function confirmSkuNoteDelete(options){if(document.getElementById('confirmModalRoot'))showConfirmModal(options);else toast('Dialog konfirmasi belum tersedia. Muat ulang halaman.','error');}
 function renderAllSkuNotesPage({refresh=false}={}){const previous=allSkuNotesController;allSkuNotesController=mountAllSkuNotes(document.getElementById('allSkuNotesApp'),{account:inventoryDraftOwner()+'|'+authRequestGeneration,confirmDelete:confirmSkuNoteDelete,navigate:navigateToSku});if(refresh&&previous===allSkuNotesController)void allSkuNotesController?.refresh();}
 let skuDetailRequestId=0;
 async function showDetail(identifier,{background=false,throwOnError=false}={}){
@@ -4649,40 +4648,6 @@ async function loadPersonalProfile(){
  finally{if(request===personalProfileRequest&&generation===authRequestGeneration){form.setAttribute('aria-busy','false');reload.disabled=false;}}
 }
 
-let skuPreviewState=null;
-function openSkuPreview(identifier){
- const sku=String(identifier||'').trim();if(!sku)return;
- if(skuPreviewState){closeSkuPreview();}
- const originalParent=detail.parentNode,anchor=document.createComment('SKU detail position');
- originalParent.insertBefore(anchor,detail);
- const dialog=document.createElement('dialog');dialog.id='skuPreviewDialog';dialog.className='sku-preview';dialog.setAttribute('aria-labelledby','skuPreviewTitle');
- dialog.innerHTML='<header class="sku-preview-header"><div><small>INVENTORY</small><h2 id="skuPreviewTitle">Detail SKU</h2></div><div class="workspace-actions"><a class="btn-ghost" data-full-sku>Buka halaman penuh ↗</a><button class="icon-btn" type="button" aria-label="Tutup detail SKU" data-close-sku>×</button></div></header><div class="sku-preview-body"></div>';
- dialog.querySelector('[data-full-sku]').href='/sku/'+encodeURIComponent(sku);
- const toastRoot=document.getElementById('toast'),toastAnchor=toastRoot?document.createComment('Toast position'):null;if(toastRoot)toastRoot.before(toastAnchor);
- skuPreviewState={dialog,anchor,toastRoot,toastAnchor,originalParent,previousSku:currentSku,opener:document.activeElement};
- dialog.querySelector('.sku-preview-body').append(detail);if(toastRoot)dialog.append(toastRoot);document.body.append(dialog);currentSku=sku;
- dialog.querySelector('[data-close-sku]').onclick=closeSkuPreview;
- dialog.addEventListener('cancel',event=>{event.preventDefault();closeSkuPreview();});
- dialog.addEventListener('close',()=>{if(skuPreviewState?.dialog===dialog)closeSkuPreview();});
- dialog.addEventListener('click',event=>{if(event.target===dialog){const rect=dialog.getBoundingClientRect();if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)closeSkuPreview();}});
- dialog.addEventListener('keydown',event=>event.stopPropagation());dialog.showModal();document.body.classList.add('sku-preview-open');dialog.querySelector('[data-close-sku]').focus();void showDetail(sku);
-}
-function closeSkuPreview(){
- const state=skuPreviewState;if(!state)return;skuPreviewState=null;++skuDetailRequestId;
- currentSku=state.previousSku;state.anchor.replaceWith(detail);if(state.toastRoot)state.toastAnchor.replaceWith(state.toastRoot);state.dialog.close();state.dialog.remove();document.body.classList.remove('sku-preview-open');if(state.opener?.isConnected)state.opener.focus({preventScroll:true});
-}
-function showSkuPreviewConfirm({title='Konfirmasi',message='',confirmText='Hapus',cancelText='Batal',onConfirm}={}){
- const parent=document.getElementById('skuPreviewDialog');if(!parent?.open)return;
- const dialog=document.createElement('dialog');dialog.className='sku-preview-confirm';dialog.setAttribute('aria-labelledby','skuPreviewConfirmTitle');
- dialog.innerHTML='<h3 id="skuPreviewConfirmTitle"></h3><p></p><div class="workspace-actions"><button type="button" class="btn-ghost" data-cancel></button><button type="button" class="btn-primary danger" data-confirm></button></div>';
- dialog.querySelector('h3').textContent=title;dialog.querySelector('p').textContent=message;dialog.querySelector('[data-cancel]').textContent=cancelText;dialog.querySelector('[data-confirm]').textContent=confirmText;
- const dismiss=()=>{dialog.close();dialog.remove();};
- dialog.querySelector('[data-cancel]').onclick=dismiss;dialog.querySelector('[data-confirm]').onclick=()=>{dismiss();onConfirm?.();};
- dialog.addEventListener('keydown',event=>event.stopPropagation());dialog.addEventListener('cancel',event=>{event.preventDefault();dismiss();});dialog.addEventListener('close',()=>dialog.remove(),{once:true});
- parent.append(dialog);dialog.showModal();dialog.querySelector('[data-cancel]').focus();
-}
-window.addEventListener('auth:logout',closeSkuPreview);
-
 function workspaceColumnKind(label){
  const value=String(label||'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
  if(/^(qty|quantity|jumlah|stok|stock|saldo|total qty|stok awal|stok akhir|pengeluaran|selisih|internal stock transfer|replenishment)( |$)/.test(value))return 'number';
@@ -4718,8 +4683,6 @@ function mountWorkspacePresentation(){
  const pending=new Set();let frame=0;
  const polish=node=>{polishWorkspaceTables(node);polishWorkspaceTools(node);};polish(root);
  const observer=new MutationObserver(records=>{for(const record of records){if(record.addedNodes.length&&record.target instanceof Element)pending.add(record.target);}if(!pending.size||frame)return;frame=requestAnimationFrame(()=>{frame=0;const nodes=[...pending];pending.clear();nodes.forEach(polish);});});
- observer.observe(root,{childList:true,subtree:true});if(typeof detail!=='undefined'&&detail)observer.observe(detail,{childList:true,subtree:true});
- // The same detail component moves outside mainContentPages while previewing.
- document.addEventListener('click',event=>{if(event.target.closest('.sku-preview summary'))requestAnimationFrame(()=>polishWorkspaceTables(detail));});
+ observer.observe(root,{childList:true,subtree:true});
 }
 mountWorkspacePresentation();
