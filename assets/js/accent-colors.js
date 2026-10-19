@@ -1,4 +1,4 @@
-const COLORS=Object.freeze({red:'Merah',blue:'Biru',green:'Hijau',purple:'Ungu',amber:'Amber'});
+const COLORS=Object.freeze({red:'Merah',blue:'Biru',green:'Hijau',purple:'Ungu',amber:'Amber',pink:'Pink'});
 const STORAGE_KEY='wms.accent';
 export function mountAccentColors(root){
  if(!root)return;
