@@ -2485,3 +2485,25 @@ html[data-accent] .account-card .account-profile-link strong{color:var(--text)}
 .sheet-cell-editor{position:absolute;inset:0;z-index:8;min-width:100%;width:100%;height:100%;min-height:32px;border:2px solid var(--primary)!important;border-radius:0!important;background:var(--panel)!important;color:var(--text)!important;padding:7px!important;font:inherit;box-sizing:border-box;outline:0}
 .sheet-cell-editing{overflow:visible!important}.sheet-editable-table .sheet-cell>input:not([data-grid-editor]){pointer-events:none}
 @media(max-width:700px){.sheet-grid-toolbar{gap:6px;padding:9px}.sheet-grid-toolbar [data-grid-status]{flex-basis:100%}.sheet-grid-toolbar [data-grid-save],.sheet-grid-toolbar [data-grid-cancel]{flex:1;min-height:38px}.sheet-grid-help p{left:0;right:auto}.sheet-cell-editor{font-size:16px!important}}
+
+/* Keep the primary Balikan controls visible and full width on phones. */
+@media(max-width:700px){
+ #page-balikan-store .balikan-controls{display:flex;flex-direction:column;align-items:stretch;gap:12px;min-width:0}
+ #page-balikan-store .balikan-controls>*,#page-balikan-store .balikan-search-row>*{min-width:0;max-width:100%;box-sizing:border-box}
+ #page-balikan-store .balikan-sheet-field{width:100%;padding:10px 12px;gap:6px}
+ #page-balikan-store .balikan-search-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+ #page-balikan-store .balikan-search-row input{grid-column:1/-1;width:100%;min-width:0;min-height:44px;font-size:16px}
+ #page-balikan-store .balikan-shortcut-hint{display:none}
+ #page-balikan-store .balikan-sku-stepper{order:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+ #page-balikan-store .balikan-sku-stepper button{width:100%;min-width:0;min-height:44px}
+ #page-balikan-store #btnScanBalikan{order:0;width:44px;height:44px}
+ #page-balikan-store #btnBalikanSingleCheck{grid-column:1/-1;min-height:44px}
+ #page-balikan-store .balikan-search-history{min-width:0;margin:0}
+ #page-balikan-store .balikan-history-head{align-items:center}
+ #page-balikan-store .balikan-filter-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ #page-balikan-store .balikan-filter-row>*{min-width:0;width:100%;box-sizing:border-box;min-height:44px}
+ #page-balikan-store .balikan-filter-row select{grid-column:1/-1;min-width:0}
+ #page-balikan-store .balikan-switch-wrap{grid-column:1/-1;justify-content:flex-end;border-radius:12px;padding:8px 12px}
+ #page-balikan-store .balikan-switch-label{margin-right:auto}
+ #page-balikan-store .balikan-switch-track{flex-shrink:0}
+}
