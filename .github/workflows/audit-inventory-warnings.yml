@@ -1,14 +1,14 @@
 name: Audit inventory warning data
 on:
   push:
-    branches: [fix/warning-evidence, feat/movement-impact-warnings]
+    branches: [fix/warning-evidence, feat/movement-impact-warnings, fix/warning-transactions]
     paths: ['scripts/audit-inventory-warnings.mjs', '.github/workflows/audit-inventory-warnings.yml']
   workflow_dispatch:
     inputs:
       mode:
         description: 'Read-only validation or movement inspection (preview installs its private review RPC)'
         type: choice
-        options: [validate, movement, movement-preview]
+        options: [validate, movement, movement-preview, sync-health]
         default: validate
 permissions:
   contents: read
@@ -25,4 +25,4 @@ jobs:
         env:
           SUPABASE_PROJECT_REF: udullprykzdskrxmbbkj
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: node scripts/audit-inventory-warnings.mjs ${{ inputs.mode == 'movement' && '--movement' || inputs.mode == 'movement-preview' && '--movement-preview' || github.event_name == 'push' && github.ref == 'refs/heads/feat/movement-impact-warnings' && '--movement-preview' || '--validate' }}
+        run: node scripts/audit-inventory-warnings.mjs ${{ (inputs.mode == 'sync-health' || github.ref == 'refs/heads/fix/warning-transactions') && '--sync-health' || inputs.mode == 'movement' && '--movement' || inputs.mode == 'movement-preview' && '--movement-preview' || github.event_name == 'push' && github.ref == 'refs/heads/feat/movement-impact-warnings' && '--movement-preview' || '--validate' }}
