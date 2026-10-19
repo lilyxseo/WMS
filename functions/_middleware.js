@@ -1,4 +1,4 @@
-const PUBLIC_HOST='wms-duj.pages.dev';
+const PUBLIC_HOST='gotoliving.id';
 
 // Login is the only indexable page. This is a crawler directive; API/session
 // authorization continues to protect inventory data independently.
