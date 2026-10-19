@@ -6,7 +6,8 @@ if(process.argv.includes('--sync-health')){
  const query=`select source,status,last_success_at,locked_at from public.inventory_sync_status order by source;
  select source,status,started_at,source_row_count,
  left(regexp_replace(regexp_replace(regexp_replace(coalesce(error_message,''),'https?://[^[:space:]]+','[URL]','g'),'[A-Za-z0-9_/-]{24,}','[REDACTED]','g'),'[^[:space:]]+@[^[:space:]]+','[EMAIL]','g'),220) as error
- from public.inventory_sync_history where status='error' order by started_at desc limit 10`;
+ from public.inventory_sync_history where status='error' order by started_at desc limit 10;
+ select table_name,column_name,data_type from information_schema.columns where table_schema='public' and table_name in ('inventory_barang_masuk','inventory_barang_keluar') order by table_name,ordinal_position`;
  const response=await fetch(`https://api.supabase.com/v1/projects/${project}/database/query`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({query}),signal:AbortSignal.timeout(60000)});
  if(!response.ok)throw new Error(`Sync health query failed: ${response.status}`);
  console.log('::notice title=Sync health::'+JSON.stringify(await response.json()));
