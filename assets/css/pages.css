@@ -2377,3 +2377,23 @@ html[data-theme="light"] #page-profile{--bg:#f8fafc;--panel:#fff;--text:#172033;
 html[data-accent] .account-card .account-profile-link strong{color:var(--text)}
 
 .account-card .account-avatar{padding:0;cursor:pointer}.account-card .account-avatar:focus-visible{outline:2px solid var(--primary);outline-offset:3px}.account-card .account-avatar:hover{border-color:var(--primary)}
+
+/* Sidebar identity: fixed action widths and left-aligned flexible text. */
+.sidebar-footer{padding-top:12px;border-top:1px solid var(--line)}
+.sidebar-footer .account-card{display:flex;align-items:center;gap:9px;width:100%;margin:0;padding:10px 9px;border:1px solid var(--line);border-radius:12px;background:var(--panel-soft);box-shadow:none}
+.sidebar-footer .account-card .account-avatar{display:grid;place-items:center;flex:0 0 32px;width:32px;height:36px;border-radius:9px;font-size:12px}
+.sidebar-footer .account-card .account-profile-link{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;flex:1 1 0;min-width:0;gap:4px;margin:0;padding:2px 0;border:0;background:transparent;box-shadow:none;text-align:left}
+.sidebar-footer .account-profile-link strong,.sidebar-footer .account-profile-link small{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sidebar-footer .account-profile-link strong{font-size:12px;font-weight:650;line-height:1.4;letter-spacing:0}
+.sidebar-footer .account-profile-link small{font-size:10px;font-weight:450;line-height:1.4}
+.sidebar-footer .account-status:empty{display:none}
+.sidebar-footer .account-card .account-more{display:grid;place-items:center;flex:0 0 26px;width:26px;height:34px;padding:0;border:0;border-radius:7px;color:var(--muted);background:transparent}
+.sidebar-footer .account-more:hover,.sidebar-footer .account-more[aria-expanded="true"]{background:color-mix(in srgb,var(--primary) 10%,var(--panel));color:var(--text)}
+.sidebar-footer .account-more:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.sidebar-footer .account-more svg{width:17px;height:17px}
+.sidebar-footer .account-menu{left:0;right:0;bottom:calc(100% + 8px);min-width:0;padding:6px;border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:0 12px 32px #0003}
+.sidebar-footer .account-menu .account-menu-item{display:flex;align-items:center;justify-content:flex-start;gap:9px;width:100%;min-height:38px;padding:9px 10px;font-size:12px;font-weight:500;color:var(--text);border-radius:7px}
+.sidebar-footer .account-menu .logout-btn{width:100%!important;max-width:none!important;padding:9px 10px!important;font-size:12px!important;border-radius:7px!important}
+.sidebar-footer .account-menu .account-menu-item svg{width:16px;height:16px;flex:none;color:var(--muted)}
+.sidebar-footer .account-menu .account-menu-item:hover{background:var(--panel-soft)}
+@media(min-width:900px){body.sidebar-collapsed .sidebar-footer .account-card{padding:6px;border:0;background:transparent;justify-content:center}body.sidebar-collapsed .sidebar-footer .account-profile-link,body.sidebar-collapsed .sidebar-footer .account-more{display:none}body.sidebar-collapsed .sidebar-footer .account-avatar{flex-basis:36px;width:36px;height:40px}}

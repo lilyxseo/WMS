@@ -326,8 +326,8 @@
           <small>—</small>
           <span id="sidebarApi" class="account-status"></span>
         </button>
-        <button class="icon-btn account-more" title="Akun" aria-label="Menu akun" type="button" data-account-menu-toggle><i data-lucide="ellipsis"></i></button>
-        <div class="account-menu" data-account-menu hidden>
+        <button class="icon-btn account-more" title="Akun" aria-label="Menu akun" aria-expanded="false" aria-controls="sidebarAccountMenu" type="button" data-account-menu-toggle><i data-lucide="ellipsis"></i></button>
+        <div class="account-menu" id="sidebarAccountMenu" data-account-menu hidden>
           <button class="account-menu-item" data-open-profile type="button"><i data-lucide="user-round"></i><span>Profil Saya</span></button>
           <button class="account-menu-item logout-btn" data-logout-btn type="button">
             <i data-lucide="log-out"></i>
