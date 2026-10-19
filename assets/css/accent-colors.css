@@ -46,3 +46,12 @@ html[data-accent] .side-link.nav-item.active i,html[data-accent] .side-link.nav-
 
 html[data-accent] .reject-tabs .btn-ghost.active,html[data-accent] #page-balikan-store .balikan-sheet-badge{background:var(--primary-2);color:#fff;box-shadow:none}
 html[data-accent] #page-balikan-store .balikan-location-item:hover:not(:disabled),html[data-accent] #page-balikan-store .balikan-location-item:focus-visible{border-color:var(--primary);box-shadow:0 0 0 3px var(--accent-soft)}
+
+/* Data remains neutral; accents communicate selection and primary actions. */
+html[data-theme="light"] body{--bg:#f8fafc;--panel:#fff;--panel-soft:#f1f5f9;--text:#172033;--muted:#526176;--line:#dbe2ec}
+html[data-accent] .workspace-table thead th{color:var(--muted)}
+html[data-accent] .workspace-table tbody td{color:var(--text)}
+html[data-accent] .workspace-table .ui-col-number{font-variant-numeric:tabular-nums}
+html[data-accent] #page-dashboard .metric-delta--out{color:var(--muted)}
+html[data-accent="pink"],html[data-accent="pink"] body{--primary:#f9a8d4;--primary-2:#be185d}
+html[data-theme="light"][data-accent="pink"],html[data-theme="light"][data-accent="pink"] body{--primary:#be185d}
