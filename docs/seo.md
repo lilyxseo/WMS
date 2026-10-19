@@ -1,6 +1,6 @@
 # SEO WMS Goto Living
 
-Hanya `https://wms-duj.pages.dev/` (halaman login) yang boleh diindeks. Data inventory tetap memerlukan autentikasi; aturan crawler tidak menggantikan otorisasi API.
+Hanya `https://gotoliving.id/` (halaman login) yang boleh diindeks. Data inventory tetap memerlukan autentikasi; aturan crawler tidak menggantikan otorisasi API.
 
 ## Perubahan
 
@@ -17,4 +17,4 @@ Lighthouse 12.8.2, Chromium, kategori SEO pada build lokal: **82 → 100**. Sebe
 
 481 tes Node lulus, termasuk header noindex, sitemap, metadata, dan penggabungan CSS. Uji browser desktop/mobile memakai auth/CDN mock memverifikasi login, validasi form, tampilan tanpa JavaScript, serta tidak adanya prefetch scanner/inventory sebelum login. Emulator Cloudflare memverifikasi root indexable, halaman internal noindex, API tanpa autentikasi tetap 401, robots/sitemap tersedia dan redirect login berjalan.
 
-Sitemap dapat dikirim ke Google Search Console: `https://wms-duj.pages.dev/sitemap.xml`. Search Console belum diverifikasi dari sesi ini. Jika domain utama berubah, perbarui host middleware, canonical/schema/social URLs, robots, sitemap, dan pengujiannya bersamaan.
+Sitemap dapat dikirim ke Google Search Console: `https://gotoliving.id/sitemap.xml`. Search Console belum diverifikasi dari sesi ini. Jika domain utama berubah, perbarui host middleware, canonical/schema/social URLs, robots, sitemap, dan pengujiannya bersamaan.
