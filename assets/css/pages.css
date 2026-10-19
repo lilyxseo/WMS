@@ -2450,3 +2450,26 @@ html[data-accent] .account-card .account-profile-link strong{color:var(--text)}
 #page-asset-store .asset-inline-cell{cursor:text;transition:background .15s}#page-asset-store .asset-inline-cell:hover{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--primary) 30%,var(--line))}#page-asset-store .asset-inline-cell.editing{padding:4px}#page-asset-store .asset-inline-cell .inline-edit-input{width:100%;min-width:100px;min-height:36px;border:1px solid var(--primary);border-radius:6px;padding:7px 9px;background:var(--panel);color:var(--text);font-size:12px}#page-asset-store .asset-inline-cell.is-saving{color:var(--muted);font-size:11px}
 #mainContentPages .workspace-table td.txt-danger{color:var(--danger)}#mainContentPages .workspace-table .mv-row-selected>td{background:color-mix(in srgb,var(--primary) 12%,var(--panel))}
 @media(max-width:700px){#mainContentPages .workspace-tools-collapsible.workspace-tools-with-search{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))}#mainContentPages .workspace-tools-with-search:not(.workspace-tools-expanded)>:not(input){display:none}#mainContentPages .workspace-tools-with-search>input{grid-column:1/-1;width:100%}}
+
+/* Balikan has its own column layout; never squeeze the TRIP table to viewport. */
+#page-balikan-store .balikan-table{table-layout:auto;width:max-content;min-width:100%}
+#page-balikan-store .balikan-table-wrapper{max-width:100%;overflow:auto;max-height:65dvh;border-color:var(--line);border-radius:12px;scrollbar-width:thin;overscroll-behavior:contain}
+#page-balikan-store .balikan-table th,#page-balikan-store .balikan-table td{font-size:12px;line-height:1.5;padding:10px 12px;vertical-align:middle;word-break:normal;overflow-wrap:normal}
+#page-balikan-store .balikan-table th{height:44px;white-space:nowrap;font-size:10px;letter-spacing:.02em}
+#page-balikan-store .balikan-table .th-filter-wrap{flex-wrap:nowrap;white-space:nowrap;word-break:normal;gap:7px}
+#page-balikan-store .balikan-table .th-filter-btn{flex-shrink:0}
+#page-balikan-store .balikan-table th:nth-child(1),#page-balikan-store .balikan-table td:nth-child(1){min-width:68px;width:68px;text-align:center;position:sticky;left:0;background:var(--panel);z-index:2}
+#page-balikan-store .balikan-table th:nth-child(1){z-index:6}
+#page-balikan-store .balikan-table th:nth-child(2),#page-balikan-store .balikan-table td:nth-child(2){min-width:115px}
+#page-balikan-store .balikan-table th:nth-child(3),#page-balikan-store .balikan-table td:nth-child(3){min-width:65px;text-align:right;font-variant-numeric:tabular-nums}
+#page-balikan-store .balikan-table th:nth-child(4),#page-balikan-store .balikan-table td:nth-child(4){min-width:160px;white-space:nowrap}
+#page-balikan-store .balikan-table th:nth-child(5),#page-balikan-store .balikan-table td:nth-child(5){min-width:320px;width:360px;max-width:440px;text-align:left}
+#page-balikan-store .balikan-table td:nth-child(5){white-space:normal;overflow-wrap:break-word;word-break:normal}
+#page-balikan-store .balikan-table th:nth-child(6),#page-balikan-store .balikan-table td:nth-child(6),#page-balikan-store .balikan-table th:nth-child(9),#page-balikan-store .balikan-table td:nth-child(9),#page-balikan-store .balikan-table th:nth-child(10),#page-balikan-store .balikan-table td:nth-child(10){min-width:100px;text-align:right;font-variant-numeric:tabular-nums}
+#page-balikan-store .balikan-table th:nth-child(7),#page-balikan-store .balikan-table td:nth-child(7),#page-balikan-store .balikan-table th:nth-child(8),#page-balikan-store .balikan-table td:nth-child(8){min-width:160px}
+#page-balikan-store .balikan-table th:nth-child(11),#page-balikan-store .balikan-table td:nth-child(11){min-width:120px}
+#page-balikan-store .balikan-table th:nth-child(n+12),#page-balikan-store .balikan-table td:nth-child(n+12){min-width:200px;white-space:normal}
+#page-balikan-store .balikan-table .balikan-sku-select{font-size:12px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;white-space:nowrap;padding:4px 0}
+#page-balikan-store .balikan-table tbody tr:hover>td{background:color-mix(in srgb,var(--primary) 6%,var(--panel))}
+@media(max-width:700px){#page-balikan-store .balikan-table-wrapper{max-height:60dvh}#page-balikan-store .balikan-table th:nth-child(5),#page-balikan-store .balikan-table td:nth-child(5){min-width:280px;width:300px}#page-balikan-store .balikan-table th,#page-balikan-store .balikan-table td{padding:10px;font-size:11px}}
+#page-balikan-store .balikan-table .balikan-check{accent-color:var(--primary-2,var(--primary))!important}

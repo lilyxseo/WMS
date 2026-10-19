@@ -33,3 +33,9 @@ test('SKU navigation opens the full page and keeps browser history',()=>{
  context.navigateTo('/sku/ABC');assert.deepEqual(routes,['/sku/ABC','route:/sku/ABC']);
  assert.doesNotMatch(source,/openSkuPreview|skuPreviewDialog/);
 });
+test('shared table decoration preserves the dedicated Balikan table layout',()=>{
+ const context=vm.createContext({});vm.runInContext(between('function polishWorkspaceTables','function polishWorkspaceTools'),context);
+ let decorated=false;
+ const table={matches:selector=>['table','.balikan-table'].includes(selector),querySelectorAll:()=>[],closest:()=>null,classList:{add:()=>{decorated=true;}}};
+ context.polishWorkspaceTables(table);assert.equal(decorated,false);
+});

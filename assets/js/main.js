@@ -4659,7 +4659,7 @@ function polishWorkspaceTables(root){
  const tables=[...(root.matches?.('table')?[root]:[]),...(root.querySelectorAll?.('table')||[])];
  const parent=root.closest?.('table');if(parent&&!tables.includes(parent))tables.push(parent);
  for(const table of tables){
-  if(table.closest('#stockEntryApp,.sheet-input-grid'))continue;
+  if(table.closest('#stockEntryApp,.sheet-input-grid')||table.matches('.balikan-table'))continue;
   table.classList.add('workspace-table');
   const headers=[...(table.tHead?.rows[0]?.cells||[])],kinds=headers.map(cell=>workspaceColumnKind(cell.textContent));
   headers.forEach((cell,index)=>{if(kinds[index])cell.classList.add('ui-col-'+kinds[index]);});
