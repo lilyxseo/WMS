@@ -38,6 +38,7 @@ test('returns not found only after every SKU-specific source is empty', async ()
       found: false,
       sku: 'UNKNOWN',
       sources: { 'Kartu Stock': [], RPL: [], BULKY: [], 'Barang Masuk': [], 'Barang Keluar': [] },
+      rowRefs: {'Barang Masuk':[],'Barang Keluar':[]},
     });
   } finally { globalThis.fetch = originalFetch; }
 });
@@ -59,6 +60,8 @@ test('orders SKU detail transactions from oldest at the top to newest at the bot
     const expectedDates = ['01/05/2026', '2026-03-12', '2026-08-29'];
     assert.deepEqual(body.sources['Barang Masuk'].map(row => row.tanggal), expectedDates);
     assert.deepEqual(body.sources['Barang Keluar'].map(row => row.tanggal), expectedDates);
+    assert.deepEqual(body.rowRefs['Barang Masuk'],[1,2,3]);
+    assert.equal(Object.hasOwn(body.sources['Barang Masuk'][0],'rowNumber'),false);
   } finally { globalThis.fetch = originalFetch; }
 });
 

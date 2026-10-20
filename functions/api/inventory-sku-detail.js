@@ -43,7 +43,7 @@ async function fetchSkuSource(config, source, sku) {
     if (payload.length < batchSize) break;
   }
   const rows = source.transaction ? orderTransactionRows(rawRows, 'oldest').map(item => item.row) : rawRows;
-  return rows.map(source.map).map(toSkuDetailRow);
+  const mapped=rows.map(source.map);return {rows:mapped.map(toSkuDetailRow),rowNumbers:source.transaction?mapped.map(row=>Number(row.rowNumber)||null):[]};
 }
 
 export async function handleInventorySkuDetailRequest({ request, env }) {
@@ -56,9 +56,10 @@ export async function handleInventorySkuDetailRequest({ request, env }) {
   try {
     const config = getSecretSupabaseConfig(env);
     const entries = await Promise.all(Object.entries(SOURCES).map(async ([name, source]) => [name, await fetchSkuSource(config, source, sku)]));
-    const sources = Object.fromEntries(entries);
-    const found = entries.some(([, rows]) => rows.length > 0);
-    return json({ success: true, found, sku, sources });
+    const sources = Object.fromEntries(entries.map(([name,data])=>[name,data.rows]));
+    const rowRefs=Object.fromEntries(entries.filter(([name])=>SOURCES[name].transaction).map(([name,data])=>[name,data.rowNumbers]));
+    const found = entries.some(([, data]) => data.rows.length > 0);
+    return json({ success: true, found, sku, sources, rowRefs });
   } catch (error) {
     console.error('[InventorySkuDetailAPI]', error?.message || error);
     return json({ success: false, message: 'Gagal memuat detail SKU' }, 502);
