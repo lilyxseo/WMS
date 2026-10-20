@@ -15,7 +15,7 @@ function inventoryNumber(value) {
 }
 
 export function groupInventorySearchRows(rows = []) {
-  const grouped = new Map();
+  const grouped = new Map(), locationTotals = new Map();
   for (const row of rows) {
     const sku = String(row.sku || '').trim().toUpperCase();
     if (!sku) continue;
@@ -29,10 +29,11 @@ export function groupInventorySearchRows(rows = []) {
     if (Object.prototype.hasOwnProperty.call(item.summary.distribution, row.source)) {
       item.summary.distribution[row.source] += inventoryNumber(row.qty);
       const location = String(row.location || '').trim();
-      if (location && !item.summary.locations.includes(location)) item.summary.locations.push(location);
+      if(location){if(!locationTotals.has(sku))locationTotals.set(sku,new Map());const totals=locationTotals.get(sku),key=location.toUpperCase();const previous=totals.get(key)||{location,qty:0};previous.qty+=inventoryNumber(row.qty);totals.set(key,previous);}
     }
     grouped.set(sku, item);
   }
+  for(const [sku,item] of grouped){item.summary.locationStocks=[...(locationTotals.get(sku)?.values()||[])];item.summary.locations=item.summary.locationStocks.filter(row=>row.qty>0).map(row=>row.location);}
   return grouped;
 }
 

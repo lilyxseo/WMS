@@ -21,6 +21,9 @@ revoke all on public.netsuite from public,anon,authenticated;
 grant select,insert,update,delete on public.netsuite to service_role;
 grant usage,select on sequence public.netsuite_id_seq to service_role;
 
+-- The existing lock RPC updates a registered source row; register before syncing.
+insert into public.inventory_sync_status(source,status) values('netsuite','idle') on conflict(source) do nothing;
+
 create or replace function public.inventory_netsuite_accuracy()
 returns jsonb language sql stable security invoker set search_path=public,pg_temp as $$
  with sources as (
