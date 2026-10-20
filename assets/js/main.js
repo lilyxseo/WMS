@@ -2069,10 +2069,11 @@ function renderResults(items,query){if(!items.length){renderQuickResultCard(null
 let allSkuNotesController=null;
 function confirmSkuNoteDelete(options){if(document.getElementById('confirmModalRoot'))showConfirmModal(options);else toast('Dialog konfirmasi belum tersedia. Muat ulang halaman.','error');}
 function renderAllSkuNotesPage({refresh=false}={}){const previous=allSkuNotesController;allSkuNotesController=mountAllSkuNotes(document.getElementById('allSkuNotesApp'),{account:inventoryDraftOwner()+'|'+authRequestGeneration,confirmDelete:confirmSkuNoteDelete,navigate:navigateToSku});if(refresh&&previous===allSkuNotesController)void allSkuNotesController?.refresh();}
-let skuDetailRequestId=0;
+let skuDetailRequestId=0,skuDetailFilterSku='';
 async function showDetail(identifier,{background=false,throwOnError=false}={}){
 const sku=String(identifier||"").trim();
 if(!sku)return renderState("detail","Detail tidak tersedia.");
+if(skuDetailFilterSku!==sku){tableFiltersController?.reset(document.getElementById("page-detail"));skuDetailFilterSku=sku;}
 const requestId=++skuDetailRequestId;
 if(!background)renderState("detail","Memuat detail SKU...");
 try{
