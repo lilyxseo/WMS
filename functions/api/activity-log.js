@@ -4,7 +4,7 @@ import { getSecretSupabaseConfig } from './_supabase-config.js';
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Cache-Control":"private, no-store" },
   });
 }
 
@@ -132,10 +132,10 @@ async function getUserProfile(env, userId) {
 async function supabaseGetLogs(env, query) {
   const { url, key } = getSupabaseConfig(env);
   const params = new URLSearchParams();
-  const limit = Math.min(Math.max(Number(query.limit) || 25, 1), 100);
-  const offset = Math.max(Number(query.offset) || 0, 0);
+  const limit = Math.min(Math.max(Math.trunc(Number(query.limit)) || 25, 1), 100);
+  const offset = Math.max(Math.trunc(Number(query.offset)) || 0, 0);
   params.set("select", "*");
-  params.set("order", "created_at.desc");
+  params.set("order", "created_at.desc,id.desc");
   params.set("limit", String(limit));
   params.set("offset", String(offset));
 
@@ -143,19 +143,21 @@ async function supabaseGetLogs(env, query) {
   if (query.action && /^[A-Z][A-Z0-9_]{1,99}$/.test(query.action)) params.set("action", `eq.${query.action}`);
   if (query.user_name) params.set("user_name", `ilike.*${sanitizeText(query.user_name, 100)}*`);
   if (query.status && ALLOWED_STATUS.has(query.status)) params.set("status", `eq.${query.status}`);
-  if (query.from) params.set("created_at", `gte.${sanitizeText(query.from, 40)}`);
-  if (query.to) params.append("created_at", `lte.${sanitizeText(query.to, 40)}`);
+  const validDate=value=>/^\d{4}-\d{2}-\d{2}$/.test(value)&&!Number.isNaN(Date.parse(value))&&new Date(value).toISOString().slice(0,10)===value;
+  if((query.from&&!validDate(query.from))||(query.to&&!validDate(query.to))||(query.from&&query.to&&query.from>query.to))throw Error('Rentang tanggal tidak valid.');
+  if(query.from)params.append('created_at',`gte.${query.from}T00:00:00+07:00`);
+  if(query.to){const next=new Date(Date.parse(query.to)+86400000).toISOString().slice(0,10);params.append('created_at',`lt.${next}T00:00:00+07:00`);}
   if (query.search) {
-    const term = sanitizeText(query.search, 100).replace(/[(),]/g, "");
-    params.set("or", `(detail.ilike.*${term}*,reference.ilike.*${term}*,user_name.ilike.*${term}*,module.ilike.*${term}*)`);
+    const term=sanitizeText(query.search,100).replace(/[\\"*,()%_]/g,' ').replace(/\s+/g,' ').trim();
+    if(term)params.set('or','('+['detail','reference','user_name','module','action','status','role'].map(field=>`${field}.ilike."*${term}*"`).join(',')+')');
   }
 
   const res = await fetch(`${url}/rest/v1/activity_logs?${params.toString()}`, {
-    headers: { apikey: key, Authorization: `Bearer ${key}` },
+    headers: { apikey: key, Authorization: `Bearer ${key}`, Prefer: "count=exact" },
   });
   const body = await res.json().catch(() => []);
   if (!res.ok) throw new Error(body?.message || body?.error || "Gagal mengambil activity logs");
-  return body;
+  const count=Number(res.headers.get("content-range")?.split("/")[1]);return {data:Array.isArray(body)?body:[],total:Number.isFinite(count)?count:null,limit,offset};
 }
 
 export async function onRequestPost({ request, env }) {
@@ -208,8 +210,8 @@ export async function onRequestGet({ request, env }) {
   try {
     if (!isDeveloperRequest(request, env) && !await hasInventoryDeveloperAccess(request,env)) return json({ success: false, error: "Akses ditolak" }, 403);
     const url = new URL(request.url);
-    const data = await supabaseGetLogs(env, Object.fromEntries(url.searchParams.entries()));
-    return json({ success: true, data });
+    const result = await supabaseGetLogs(env, Object.fromEntries(url.searchParams.entries()));
+    return json({ success: true, ...result });
   } catch (err) {
     return json({ success: false, message: err?.message || "Internal server error" }, 500);
   }
