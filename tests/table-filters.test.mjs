@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {filterMatches,filterRowMatches,compareFilterValues,parseFilterNumber} from '../assets/js/table-filters.js';
+import {filterMatches,filterRowMatches,compareFilterValues,parseFilterNumber,sortFilterValues} from '../assets/js/table-filters.js';
 test('column conditions compare text without case sensitivity and preserve exact value selection',()=>{
  assert.equal(filterMatches('Merlyn Green Gold',{condition:'contains',text:'GREEN',values:null}),true);
  assert.equal(filterMatches('Merlyn Green Gold',{condition:'notContains',text:'green',values:null}),false);
@@ -28,3 +28,5 @@ test('sorting is numeric for quantities and natural for location codes',()=>{
 });
 
 test('Indonesian quantity formats sort and compare as numbers',()=>{assert.equal(parseFilterNumber('1.000'),1000);assert.equal(parseFilterNumber('1.250,5'),1250.5);assert.equal(parseFilterNumber('1,5'),1.5);assert.ok(compareFilterValues('1.000','20',true)>0);assert.equal(filterMatches('1.000',{condition:'gt',text:'900',values:null}),true);});
+
+test('blank draft cells remain after populated cells for either sort direction',()=>{for(const dir of [1,-1]){assert.ok(sortFilterValues('', '0',dir,true)>0);assert.ok(sortFilterValues('2', '',dir,true)<0);}assert.ok(sortFilterValues('10','2',-1,true)<0);});
