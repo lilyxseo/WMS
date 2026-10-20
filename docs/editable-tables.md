@@ -17,3 +17,7 @@ Perubahan belum masuk database sebelum **Simpan perubahan** atau Ctrl+S. Pada ta
 Draf melekat pada identitas baris/kolom, bukan hanya posisi visual. Pergantian akun menghapus draf; browser meminta konfirmasi saat reload/keluar jika ada perubahan. Draf grid tidak disimpan secara permanen. Kolom otomatis dan akses read-only tidak mendapatkan hak tulis baru.
 
 Penyimpanan memakai endpoint dan validasi yang sudah ada. Respons sukses dikonfirmasi per unit simpan, sehingga perubahan yang telah berhasil tidak dikirim ulang otomatis ketika unit berikutnya gagal. Tabel dapat tersimpan sebagian; periksa pesan status dan data sebelum mencoba lagi. Pemeriksaan sumber di browser bukan transaksi atomik lintas pengguna; Asset Store juga mempertahankan pemeriksaan original-row di server.
+
+Barang Masuk/Keluar pada detail SKU juga memakai grid yang sama. Referensi baris disediakan terpisah dari kolom tampilan. Simpan melalui endpoint transaksi yang sudah ada, dengan pemeriksaan SKU, lokasi dan nilai sebelum edit terhadap Google Sheets. Data yang berubah ditolak; qty ringkasan dan tabel detail diperbarui setelah respons simpan sukses. Jika SKU transaksi diubah, baris itu dikeluarkan dari detail SKU sebelumnya. Sinkronisasi sumber transaksi dijalankan sesudah penyimpanan.
+
+Input native lama pada tabel sesi/history berfungsi sebagai backing metadata tersembunyi; tampilan sel menggunakan nilai teks dan satu editor grid penuh saat mengedit. To dan Qty/Stok Aktual tidak lagi memakai dua input yang bertumpuk.

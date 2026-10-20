@@ -32,3 +32,12 @@ test('failed API writes remain unacknowledged and do not change source values',a
 test('invalid numeric values and formulas stay protected',()=>{
  const f=fixture(),cell=f.cell({mvCell:'1',mode:'in',row:'2',field:'qty'}),desc=f.ctx.describeEditableTableCell(cell);assert.throws(()=>desc.validate('-1'),/nol atau positif/);assert.throws(()=>desc.validate('=1+1'),/Rumus/);
 });
+
+test('SKU detail edits retain source row references and submit optimistic checks through existing ledger API',async()=>{
+ const f=fixture();f.ctx.SKU_DETAIL_EDIT_STATE={sku:'SKU1',rows:{in:[f.inbound],out:[]},payload:{sources:{'Barang Masuk':[f.inbound]}}};f.ctx.refreshSkuDetailLedger=()=>{};f.ctx.syncInventorySourcesForRefresh=async()=>({success:true});
+ const patch=f.patch(f.cell({detailLedger:'in',row:'2',field:'qty'}),'6');await f.save('sku-detail-in',[patch]);
+ assert.equal(f.calls[0].path,'/api/barang-masuk/bulk-update');assert.equal(f.calls[0].body.expectedRows['2'].sku,'SKU1');assert.equal(f.calls[0].body.expectedRows['2'].cells.qty,'1');assert.equal(f.inbound.qty,6);assert.equal(f.ack.length,1);
+});
+test('SKU detail cannot save a draft after navigation replaced its source rows',async()=>{
+ const f=fixture();f.ctx.SKU_DETAIL_EDIT_STATE={sku:'SKU1',rows:{in:[f.inbound],out:[]}};const patch=f.patch(f.cell({detailLedger:'in',row:'2',field:'qty'}),'8');f.ctx.SKU_DETAIL_EDIT_STATE.rows.in=[];await assert.rejects(f.save('sku-detail-in',[patch]),/Detail SKU berubah/);assert.equal(f.calls.length,0);
+});
