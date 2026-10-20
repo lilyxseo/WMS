@@ -13,7 +13,7 @@ begin
  insert into public.reject_write_lock(id,run,expires_at) values(1,p_run,now()+interval '5 minutes')
  on conflict(id) do update set run=excluded.run,expires_at=excluded.expires_at where reject_write_lock.expires_at<now() or reject_write_lock.run=p_run
  returning run into obtained;
- return obtained=p_run;
+ return coalesce(obtained=p_run,false);
 end;
 $$;
 create or replace function public.release_reject_write_lock(p_run uuid) returns void

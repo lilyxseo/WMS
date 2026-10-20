@@ -7,6 +7,7 @@ test('dashboard daily response is explicit and cannot be HTTP-cached', async () 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async url => {
     const parsed = new URL(url);
+    if(parsed.pathname.endsWith('/rpc/inventory_unique_sku_count'))return Response.json(3);
     const isDaily = parsed.searchParams.has('or');
     const outgoing = parsed.pathname.endsWith('/inventory_barang_keluar');
     const inbound = parsed.pathname.endsWith('/inventory_barang_masuk');
@@ -20,6 +21,7 @@ test('dashboard daily response is explicit and cannot be HTTP-cached', async () 
     });
     const body = await response.json();
     assert.equal(response.headers.get('cache-control'), 'private, no-store');
+    assert.equal(body.summary.totalSku,3);
     assert.equal(body.today, body.summary.today);
     assert.equal(body.barangMasukToday, body.summary.barangMasukHariIni);
     assert.equal(body.barangKeluarToday, body.summary.barangKeluarHariIni);

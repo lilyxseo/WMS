@@ -142,7 +142,7 @@ export async function loadInventoryAnalyticsRows(env, { sourceNames = Object.key
 
 export function computeInventorySummary(rows, now = new Date()) {
   const all = Object.values(rows).flat();
-  const skuSet = new Set(all.map(row => key(row.sku)).filter(Boolean));
+  const skuSet = new Set(rows.kartuStok.map(row => key(row.sku)).filter(Boolean));
   const today = businessDateKey(now);
   const validInbound = rows.barangMasuk.filter(row => key(row.sku));
   const inbound = validInbound.filter(row => key(row.status) === 'BARANG MASUK');
@@ -193,3 +193,5 @@ export function computeInventorySummary(rows, now = new Date()) {
     deadStock: rows.kartuStok.filter(row => number(row.stok_akhir) > 0 && number(row.pengeluaran) === 0).length,
   };
 }
+
+export async function loadUniqueInventorySkuCount(env){const {url,key}=getSecretSupabaseConfig(env),response=await fetch(`${url}/rest/v1/rpc/inventory_unique_sku_count`,{method:'POST',headers:{apikey:key,Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:'{}'}),value=await response.json();if(!response.ok||typeof value!=='number'||!Number.isFinite(value))throw Error('Unique SKU count unavailable');return value;}

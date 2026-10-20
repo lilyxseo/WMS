@@ -1,5 +1,5 @@
 import { getRequestRole } from './_authz.js';
-import { loadInventoryCounts } from './_inventory-analytics.js';
+import { loadInventoryCounts,loadUniqueInventorySkuCount } from './_inventory-analytics.js';
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -16,8 +16,8 @@ export async function handleDashboardSummaryRequest({ request, env }) {
     const startedAt = Date.now();
     // Dashboard startup is counts-only. Detailed warning/accuracy analytics have
     // their own endpoints and must never force this route to materialize tables.
-    const counts = await loadInventoryCounts(env);
-    const summary = { ...counts, totalSku: counts.kartuStok, minusStock: counts.minusStock };
+    const [counts,totalSku] = await Promise.all([loadInventoryCounts(env),loadUniqueInventorySkuCount(env)]);
+    const summary = { ...counts, totalSku, minusStock: counts.minusStock };
     return json({
       success: true,
       source: 'supabase',
