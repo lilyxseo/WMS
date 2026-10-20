@@ -2608,3 +2608,23 @@ html[data-accent] .account-card .account-profile-link strong{color:var(--text)}
 #balikanEntryApp .balikan-entry-message{margin:6px 0 0}
 #balikanEntryApp .balikan-entry-message:empty{display:none}
 @media(max-width:700px){#balikanEntryApp .balikan-entry-table input{font-size:16px;height:36px}.balikan-entry-options>span{font-size:10px}#balikanEntryApp .balikan-entry-options button{min-height:36px}#balikanEntryApp .balikan-entry-actions button{min-height:40px}}
+/* ABC analysis: compact overview, consistent filters and readable volume ranking. */
+#abcAnalisisApp{min-width:0}
+.abc-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0 0 12px;color:var(--muted);font-size:12px}.abc-heading p{margin:0}.abc-heading>span{font-size:11px}
+.abc-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px}
+.abc-metric{display:flex;flex-direction:column;align-items:flex-start;gap:5px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text);text-align:left;cursor:pointer}.abc-metric small,.abc-metric span{color:var(--muted);font-size:11px}.abc-metric strong{font-size:23px;line-height:1.2}.abc-metric.is-active{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 7%,var(--panel))}.abc-metric.is-active small{color:var(--primary)}.abc-metric:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.abc-search-row{display:grid;grid-template-columns:minmax(0,1fr) 160px auto;gap:8px;margin-bottom:12px}.abc-search-row input,.abc-search-row select{min-width:0;width:100%;margin:0}
+#abcAnalisisApp .abc-data-panel{padding:12px;min-width:0}
+#abcAnalisisApp .abc-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0}
+#abcAnalisisApp .abc-toolbar select{flex:1 1 145px;margin:0;min-width:0;max-width:200px!important;font-size:12px}
+#abcAnalisisApp .abc-to-wrap{min-width:180px;flex:1 1 210px;max-width:300px}
+#abcAnalisisApp .table-wrap{width:100%;max-width:100%;border:1px solid var(--line);border-radius:10px}
+#abcAnalisisApp table{min-width:1140px;table-layout:auto;width:100%}
+#abcAnalisisApp th{white-space:nowrap}
+#abcAnalisisApp td{font-size:12px;vertical-align:middle}
+#abcAnalisisApp td:nth-child(3){min-width:230px;max-width:340px;white-space:normal}
+#abcAnalisisApp .btn-link{text-align:left;line-height:1.5;white-space:normal;word-break:normal}
+#abcAnalisisApp td:is(:nth-child(4),:nth-child(5),:nth-child(6),:nth-child(8)){text-align:right;font-variant-numeric:tabular-nums}
+.abc-category{display:inline-flex;align-items:center;justify-content:center;border-radius:6px;min-width:28px;padding:4px 8px;font-size:11px;font-weight:700;background:color-mix(in srgb,var(--primary) 12%,var(--panel));color:var(--primary);border:1px solid color-mix(in srgb,var(--primary) 25%,var(--line))}.abc-category-B{background:var(--panel-soft)}.abc-category-C{background:transparent;color:var(--muted);border-color:var(--line)}
+.abc-method,.abc-top-panel{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:10px;font-size:11px;color:var(--muted)}.abc-method summary,.abc-top-panel summary{cursor:pointer;font-weight:600;color:var(--text)}.abc-method p{line-height:1.7;max-width:1000px;margin:8px 0 0}.abc-top-panel ol{padding-left:20px;margin:10px 0 0}.abc-top-panel li{padding:7px 0;border-bottom:1px solid var(--line)}.abc-top-panel li>span{display:inline-block;width:75%;vertical-align:top}.abc-top-panel li small{display:block;margin-top:3px}.abc-top-panel li>strong{color:var(--primary);white-space:nowrap}
+@media(max-width:700px){.abc-heading{align-items:flex-start;flex-direction:column;gap:5px}.abc-summary{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.abc-metric{padding:10px}.abc-metric strong{font-size:21px}.abc-search-row{grid-template-columns:minmax(0,1fr) auto}.abc-search-row input{grid-column:1/-1;font-size:16px}.abc-search-row select,.abc-search-row button{min-height:40px}#abcAnalisisApp .abc-toolbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}#abcAnalisisApp .abc-toolbar select{width:100%;max-width:none!important;height:40px!important}#abcAnalisisApp .abc-to-wrap{grid-column:1/-1;min-width:0;max-width:none}#abcAnalisisApp .abc-to-toggle{height:40px!important}#abcAnalisisApp .abc-action-btn{min-height:40px}#abcAnalisisApp .abc-to-menu{top:44px}.abc-top-panel li>span{width:100%}.abc-top-panel li>strong{display:block;margin-top:4px}#abcPager{align-items:flex-start;gap:10px;flex-direction:column}#abcPager .row{width:100%;justify-content:space-between}}
