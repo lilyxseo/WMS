@@ -1,3 +1,4 @@
+import { mountTableFilters } from './table-filters.js?v=__APP_VERSION__';
 import { mountEditableTables } from './editable-table-grid.js?v=__APP_VERSION__';
 import { mountStockEntry } from './stock-entry.js?v=__APP_VERSION__';
 import { mountAccentColors } from './accent-colors.js?v=__APP_VERSION__';
@@ -40,7 +41,7 @@ const scheduleManualRefreshRender=debounce((mode)=>{
 if(mode==='in'||mode==='out')rerenderTableWithScrollRestore(mode,true);
 },180);
 const BARCODE_STATE={barcodeToSku:new Map(),barcodeToName:new Map(),loaded:false,updatedAt:0};
-const SEARCH_STATE={inputValue:"",filterValue:"",page:1,pageSize:50,minChars:2,debounceMs:500,debounceTimer:null,idleTimer:null,abortController:null,runToken:0,lastRenderedHtml:""};
+const SEARCH_STATE={inputValue:"",filterValue:"",page:1,pageSize:50,minChars:2,debounceMs:500,debounceTimer:null,idleTimer:null,abortController:null,runToken:0,lastRenderedHtml:"",completedQuery:null,completedSource:null};
 const SCANNER_STATE={instance:null,isScannerRunning:false,isClosing:false,hasScanned:false,targetInputId:"searchInput",resultHandler:null,lastSearchSku:"",lastSearchNavigationAt:0,libraryPromise:null};
 const SEARCH_SCAN_NAVIGATION_LOCK_MS=750;
 const PAGE_REQUEST_TIMEOUT_MS=12000;
@@ -849,7 +850,7 @@ if(page==="detail"){return;}
 if(page==="locations"){setMainContentLoading(false);renderLocationsPage();return;}
 if(page==="sku-notes"){setMainContentLoading(false);renderAllSkuNotesPage({refresh:true});return;}
 if(page==="stock-aging"){renderStockAgingPage();return;}
-if(page==="search"){pageLog('CariData','init');renderState("results",`Ketik minimal ${SEARCH_STATE.minChars} huruf untuk mencari.`);return;}
+if(page==="search"){pageLog('CariData','init');restoreSearchResults();return;}
 if(page==="arsip"){pageLog('Arsip','init');renderArchivePage();return;}
 if(page==="profile"){loadPersonalProfile();return;}
 if(page==="asset-store"){pageLog('Asset','init');renderAssetStorePage();return;}
@@ -1818,6 +1819,13 @@ await runChunked([...next.values()],(it)=>{const rowsText=(it.rows||[]).map(x=>g
 if(token===skuCacheBuildToken)CACHE_SKU=next;
 })().catch(err=>console.warn("SKU cache build failed",err));
 }
+function restoreSearchResults(){
+ const query=String(SEARCH_STATE.inputValue||searchInput?.value||SEARCH_STATE.filterValue||'');
+ SEARCH_STATE.inputValue=query;SEARCH_STATE.filterValue=query;if(searchInput)searchInput.value=query;renderFilters();
+ if(normalizeSearch(query).length<(SEARCH_STATE.minChars||2)){renderQuickResultCard(null,query,'hint');renderState('results',`Ketik minimal ${SEARCH_STATE.minChars} huruf untuk mencari.`);return;}
+ if(SEARCH_STATE.completedQuery===query&&SEARCH_STATE.completedSource===currentFilter){renderQuickResultCard(pickQuickResult(lastResults,query),query,lastResults.length?'result':'empty');renderResults(lastResults,query);return;}
+ clearTimeout(SEARCH_STATE.debounceTimer);clearTimeout(SEARCH_STATE.idleTimer);void runSearch();
+}
 function scheduleSearchFilter(nextValue){
 SEARCH_STATE.inputValue=String(nextValue||"");
 clearTimeout(SEARCH_STATE.debounceTimer);
@@ -1830,7 +1838,7 @@ if(SEARCH_STATE.idleTimer)clearTimeout(SEARCH_STATE.idleTimer);
 SEARCH_STATE.idleTimer=setTimeout(run,0);
 },SEARCH_STATE.debounceMs);
 }
-async function runSearch(){const qRaw=SEARCH_STATE.filterValue||"",q=normalizeSearch(qRaw),prevQuery=lastQuery;lastQuery=qRaw;const minChars=SEARCH_STATE.minChars||2;if(q.length<minChars){lastResults=[];SEARCH_STATE.page=1;renderQuickResultCard(null,qRaw,"hint");return renderState("results",`Ketik minimal ${minChars} huruf untuk mencari.`);}saveRecentSearch(qRaw);if(SEARCH_STATE.abortController)SEARCH_STATE.abortController.abort();SEARCH_STATE.abortController=new AbortController();const signal=SEARCH_STATE.abortController.signal;const token=++SEARCH_STATE.runToken;renderState("results","Mencari di database...");try{const headers=await awaitPageAuth('CariData');const filter=currentFilter==="Semua"?"":`&source=${encodeURIComponent(currentFilter)}`;const {res,data}=await fetchPageJson('CariData',`/api/inventory-search?q=${encodeURIComponent(qRaw)}${filter}`,{headers,signal,cache:'no-store'});if(signal.aborted||token!==SEARCH_STATE.runToken)return;if(!res.ok||!data?.success)throw new Error(data?.message||"Pencarian gagal");const nextResults=Array.isArray(data.rows)?data.rows:[];if(nextResults.length!==lastResults.length||normalizeSearch(prevQuery)!==q)SEARCH_STATE.page=1;lastResults=nextResults;renderQuickResultCard(pickQuickResult(lastResults,qRaw),qRaw,nextResults.length?"result":"empty");renderResults(lastResults,qRaw);pageLog('CariData','renderMs',Math.round(performance.now()-startupMark));}catch(err){if(err?.name!=="AbortError"&&token===SEARCH_STATE.runToken){pageLog('CariData','error',err?.message||err);const node=document.getElementById('results');if(node)node.innerHTML=`<div class='state error'>Gagal memuat data. <button type='button' class='btn-ghost' data-retry-search>Coba Lagi</button></div>`;}}}
+async function runSearch(){const qRaw=SEARCH_STATE.filterValue||"",q=normalizeSearch(qRaw),prevQuery=lastQuery;lastQuery=qRaw;const minChars=SEARCH_STATE.minChars||2;if(q.length<minChars){SEARCH_STATE.completedQuery=null;SEARCH_STATE.completedSource=null;lastResults=[];SEARCH_STATE.page=1;renderQuickResultCard(null,qRaw,"hint");return renderState("results",`Ketik minimal ${minChars} huruf untuk mencari.`);}saveRecentSearch(qRaw);if(SEARCH_STATE.abortController)SEARCH_STATE.abortController.abort();SEARCH_STATE.abortController=new AbortController();const signal=SEARCH_STATE.abortController.signal;const token=++SEARCH_STATE.runToken;renderState("results","Mencari di database...");try{const headers=await awaitPageAuth('CariData');const filter=currentFilter==="Semua"?"":`&source=${encodeURIComponent(currentFilter)}`;const {res,data}=await fetchPageJson('CariData',`/api/inventory-search?q=${encodeURIComponent(qRaw)}${filter}`,{headers,signal,cache:'no-store'});if(signal.aborted||token!==SEARCH_STATE.runToken)return;if(!res.ok||!data?.success)throw new Error(data?.message||"Pencarian gagal");const nextResults=Array.isArray(data.rows)?data.rows:[];if(nextResults.length!==lastResults.length||normalizeSearch(prevQuery)!==q)SEARCH_STATE.page=1;lastResults=nextResults;SEARCH_STATE.completedQuery=qRaw;SEARCH_STATE.completedSource=currentFilter;renderQuickResultCard(pickQuickResult(lastResults,qRaw),qRaw,nextResults.length?"result":"empty");renderResults(lastResults,qRaw);pageLog('CariData','renderMs',Math.round(performance.now()-startupMark));}catch(err){if(err?.name!=="AbortError"&&token===SEARCH_STATE.runToken){pageLog('CariData','error',err?.message||err);const node=document.getElementById('results');if(node)node.innerHTML=`<div class='state error'>Gagal memuat data. <button type='button' class='btn-ghost' data-retry-search>Coba Lagi</button></div>`;}}}
 
 const SCANNER_LIBRARY_URLS=[
 "https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js",
@@ -4764,8 +4772,9 @@ function editableTableActionScope(target){
  if(transaction)return 'transaction-'+(transaction.dataset.mvDelete||transaction.dataset.mvBulkDelete||transaction.dataset.mvBulkEdit);
  return null;
 }
-let editableTablesController;
+let editableTablesController,tableFiltersController;
 function setupEditableTableGrid(){
  if(editableTablesController)return;editableTablesController=mountEditableTables({root:document.getElementById('mainContentPages'),describe:describeEditableTableCell,save:saveEditableTableChanges,canEdit:canCrud,notify:toast,confirm:showConfirmModal,owner:inventoryDraftOwner,actionScope:editableTableActionScope});
- window.addEventListener('auth:logout',()=>editableTablesController?.reset());
+ tableFiltersController=mountTableFilters(document.getElementById('mainContentPages'));
+ window.addEventListener('auth:logout',()=>{editableTablesController?.reset();tableFiltersController?.reset();});
 }

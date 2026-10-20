@@ -23,5 +23,5 @@ const stylePath="./assets/css/style.css";
 const style=fs.readFileSync(stylePath,"utf8").replace(/@import url\("\.\/([a-z-]+\.css)\?v=__APP_VERSION__"\);/g,(_match,name)=>fs.readFileSync('./assets/css/'+name,'utf8')).replaceAll("__APP_VERSION__",version);
 fs.writeFileSync(stylePath,style);
 const mainPath="./assets/js/main.js";
-fs.writeFileSync(mainPath,fs.readFileSync(mainPath,"utf8").replaceAll("./stock-entry.js?v=__APP_VERSION__","./stock-entry.js?v="+version).replaceAll("./warning-view.js?v=__APP_VERSION__","./warning-view.js?v="+version).replaceAll("./accent-colors.js?v=__APP_VERSION__","./accent-colors.js?v="+version).replaceAll("./editable-table-grid.js?v=__APP_VERSION__","./editable-table-grid.js?v="+version));
+fs.writeFileSync(mainPath,fs.readFileSync(mainPath,"utf8").replaceAll("./stock-entry.js?v=__APP_VERSION__","./stock-entry.js?v="+version).replaceAll("./warning-view.js?v=__APP_VERSION__","./warning-view.js?v="+version).replaceAll("./accent-colors.js?v=__APP_VERSION__","./accent-colors.js?v="+version).replaceAll("./editable-table-grid.js?v=__APP_VERSION__","./editable-table-grid.js?v="+version).replaceAll("./table-filters.js?v=__APP_VERSION__","./table-filters.js?v="+version));
 console.log("Version injected:", version);
