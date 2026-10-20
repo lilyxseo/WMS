@@ -4803,6 +4803,15 @@ async function saveEditableTableChanges(scope,patches,acknowledge){
  }
  logActivitySafe({action:'GRID_EDIT',module:scope,detail:`Menyimpan ${patches.length} perubahan sel`,status:'SUCCESS'});
 }
+function applyMovementDraftChanges(scope,patches){
+ if(scope!=='movement-session'||!canCrud()||!MOVEMENT_STATE.sessionActive||MOVEMENT_STATE.submitting)throw Error('Sesi movement tidak tersedia.');
+ if(patches.some(({target})=>!MOVEMENT_STATE.sessionItems.includes(target.rowRef)))throw Error('Baris movement berubah. Pilih ulang barang.');
+ patches.forEach(({target,value})=>target.validate?.(String(value)));
+ const previous=patches.map(({target})=>({target,value:target.rowRef[target.field]}));
+ patches.forEach(({target,value})=>{target.rowRef[target.field]=target.number?(String(value).trim()===''?'':Number(value)):String(value);});
+ if(!persistInventoryDraft('movement')){previous.forEach(({target,value})=>target.rowRef[target.field]=value);throw Error('Draft belum tersimpan. Periksa penyimpanan browser.');}
+ const button=document.getElementById('mvSubmitBtn');if(button)button.disabled=!canSubmitMovement()||MOVEMENT_STATE.submitting;
+}
 function editableTableActionScope(target){
  if(target.closest('#ccSubmitBtn,[data-cc-action="remove"]'))return 'cycle-session';
  if(target.closest('#mvSubmitBtn,[data-mvm-action="remove"]'))return 'movement-session';
@@ -4816,7 +4825,7 @@ function editableTableActionScope(target){
 }
 let editableTablesController,tableFiltersController;
 function setupEditableTableGrid(){
- if(editableTablesController)return;editableTablesController=mountEditableTables({root:document.getElementById('mainContentPages'),describe:describeEditableTableCell,save:saveEditableTableChanges,canEdit:canCrud,notify:toast,confirm:showConfirmModal,owner:inventoryDraftOwner,actionScope:editableTableActionScope});
+ if(editableTablesController)return;editableTablesController=mountEditableTables({root:document.getElementById('mainContentPages'),describe:describeEditableTableCell,save:saveEditableTableChanges,canEdit:canCrud,notify:toast,confirm:showConfirmModal,owner:inventoryDraftOwner,actionScope:editableTableActionScope,immediateDraft:scope=>scope==='movement-session',applyDraft:applyMovementDraftChanges});
  tableFiltersController=mountTableFilters(document.getElementById('mainContentPages'));
  window.addEventListener('auth:logout',()=>{editableTablesController?.reset();tableFiltersController?.reset();});
 }

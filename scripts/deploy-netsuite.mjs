@@ -19,25 +19,26 @@ console.log('NetSuite table and private accuracy query deployed.');
 
 const checks=await sql("select c.relrowsecurity and has_table_privilege('service_role','public.netsuite','INSERT') and not has_table_privilege('authenticated','public.netsuite','SELECT') as ready from pg_class c where c.oid='public.netsuite'::regclass");
 if(!checks[0]?.ready)throw Error('NetSuite schema verification failed');
-stage='website-endpoint';
-let available=false;
-for(let attempt=0;attempt<30;attempt++){
- const response=await fetch('https://www.gotoliving.app/api/sync/inventory/netsuite',{method:'POST',signal:AbortSignal.timeout(15000)});
- if(response.status===401){available=true;break;}
- await new Promise(resolve=>setTimeout(resolve,3000));
-}
-if(!available)throw Error('NetSuite website endpoint has not deployed');
-stage='initial-dispatch';
-const dispatched=await sql('select public.dispatch_netsuite_sync() as id'),id=Number(dispatched[0]?.id);
-if(!Number.isSafeInteger(id))throw Error('NetSuite initial sync dispatch failed');
-stage='initial-result';
 let result;
-for(let attempt=0;attempt<50;attempt++){
- const response=await sql(`select status_code,content from net._http_response where id=${id}`);
- if(response.length){const body=JSON.parse(response[0].content||'{}');if(response[0].status_code!==200||!body.success)throw Error(`NetSuite initial sync failed: ${body.reason||response[0].status_code}`);result=body;break;}
- await new Promise(resolve=>setTimeout(resolve,2000));
+for(let deploymentAttempt=0;deploymentAttempt<12&&!result;deploymentAttempt++){
+ stage='initial-dispatch';
+ const dispatched=await sql('select public.dispatch_netsuite_sync() as id'),id=Number(dispatched[0]?.id);
+ if(!Number.isSafeInteger(id))throw Error('NetSuite initial sync dispatch failed');
+ stage='initial-result';
+ let settled=false;
+ for(let attempt=0;attempt<50;attempt++){
+  const response=await sql(`select status_code,content from net._http_response where id=${id}`);
+  if(response.length){
+   settled=true;let body;try{body=JSON.parse(response[0].content||'{}');}catch{body={};}
+   if(response[0].status_code===200&&body.success){result=body;break;}
+   if([404,405,503].includes(response[0].status_code)){await new Promise(resolve=>setTimeout(resolve,5000));break;}
+   throw Error(`NetSuite initial sync failed: ${body.reason||response[0].status_code}`);
+  }
+  await new Promise(resolve=>setTimeout(resolve,2000));
+ }
+ if(!settled)throw Error('NetSuite initial sync has not confirmed');
 }
-if(!result)throw Error('NetSuite initial sync has not confirmed');
+if(!result)throw Error('NetSuite website endpoint has not deployed');
 stage='schedule';
 await sql("select cron.schedule('inventory-netsuite','20,50 * * * *','select public.dispatch_netsuite_sync()')");
 const health=await sql("select jsonb_build_object('rows',(select count(*) from public.netsuite),'sources',(select jsonb_agg(jsonb_build_object('source',source,'status',status,'last_success_at',last_success_at)) from public.inventory_sync_status where source in ('netsuite','kartu_stok')),'schedule',(select schedule from cron.job where jobname='inventory-netsuite'),'ready',(public.inventory_netsuite_accuracy()->'ready')) as health");
