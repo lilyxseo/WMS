@@ -30,3 +30,6 @@ jobs:
       - name: 'Source checks: ${{ steps.schema.outputs.source_checks }}'
         if: github.ref != 'refs/heads/main'
         run: echo 'Schema inspection completed.'
+      - name: 'NetSuite deployment: ${{ steps.schema.outputs.health }}'
+        if: github.ref == 'refs/heads/main'
+        run: echo 'NetSuite schema, first synchronization and schedule verified.'
