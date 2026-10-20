@@ -43,3 +43,6 @@ jobs:
       - name: 'Deployment failure: ${{ steps.schema.outputs.failure }}'
         if: always() && steps.schema.outcome == 'failure'
         run: exit 1
+      - name: 'Source report: ${{ steps.schema.outputs.source_report }}'
+        if: always() && github.ref != 'refs/heads/main'
+        run: echo 'Read-only Google report validation.'
