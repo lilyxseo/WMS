@@ -19,7 +19,8 @@ console.log('NetSuite table and private accuracy query deployed.');
 
 const checks=await sql("select c.relrowsecurity and has_table_privilege('service_role','public.netsuite','INSERT') and not has_table_privilege('authenticated','public.netsuite','SELECT') as ready from pg_class c where c.oid='public.netsuite'::regclass");
 if(!checks[0]?.ready)throw Error('NetSuite schema verification failed');
-let result;
+const previous=await sql("select status,last_success_at,locked_at,(select count(*) from public.netsuite) as rows from public.inventory_sync_status where source='netsuite'");
+let result=previous[0]?.status==='success'&&previous[0]?.last_success_at&&!previous[0]?.locked_at&&Number(previous[0]?.rows)>0?{success:true}:null;
 for(let deploymentAttempt=0;deploymentAttempt<20&&!result;deploymentAttempt++){
  if(deploymentAttempt){const status=await sql("select status,last_success_at,locked_at from public.inventory_sync_status where source='netsuite'");if(status[0]?.status==='success'&&status[0]?.last_success_at&&!status[0]?.locked_at){result={success:true};break;}}
  stage='initial-dispatch';
@@ -33,6 +34,7 @@ for(let deploymentAttempt=0;deploymentAttempt<20&&!result;deploymentAttempt++){
    settled=true;let body;try{body=JSON.parse(response[0].content||'{}');}catch{body={};}
    if(response[0].status_code===200&&body.success){result=body;break;}
    if([404,405,503].includes(response[0].status_code)||(response[0].status_code===409&&body.reason==='SYNC_ALREADY_RUNNING')){await new Promise(resolve=>setTimeout(resolve,5000));break;}
+   if(response[0].status_code===null){for(let retry=0;retry<30;retry++){const status=await sql("select status,last_success_at,locked_at from public.inventory_sync_status where source='netsuite'");if(status[0]?.status==='success'&&status[0]?.last_success_at&&!status[0]?.locked_at){result={success:true};break;}if(status[0]?.status==='error')break;await new Promise(resolve=>setTimeout(resolve,2000));}if(result)break;}
    throw Error(`NetSuite initial sync failed: ${body.reason||response[0].status_code}`);
   }
   await new Promise(resolve=>setTimeout(resolve,2000));
