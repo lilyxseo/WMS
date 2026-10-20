@@ -49,7 +49,7 @@ html[data-accent] #page-balikan-store .balikan-location-item:hover:not(:disabled
 
 /* Data remains neutral; accents communicate selection and primary actions. */
 html[data-theme="light"] body{--bg:#f8fafc;--panel:#fff;--panel-soft:#f1f5f9;--text:#172033;--muted:#526176;--line:#dbe2ec}
-html[data-accent] .workspace-table thead th{color:var(--muted)}
+html[data-accent] #mainContentPages table thead th{color:var(--primary)!important}
 html[data-accent] .workspace-table tbody td{color:var(--text)}
 html[data-accent] .workspace-table .ui-col-number{font-variant-numeric:tabular-nums}
 html[data-accent] #page-dashboard .metric-delta--out{color:var(--muted)}
