@@ -2636,3 +2636,38 @@ html[data-accent] .account-card .account-profile-link strong{color:var(--text)}
 #statsReference{font-size:11px;line-height:1.7;color:var(--muted)}
 #page-stats .stats-toolbar{flex-wrap:wrap}
 @media(max-width:800px){#page-stats #statsCards{grid-template-columns:repeat(2,minmax(0,1fr))}#page-stats #statsCards>.metric:last-child{grid-column:1/-1}}
+/* Reject workspace uses the same compact ledger and input grid language. */
+#page-barang-reject .reject-page-header{align-items:center;gap:14px}
+#page-barang-reject .reject-meta{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 14px;color:var(--muted)}
+#page-barang-reject .reject-dashboard-cards{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px}
+#page-barang-reject .reject-dashboard-cards .metric{padding:14px;min-width:0}
+#page-barang-reject .reject-dashboard-cards small{font-size:10px;color:var(--muted)}
+#page-barang-reject .reject-dashboard-cards .v{margin:8px 0;font-size:24px}
+#page-barang-reject .reject-stock-panel,#page-barang-reject .reject-recent{padding:14px;min-width:0}
+.reject-stock-toolbar{display:grid;grid-template-columns:minmax(0,1fr) 160px;gap:8px;margin:12px 0}
+.reject-stock-toolbar input,.reject-stock-toolbar select{min-width:0;width:100%;margin:0}
+#page-barang-reject .reject-stock-table{max-height:380px}
+#page-barang-reject .reject-stock-table table{min-width:700px;table-layout:auto}
+.reject-recent-grid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}
+.reject-recent .table-wrap{max-height:300px}.reject-recent table{min-width:800px}
+.reject-recent td small{display:block;color:var(--muted);font-size:10px;margin-top:4px;white-space:normal;min-width:180px}
+.reject-chart-details{border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:12px}
+.reject-chart-details summary{cursor:pointer;font-weight:600;font-size:12px}
+#page-barang-reject .reject-movement-toolbar{display:grid;grid-template-columns:minmax(220px,1fr) 145px 145px 150px auto;gap:8px;margin:12px 0}
+#page-barang-reject .reject-movement-toolbar input,#page-barang-reject .reject-movement-toolbar select{min-width:0;width:100%;margin:0;height:38px}
+#page-barang-reject .reject-table-wrap table{table-layout:auto;min-width:1850px}
+#page-barang-reject .reject-table-wrap td{vertical-align:middle;max-width:300px;min-width:80px;white-space:normal;line-height:1.5}
+#page-barang-reject .reject-table-wrap td:nth-child(5){min-width:240px}
+#page-barang-reject .reject-table-wrap td:nth-child(6){text-align:right;font-variant-numeric:tabular-nums}
+#page-barang-reject .reject-pager{gap:10px;flex-wrap:wrap}
+#page-barang-reject .reject-pager .row{align-items:center;gap:8px}
+#rejectEntryApp{min-width:0}#rejectEntryApp .stock-entry-scroll{max-height:60dvh}#rejectEntryApp .stock-entry-grid th{white-space:nowrap}#rejectEntryApp .stock-entry-grid td{padding:0;max-width:none}#rejectEntryApp .stock-entry-grid input{margin:0}#rejectEntryApp .stock-entry-grid input[data-col="9"],#rejectEntryApp .stock-entry-grid input[data-col="10"],#rejectEntryApp .stock-entry-grid input[data-col="11"]{min-width:140px}
+@media(max-width:1000px){#page-barang-reject .reject-movement-toolbar{grid-template-columns:repeat(2,minmax(0,1fr))}#page-barang-reject .reject-movement-toolbar>input:first-child{grid-column:1/-1}#page-barang-reject .reject-dashboard-cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){#page-barang-reject .reject-page-header{align-items:flex-start;flex-direction:column}#page-barang-reject .reject-page-title-row{align-items:flex-start;gap:10px;flex-direction:column}.reject-stock-toolbar{grid-template-columns:1fr}#page-barang-reject .reject-movement-toolbar input{font-size:16px}#page-barang-reject .reject-pager{align-items:flex-start;flex-direction:column}#page-barang-reject .reject-pager .row{flex-wrap:wrap}#page-barang-reject .reject-dashboard-cards .metric{padding:11px}#page-barang-reject .reject-dashboard-cards .k{font-size:11px}#page-barang-reject .reject-dashboard-cards .v{font-size:21px}}
+
+#rejectEntryApp .entry-col-statusBarang,#rejectEntryApp .entry-col-noIseller,#rejectEntryApp .entry-col-netsuite,#rejectEntryApp .entry-col-keteranganLainnya,#rejectEntryApp .entry-col-statusProses,#rejectEntryApp .entry-col-lokasiSuratJalan,#rejectEntryApp .entry-col-stckoutReject{width:160px;min-width:140px}
+
+#page-barang-reject .reject-table-wrap thead th{color:var(--primary)!important;background:var(--panel)!important;border-color:var(--line)!important;box-shadow:none!important}
+#page-barang-reject .reject-table-wrap{background:var(--panel);border-color:var(--line)}
+#page-barang-reject .reject-movement-toolbar input,#page-barang-reject .reject-movement-toolbar select{padding:8px 10px;background:var(--input-bg,var(--panel));border:1px solid var(--line);border-radius:10px;color:var(--text)}
+.sku-detail-delete{color:var(--danger,#ef4444);white-space:nowrap}.sku-detail-delete:hover{background:color-mix(in srgb,var(--danger,#ef4444) 12%,transparent)}

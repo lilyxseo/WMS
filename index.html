@@ -300,6 +300,7 @@
           <div class="sidebar-submenu" id="submenu-barang-reject" data-menu-panel="barang-reject">
             <button class="side-link nav-item submenu-item" data-page="barang-reject-dashboard" data-route="/barang-reject" title="Dashboard Reject"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></button>
             <button class="side-link nav-item submenu-item" data-page="barang-reject-masuk" data-route="/barang-reject/masuk" title="Barang Masuk Reject"><i data-lucide="package-plus"></i><span>Barang Masuk</span></button>
+            <button class="side-link nav-item submenu-item" data-page="barang-reject-input" data-route="/barang-reject/input" title="Form Input Reject"><i data-lucide="table-2"></i><span>Form Input</span></button>
             <button class="side-link nav-item submenu-item" data-page="barang-reject-keluar" data-route="/barang-reject/keluar" title="Barang Keluar Reject"><i data-lucide="package-minus"></i><span>Barang Keluar</span></button>
           </div>
         </section>
@@ -309,7 +310,6 @@
           </button>
           <div class="sidebar-submenu" id="submenu-sistem" data-menu-panel="sistem">
             <button class="side-link nav-item submenu-item" data-page="activity-log" data-route="/activity-log" title="Activity Log"><i data-lucide="scroll-text"></i><span>Activity Log</span></button>
-            <button class="side-link nav-item submenu-item" data-page="tools-dev" data-route="/tools-dev" title="Tools Dev"><i data-lucide="wrench"></i><span>Tools Dev</span></button>
             <a class="side-link nav-item submenu-item apk-download-link" href="assets/goto.apk" download title="Download APK"><svg class="android-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5-1.5-2M16 5l1.5-2M6 9h12M5 10v7a2 2 0 0 0 2 2h1v2M19 10v7a2 2 0 0 1-2 2h-1v2M5 11H3v5M19 11h2v5M8 19h8M9 7h.01M15 7h.01" /></svg><span>Download APK</span></a>
             <button class="side-link nav-item submenu-item" data-page="settings" data-route="/settings" title="Pengaturan"><i data-lucide="settings"></i><span>Pengaturan</span></button>
           </div>
@@ -395,27 +395,6 @@
     <section id="page-sku-notes" class="panel page hidden"><h3 class="page-title">Semua Catatan</h3><div id="allSkuNotesApp"></div></section>
     <section id="page-activity-log" class="panel page hidden"><h3 class="page-title">Activity Log</h3><div id="activityLogApp"></div></section>
 
-    <section id="page-tools-dev" class="panel page hidden">
-      <h3 class="page-title">Tools Dev</h3>
-      <div class="settings-layout dev-tools-layout">
-        <article class="card settings-card dev-tool-card">
-          <div class="settings-head"><i data-lucide="refresh-cw"></i><h4>Auto Refresh Data</h4></div>
-          <p class="settings-desc">Jalankan refresh data berulang untuk kebutuhan preview, development, atau admin. Auto refresh tidak aktif otomatis saat halaman dibuka.</p>
-          <div class="settings-grid settings-grid--cache">
-            <label class="settings-item" for="devAutoRefreshInterval"><small>Interval refresh</small><strong><input id="devAutoRefreshInterval" class="search-lg" type="number" min="5" step="1" value="30" inputmode="numeric"> detik</strong></label>
-            <div class="settings-item"><small>Status</small><strong id="devAutoRefreshStatus">Stopped</strong></div>
-            <div class="settings-item"><small>Last refresh time</small><strong id="devAutoRefreshLastTime">-</strong></div>
-            <div class="settings-item"><small>Total refresh count</small><strong id="devAutoRefreshCountValue">0</strong></div>
-            <div class="settings-item"><small>Last error</small><strong id="devAutoRefreshLastError">-</strong></div>
-          </div>
-          <div class="row settings-actions">
-            <button class="btn-primary" id="devAutoRefreshStart" type="button">Start Auto Refresh</button>
-            <button class="btn-ghost" id="devAutoRefreshStop" type="button">Stop Auto Refresh</button>
-          </div>
-          <small class="settings-note">Refresh berikutnya hanya dijadwalkan setelah proses sebelumnya selesai, sehingga tidak ada fetch paralel.</small>
-        </article>
-      </div>
-    </section>
     
     <section id="page-sheet-input" class="panel page hidden"><h3 class="page-title">Form Input</h3><p class="subtitle">Input Barang Masuk dan Barang Keluar seperti spreadsheet.</p><div id="stockEntryApp"></div></section>
 

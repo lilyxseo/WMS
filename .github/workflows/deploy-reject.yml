@@ -1,0 +1,26 @@
+name: Deploy Reject workspace
+on:
+  push:
+    branches: [main, feat/reject-workspace]
+    paths: ['scripts/deploy-reject.mjs', 'supabase/migrations/20261020010000_reject_workspace.sql', '.github/workflows/deploy-reject.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: reject-schema
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - id: schema
+        run: node scripts/deploy-reject.mjs ${{ github.ref != 'refs/heads/main' && '--inspect' || '' }}
+        env:
+          SUPABASE_PROJECT_REF: udullprykzdskrxmbbkj
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      - name: 'Reject schema: ${{ steps.schema.outputs.result }}'
+        run: echo 'Schema validation completed.'

@@ -8,7 +8,7 @@ test('failed Reject read stops after one request, keeps error, and permits expli
  let requests=0,toasts=0;
  const context=vm.createContext({
   BARANG_REJECT_STATE:{stock:[],masuk:[],keluar:[],error:''},isBarangRejectLoading:false,lastBarangRejectFetchAt:0,
-  Date,queueMicrotask,getBarangRejectCache:()=>null,isBarangRejectCacheFresh:()=>false,
+  authRequestGeneration:1,Date,queueMicrotask,getBarangRejectCache:()=>null,isBarangRejectCacheFresh:()=>false,
   getActivePage:()=> 'dashboard',document:{getElementById:()=>{throw Error('Hidden page rendered');}},
   fetch:async()=>{requests++;return {ok:false,json:async()=>({message:'Refresh token ditolak'})};},
   logActivitySafe:()=>{},isBarangRejectQuotaError:()=>false,toast:()=>toasts++

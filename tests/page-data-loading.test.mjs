@@ -15,7 +15,7 @@ class Element {
  addEventListener(){}remove(){if(this.parent)this.parent.children=this.parent.children.filter(x=>x!==this);}
 }
 function routeFixture(){
- const pages=new Map(['dashboard','search','stats','abc-analisis','stok-minus','cycle-count','movement','balikan-store','activity-log','settings','tools-dev','import-pdf-transfer','sheet-input','anomaly'].map(name=>[name,new Element()]));
+ const pages=new Map(['dashboard','search','stats','abc-analisis','stok-minus','cycle-count','movement','balikan-store','activity-log','settings','import-pdf-transfer','sheet-input','anomaly'].map(name=>[name,new Element()]));
  for(const root of pages.values()){root.classes.add('hidden');root.innerHTML='<h3>Judul</h3><input class="control">';}
  const pending=new Map(),events=[];
  const ctx=vm.createContext({console:{error(){}},window:{__isDataReady:false},document:{getElementById:id=>pages.get(id.replace('page-','')),querySelectorAll:selector=>selector==='.page'?[...pages.values()]:[],createElement:()=>new Element()},LOADED_DETAIL_PAGES:new Set(),DASHBOARD_SUMMARY:{},SEARCH_STATE:{minChars:2},getActivePage:()=>[...pages].find(([,root])=>!root.classes.has('hidden'))?.[0],syncBalikanShortcutListeners(){},setupBalikanEntry(){},closeScannerModal(){},syncActiveSidebarParent(){},invalidateInactiveTransactionRequests(){},setMainContentLoading(){},pageLog(){},renderState(){},restoreSearchResults(){},loadDetailPageData:page=>{events.push('load:'+page);return new Promise((resolve,reject)=>pending.set(page,{resolve,reject}));}});
@@ -44,7 +44,7 @@ test('data failures settle the loading state and retry without hiding controls',
  f.pending.get('cycle-count').resolve();await tick();assert.equal(f.pages.get('cycle-count').querySelector(),null);
 });
 test('independent page structures never start full-table hydration',async()=>{
- for(const page of ['settings','anomaly','activity-log','tools-dev','import-pdf-transfer','sheet-input']){
+ for(const page of ['settings','anomaly','activity-log','import-pdf-transfer','sheet-input']){
   const f=routeFixture();f.ctx.showPage(page);await tick();assert.deepEqual(f.events,['render:'+page]);
  }
 });
@@ -72,7 +72,7 @@ test('cached Stock Aging rows remain visible during a background refresh',()=>{
 });
 test('Reject loading preserves the transaction toolbar and column headings',()=>{
  const root=new Element(),state={activeTab:'masuk',loading:true,lastSync:0,stock:[],masuk:[],keluar:[],filters:{masukSearch:''}};
- const ctx=vm.createContext({getActivePage:()=> 'barang-reject',BARANG_REJECT_STATE:state,REJECT_IN_COLUMNS:[['SKU'],['Qty']],document:{getElementById:id=>id==='barangRejectApp'?root:new Element(),querySelectorAll:()=>[]},window:{},getBarangRejectNavPage:()=>'',canCrud:()=>true,syncActiveSidebarParent(){},ensureBarangRejectLoaded(){},renderRejectToolbar:()=>'<input id="rejectSearch">',orderRejectSheetRows:r=>r,paginateReject:r=>r,thRejectStatic:x=>`<th>${x}</th>`,rejectPager:()=>'',bindBarangRejectEvents(){},esc:x=>x});
+ const ctx=vm.createContext({getActivePage:()=> 'barang-reject',rejectEntryController:null,filteredRejectRows:()=>[],BARANG_REJECT_STATE:state,REJECT_IN_COLUMNS:[['SKU'],['Qty']],document:{getElementById:id=>id==='barangRejectApp'?root:new Element(),querySelectorAll:()=>[]},window:{},getBarangRejectNavPage:()=>'',canCrud:()=>true,syncActiveSidebarParent(){},ensureBarangRejectLoaded(){},renderRejectToolbar:()=>'<input id="rejectSearch">',orderRejectSheetRows:r=>r,paginateReject:r=>r,thRejectStatic:x=>`<th>${x}</th>`,rejectPager:()=>'',bindBarangRejectEvents(){},esc:x=>x});
  vm.runInContext(between('function renderDataSkeletonRows','function renderPageDataStatus'),ctx);
  vm.runInContext(between('function renderRejectIn','function renderRejectOut'),ctx);
  vm.runInContext(between('function renderBarangRejectPage','\n',),ctx);
