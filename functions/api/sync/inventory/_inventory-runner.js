@@ -2,6 +2,7 @@ import { syncKartuStok } from './_kartu-stok-service.js';
 import { syncBarangMasuk } from './_barang-masuk-service.js';
 import { syncBarangKeluar } from './_barang-keluar-service.js';
 import { syncRpl } from './_rpl-service.js';
+import { syncNetsuite } from './_netsuite-service.js';
 import { syncBulky } from './_bulky-service.js';
 
 export const INVENTORY_SYNC_SOURCES = Object.freeze([
@@ -10,6 +11,7 @@ export const INVENTORY_SYNC_SOURCES = Object.freeze([
   ['barang_keluar', syncBarangKeluar],
   ['rpl', syncRpl],
   ['bulky', syncBulky],
+  ['netsuite', syncNetsuite],
 ]);
 
 export async function runInventorySync(env, dependencies = {}) {

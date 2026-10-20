@@ -4,6 +4,7 @@ export const DATABASE_SOURCES=Object.freeze([
  {key:'barang_keluar',syncKey:'barangKeluar',label:'Barang Keluar'},
  {key:'rpl',syncKey:'rpl',label:'RPL'},
  {key:'bulky',syncKey:'bulky',label:'BULKY'},
+ {key:'netsuite',syncKey:'netsuite',label:'NetSuite'},
 ]);
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
 export function databaseSyncDate(value){const date=new Date(value);return value&&!Number.isNaN(date.getTime())?new Intl.DateTimeFormat('id-ID',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Jakarta'}).format(date)+' WIB':'Belum pernah sinkron';}

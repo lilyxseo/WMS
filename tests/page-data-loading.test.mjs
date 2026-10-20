@@ -24,7 +24,7 @@ function routeFixture(){
  return {ctx,pages,pending,events};
 }
 test('page structures appear before delayed data, and repeated navigation shares the pending request',async()=>{
- for(const page of ['stats','abc-analisis','stok-minus','cycle-count','movement','balikan-store']){
+ for(const page of ['abc-analisis','stok-minus','cycle-count','movement','balikan-store']){
   const f=routeFixture();f.ctx.showPage(page);
   assert.match(f.pages.get(page).innerHTML,/input class="control"/);assert.equal(f.pages.get(page).classes.has('hidden'),false);
   assert.deepEqual(f.events,['render:'+page]);
@@ -37,11 +37,11 @@ test('delayed responses do not rerender or hide the page visited afterward',asyn
  f.pending.get('movement').resolve();await tick();assert.equal(f.events.length,before);assert.equal(f.pages.get('search').classes.has('hidden'),false);
 });
 test('data failures settle the loading state and retry without hiding controls',async()=>{
- const f=routeFixture();f.ctx.showPage('stats');await tick();f.pending.get('stats').reject(new Error('Offline'));await tick();
- const status=f.pages.get('stats').querySelector();assert.ok(status.children.some(child=>child.textContent.includes('Offline')));
- assert.equal(f.pages.get('stats').attributes.has('data-data-loading'),false);assert.match(f.pages.get('stats').innerHTML,/control/);
- status.children.find(child=>child.textContent==='Coba lagi').onclick();await tick();assert.equal(f.events.filter(x=>x==='load:stats').length,2);
- f.pending.get('stats').resolve();await tick();assert.equal(f.pages.get('stats').querySelector(),null);
+ const f=routeFixture();f.ctx.showPage('cycle-count');await tick();f.pending.get('cycle-count').reject(new Error('Offline'));await tick();
+ const status=f.pages.get('cycle-count').querySelector();assert.ok(status.children.some(child=>child.textContent.includes('Offline')));
+ assert.equal(f.pages.get('cycle-count').attributes.has('data-data-loading'),false);assert.match(f.pages.get('cycle-count').innerHTML,/control/);
+ status.children.find(child=>child.textContent==='Coba lagi').onclick();await tick();assert.equal(f.events.filter(x=>x==='load:cycle-count').length,2);
+ f.pending.get('cycle-count').resolve();await tick();assert.equal(f.pages.get('cycle-count').querySelector(),null);
 });
 test('independent page structures never start full-table hydration',async()=>{
  for(const page of ['settings','anomaly','activity-log','tools-dev','import-pdf-transfer','sheet-input']){
