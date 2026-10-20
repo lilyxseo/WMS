@@ -7,6 +7,7 @@ const SOURCES = Object.freeze({
   kartuStokVersion: 'inventory_kartu_stok',
   rplVersion: 'inventory_rpl',
   bulkyVersion: 'inventory_bulky',
+  netsuiteVersion: 'netsuite',
 });
 
 function json(body, status = 200) {
@@ -31,7 +32,7 @@ export async function handleInventoryVersionRequest({ request, env }) {
   if (!(await getRequestRole(request, env))) return json({ success: false, message: 'Sesi tidak valid' }, 401);
   try {
     const config = getSecretSupabaseConfig(env);
-    const entries = await Promise.all(Object.entries(SOURCES).map(async ([name, table]) => [name, await sourceVersion(config, table)]));
+    const entries = await Promise.all(Object.entries(SOURCES).map(async ([name, table]) => [name, await sourceVersion(config, table).catch(error=>{if(name==='netsuiteVersion')return 'unavailable';throw error;})]));
     const versions = Object.fromEntries(entries);
     return json({ ...versions, updatedAt: new Date().toISOString() });
   } catch (error) {

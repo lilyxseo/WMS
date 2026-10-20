@@ -8,6 +8,7 @@ const SOURCE_NAMES = Object.freeze({
   barang_keluar: 'barangKeluar',
   rpl: 'rpl',
   bulky: 'bulky',
+  netsuite: 'netsuite',
 });
 
 function safeFailure(error) {

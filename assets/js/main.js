@@ -168,7 +168,7 @@ return isActivityLogAllowed();
 }
 window.currentUser=getCurrentUser();
 const nativeFetch=window.fetch.bind(window);
-const AUTHENTICATED_INVENTORY_PATHS=new Set(['/api/dashboard-summary','/api/dashboard-recent-transactions','/api/dashboard-monthly-insight','/api/movement/summary','/api/inventory-sync-status','/api/inventory-version','/api/sync/inventory/all','/api/sync/inventory/kartu-stok','/api/sync/inventory/barang-masuk','/api/sync/inventory/barang-keluar','/api/sync/inventory/rpl','/api/sync/inventory/bulky','/api/kartu-stok','/api/barang-masuk','/api/barang-keluar','/api/rpl','/api/bulky','/api/inventory-sku-detail','/api/sku-notes','/api/barcode-lookup']);
+const AUTHENTICATED_INVENTORY_PATHS=new Set(['/api/dashboard-summary','/api/dashboard-recent-transactions','/api/dashboard-monthly-insight','/api/movement/summary','/api/inventory-sync-status','/api/inventory-version','/api/inventory-accuracy','/api/sync/inventory/netsuite','/api/sync/inventory/all','/api/sync/inventory/kartu-stok','/api/sync/inventory/barang-masuk','/api/sync/inventory/barang-keluar','/api/sync/inventory/rpl','/api/sync/inventory/bulky','/api/kartu-stok','/api/barang-masuk','/api/barang-keluar','/api/rpl','/api/bulky','/api/inventory-sku-detail','/api/sku-notes','/api/barcode-lookup']);
 window.fetch=async(input,init={})=>{
   const url=typeof input==='string'?input:String(input?.url||'');
   if(url.startsWith('/api/')){
@@ -694,6 +694,7 @@ void bootApplication();
 }
 window.addEventListener("auth:logout",async()=>{
 const logoutIdentity=currentUserIdentity();
+STATS_STATE.controller?.abort();STATS_STATE._normalizedRows=null;STATS_STATE.loadedAt=0;STATS_STATE.loading=false;STATS_STATE.promise=null;
 ++authRequestGeneration;
 document.getElementById('assetStoreEditor')?.remove();document.getElementById('profileForm')?.reset();
 cancelStartupPrefetch();
@@ -851,6 +852,7 @@ if(page==="detail"){return;}
 if(page==="locations"){setMainContentLoading(false);renderLocationsPage();return;}
 if(page==="sku-notes"){setMainContentLoading(false);renderAllSkuNotesPage({refresh:true});return;}
 if(page==="stock-aging"){renderStockAgingPage();return;}
+if(page==="stats"){void updateStats();return;}
 if(page==="search"){pageLog('CariData','init');restoreSearchResults();return;}
 if(page==="arsip"){pageLog('Arsip','init');renderArchivePage();return;}
 if(page==="profile"){loadPersonalProfile();return;}
@@ -858,7 +860,7 @@ if(page==="asset-store"){pageLog('Asset','init');renderAssetStorePage();return;}
 if(page==="barang-masuk"||page==="barang-keluar"){setMainContentLoading(false);loadDetailPageData(page).then(()=>{LOADED_DETAIL_PAGES.add(page);window.__isDataReady=true;}).catch(err=>{if(err?.name!=="AbortError")console.error("Transaction page load failed",err);});return;}
 if(page==='dashboard'&&!DASHBOARD_SUMMARY){pageLog('Dashboard','init');setMainContentLoading(false);void loadDashboardPayload().catch(err=>console.error('Dashboard revalidation failed',err));}
 // Render controls and headings before any inventory hydration starts.
-const dataPages=['stats','abc-analisis','stok-minus','cycle-count','movement','balikan-store'];
+const dataPages=['abc-analisis','stok-minus','cycle-count','movement','balikan-store'];
 if(dataPages.includes(page)&&!LOADED_DETAIL_PAGES.has(page)&&!PAGE_DATA_LOADS.get(page)?.promise)PAGE_DATA_LOADS.set(page,{loading:true,error:'',promise:null});
 rerenderCurrentPage({force:true});
 if(['dashboard','settings','anomaly','activity-log','sku-notes','tools-dev','import-pdf-transfer','sheet-input'].includes(page))return;
@@ -1639,6 +1641,7 @@ setRefreshIndicator(true,'Memperbarui data...');
 try{
 if(page==='barang-masuk'&&changed.includes('barangMasukVersion')){TRANSACTION_PAGE_CACHE.clearSource('barang_masuk');await loadTransactionTablePage('in',{page:TABLE_STATE.in.page,force:true,background:true});}
 else if(page==='barang-keluar'&&changed.includes('barangKeluarVersion')){TRANSACTION_PAGE_CACHE.clearSource('barang_keluar');await loadTransactionTablePage('out',{page:TABLE_STATE.out.page,force:true,background:true});}
+else if(page==='stats'&&changed.some(key=>['kartuStokVersion','netsuiteVersion'].includes(key))){await updateStats({force:true});}
 else if(page==='dashboard'){await loadDashboardPayload();}
 else if(page==='anomaly'){await refreshAnomalyInBackground();}
 else if(page==='detail'&&currentSku){await showDetail(currentSku,{background:true});}
@@ -2250,24 +2253,18 @@ const qty=parseNumber(getVal(row,["qty"]));
 const tanggal=getVal(row,["tanggal","date","created at","waktu"])||"-";
 return{sku,nama,qty,tanggal,type,sheet,row};
 }
-const STATS_STATE={page:1,pageSize:25,searchInputValue:"",debouncedSearchValue:"",sort:"absDesc",isFiltering:false,_normalizedRows:null,_debounceTimer:null,_idleTimer:null,_computeToken:0,_sourceHash:"",_lastRenderHash:"",_pendingRaf:0};
-const STATS_CACHE_KEY="statsAccuracyCacheV1";
-
-function getStatsSourceRows(){return [...(DATA["RPL"]||[]),...(DATA["BULKY"]||[])].filter(r=>clean(getVal(r,["sku"])));}
-function getStatsSourceHash(rows){return `${rows.length}|${rows.map(r=>`${getVal(r,["sku"])}|${getVal(r,["lokasi"])}|${getVal(r,["selisih","selisih kartu stok","selisih kartu stock","selisih kartu stok vs iseller","selisih kartu stok vs netsuite"])}|${getVal(r,["nama barang","nama"])}|${getVal(r,["stok bulky"])}|${getVal(r,["stok retail"])}|${getVal(r,["stok global","kartu stok","stok kartu","stok kartu stok"])}|${getVal(r,["status"])}|${getVal(r,["ns dan iseller","iseller vs netsuite"])}`).join("~")}`;}
-function getStatsCache(){try{const raw=localStorage.getItem(STATS_CACHE_KEY);if(!raw)return null;const parsed=JSON.parse(raw);return parsed&&Array.isArray(parsed.normalizedRows)?parsed:null;}catch(_){return null;}}
-function saveStatsCache(payload){try{localStorage.setItem(STATS_CACHE_KEY,JSON.stringify(payload));}catch(_){}}
-function computeStatsFromNormalized(normRows){const totalSku=normRows.length,skuAkurat=normRows.filter(r=>r.selisih===0).length,skuTidakAkurat=totalSku-skuAkurat,akurasi=totalSku?((skuAkurat/totalSku)*100):0,selisihTotal=normRows.reduce((n,r)=>n+r.selisih,0);return {totalSku,skuAkurat,skuTidakAkurat,akurasi,selisihTotal};}
-function renderStatsSummaryFromComputed(summary){statsCards.innerHTML=[["Total SKU",summary.totalSku,""],["Akurat (%)",`${summary.akurasi.toFixed(2)}%`,"ok"],["Tidak Akurat",summary.skuTidakAkurat,"err"],["Selisih Total",summary.selisihTotal,"warn"]].map(c=>`<div class='metric ${c[2]||""}'><div class='k'>${c[0]}</div><div class='v'>${esc(c[1])}</div></div>`).join("");}
-function hashNormalizedRows(rows){return JSON.stringify(rows.map(r=>[r.sku,r.nama,r.selisih,r.lokasiText]));}
-function buildNormalizedStatsRowsAsync(sourceRows,token){return new Promise(resolve=>{const bySku=new Map();let i=0;const step=()=>{if(token!==STATS_STATE._computeToken)return resolve(null);const end=Math.min(i+400,sourceRows.length);for(;i<end;i++){const r=sourceRows[i];const sel=parseNumber(getVal(r,["selisih","selisih kartu stok","selisih kartu stock","selisih kartu stok vs iseller","selisih kartu stok vs netsuite"]));const lokasi=getVal(r,["lokasi"])||"-";const sku=getVal(r,["sku"])||"-";const nama=getVal(r,["nama barang","nama"])||"-";const key=clean(sku);if(!key)continue;if(!bySku.has(key))bySku.set(key,{sku,nama,lokasiSet:new Set(),selisih:0,selisihAbs:0});const it=bySku.get(key);if(it.nama==="-"&&nama!=="-")it.nama=nama;if(lokasi&&lokasi!=="-")it.lokasiSet.add(String(lokasi));it.selisih+=Number(sel)||0;it.selisihAbs=Math.abs(it.selisih);}if(i<sourceRows.length){setTimeout(step,0);return;}const aggregated=[...bySku.values()].map(r=>({...r,lokasi:[...r.lokasiSet],lokasiText:[...r.lokasiSet].length?[...r.lokasiSet].join(", "):"-",_searchText:clean(`${r.sku} ${r.nama} ${[...r.lokasiSet].join(", ")}`)}));resolve(aggregated);};setTimeout(step,0);});}
-function renderStatsLayoutSkeleton(){if(document.getElementById("statsTbody"))return;statsChart.innerHTML=`<div class='mv-toolbar stats-toolbar'>
+const STATS_STATE={page:1,pageSize:25,searchInputValue:"",debouncedSearchValue:"",sort:"absDesc",status:"all",isFiltering:false,_normalizedRows:null,_debounceTimer:null,_idleTimer:null,loading:false,loadedAt:0,promise:null,controller:null};
+function computeStatsFromNormalized(rows){const compared=rows.filter(row=>row.selisih!==null),accurate=compared.filter(row=>row.selisih===0).length;return {totalSku:rows.length,skuAkurat:accurate,skuTidakAkurat:compared.length-accurate,unknown:rows.length-compared.length,akurasi:compared.length?accurate/compared.length*100:null,selisihTotal:compared.reduce((sum,row)=>sum+Math.abs(row.selisih),0)};}
+function renderStatsSummaryFromComputed(summary){statsCards.innerHTML=[["Total SKU",summary.totalSku,""],["Akurat (%)",summary.akurasi===null?'—':`${summary.akurasi.toFixed(2)}%`,"ok"],["SKU Selisih",summary.skuTidakAkurat,"err"],["Belum dibandingkan",summary.unknown,"warn"],["Total Selisih Absolut",summary.selisihTotal,"warn"]].map(([label,value,kind])=>`<div class="metric ${kind}"><div class="k">${label}</div><div class="v">${esc(value)}</div></div>`).join('');}
+function renderStatsLayoutSkeleton(){if(document.getElementById("statsTbody"))return;statsChart.innerHTML=`<p class='subtitle'>Total stok akhir Kartu Stok per SKU dibandingkan saldo akhir NetSuite. Akurasi dihitung hanya untuk SKU dengan saldo lengkap di kedua sumber.</p><p id='statsReference' class='subtitle' role='status'></p><div class='mv-toolbar stats-toolbar'>
 <label class='stats-search-field'><span>Cari SKU / Nama / Lokasi</span><input id='statsSearch' placeholder='Ketik kata kunci...' value='${esc(STATS_STATE.searchInputValue)}'></label>
-<select id='statsSort' aria-label='Urutkan data'><option value='absDesc'>Selisih terbesar</option><option value='absAsc'>Selisih terkecil</option><option value='sku'>SKU A-Z</option></select>
+<select id='statsStatus' aria-label='Status akurasi'><option value='all'>Semua status</option><option value='mismatch'>Selisih</option><option value='match'>Akurat</option><option value='unknown'>Belum dibandingkan</option></select><select id='statsSort' aria-label='Urutkan data'><option value='absDesc'>Selisih terbesar</option><option value='absAsc'>Selisih terkecil</option><option value='sku'>SKU A-Z</option></select>
 <select id='statsSize' aria-label='Jumlah data per halaman'><option value='25'>25 / halaman</option><option value='50'>50 / halaman</option><option value='100'>100 / halaman</option></select><small id='statsFilterState' class='stats-filtering-indicator'>Memuat data...</small></div>
-<div class='stats-table-shell'><div class='table-wrap table-wrap-full stats-table-wrap'><table><thead><tr><th>LOKASI</th><th>SKU</th><th>NAMA BARANG</th><th>SELISIH</th><th>AKSI</th></tr></thead><tbody id='statsTbody'><tr><td colspan='5'><div class='state'>Memuat akurasi stok...</div></td></tr></tbody></table></div></div>
+<div class='stats-table-shell'><div class='table-wrap table-wrap-full stats-table-wrap'><table><thead><tr><th>LOKASI</th><th>SKU</th><th>NAMA BARANG</th><th>KARTU STOK</th><th>NETSUITE</th><th>SELISIH</th><th>STATUS</th><th>AKSI</th></tr></thead><tbody id='statsTbody'><tr><td colspan='8'><div class='state'>Memuat akurasi stok...</div></td></tr></tbody></table></div></div>
 <div class='mv-pagination stats-pagination'><span id='statsPagingText'>Menampilkan 0 dari 0 data</span><div class='row'><button class='btn-ghost' id='statsPrev'>Prev</button><button class='btn-ghost' id='statsNext'>Next</button></div></div>`;
 document.getElementById("statsSearch")?.addEventListener("input",e=>{STATS_STATE.searchInputValue=e.target.value;clearTimeout(STATS_STATE._debounceTimer);STATS_STATE._debounceTimer=setTimeout(scheduleStatsFilter,350);renderStatsFilteringState();});
+document.getElementById("statsStatus").value=STATS_STATE.status;
+document.getElementById("statsStatus").onchange=event=>{STATS_STATE.status=event.target.value;STATS_STATE.page=1;updateStatsTableOnly();};
 document.getElementById("statsSort")&&(document.getElementById("statsSort").value=STATS_STATE.sort);
 document.getElementById("statsSize")&&(document.getElementById("statsSize").value=String(STATS_STATE.pageSize));
 document.getElementById("statsSort")?.addEventListener("change",e=>{STATS_STATE.sort=e.target.value;updateStatsTableOnly();});
@@ -2286,27 +2283,35 @@ function getFilteredStatsRows(){
   const rows=STATS_STATE._normalizedRows||[];
   const q=clean(STATS_STATE.debouncedSearchValue||"");
   const sorter={absDesc:(a,b)=>b.selisihAbs-a.selisihAbs,absAsc:(a,b)=>a.selisihAbs-b.selisihAbs,sku:(a,b)=>a.sku.localeCompare(b.sku)};
-  return [...rows.filter(r=>!q||r._searchText.includes(q))].sort(sorter[STATS_STATE.sort]||sorter.absDesc);
+  return rows.filter(r=>(!q||q.split(/\s+/).every(token=>r._searchText.includes(token)))&&(STATS_STATE.status==='all'||(STATS_STATE.status==='unknown'?r.selisih===null:STATS_STATE.status==='match'?r.selisih===0:r.selisih!==null&&r.selisih!==0))).sort((a,b)=>a.selisih===null&&b.selisih!==null?1:b.selisih===null&&a.selisih!==null?-1:(sorter[STATS_STATE.sort]||sorter.absDesc)(a,b));
 }
 function updateStatsTableOnly(){
   const tableRows=getFilteredStatsRows();
   const maxPage=Math.max(1,Math.ceil(tableRows.length/STATS_STATE.pageSize));if(STATS_STATE.page>maxPage)STATS_STATE.page=maxPage;
   const paged=tableRows.slice((STATS_STATE.page-1)*STATS_STATE.pageSize,STATS_STATE.page*STATS_STATE.pageSize);
   const tbody=document.getElementById("statsTbody");const paging=document.getElementById("statsPagingText");
-  if(tbody)tbody.innerHTML=paged.map(r=>`<tr class='${r.selisih!==0?"row-mismatch":""}'><td title='${encAttr(r.lokasiText)}'>${esc(r.lokasiText)}</td><td>${esc(r.sku)}</td><td><div class='nama-barang'>${esc(r.nama)}</div></td><td class='${r.selisih!==0?"txt-danger":""}'>${r.selisih}</td><td class='action-cell'><button class='detail-mini-btn' type='button' onclick="navigateToSku(decodeURIComponent('${encAttr(r.sku)}'))">Lihat SKU</button></td></tr>`).join("")||`<tr><td colspan='5'><div class='state'>Tidak ada data.</div></td></tr>`;
+  if(tbody)tbody.innerHTML=paged.map(r=>`<tr class='${r.selisih!==null&&r.selisih!==0?"row-mismatch":""}'><td title='${encAttr(r.lokasiText)}'>${esc(r.lokasiText)}</td><td>${esc(r.sku)}</td><td><div class='nama-barang'>${esc(r.nama)}</div></td><td>${r.stok_kartu??'—'}</td><td>${r.stok_netsuite??'—'}</td><td class='${r.selisih!==null&&r.selisih!==0?"txt-danger":""}'>${r.selisih??'—'}</td><td>${esc(r.status)}</td><td class='action-cell'><button class='detail-mini-btn' type='button' onclick="navigateToSku(decodeURIComponent('${encAttr(r.sku)}'))">Lihat SKU</button></td></tr>`).join("")||`<tr><td colspan='8'><div class='state'>Tidak ada data.</div></td></tr>`;
+  document.getElementById('statsPrev').disabled=STATS_STATE.page<=1;document.getElementById('statsNext').disabled=STATS_STATE.page>=maxPage;
   if(paging)paging.textContent=`Menampilkan ${(tableRows.length?((STATS_STATE.page-1)*STATS_STATE.pageSize+1):0)}–${Math.min(STATS_STATE.page*STATS_STATE.pageSize,tableRows.length)} dari ${tableRows.length} data`;
 }
-function updateStats(){
-const rows=getStatsSourceRows();
-renderStatsLayoutSkeleton();
-if(!rows.length){const pending=PAGE_DATA_LOADS.get('stats')?.loading;statsCards.innerHTML=pending?renderMetricPlaceholders(['Total SKU','Akurat (%)','Tidak Akurat','Selisih Total']):'';const tb=document.getElementById("statsTbody");if(tb)tb.innerHTML=pending?renderDataSkeletonRows(5):"<tr><td colspan='5'><div class='state'>Sheet RPL/BULKY belum ada data.</div></td></tr>";const pg=document.getElementById("statsPagingText");if(pg)pg.textContent="Menampilkan 0 dari 0 data";return;}
-const sourceHash=getStatsSourceHash(rows);STATS_STATE._sourceHash=sourceHash;
-const cache=getStatsCache();
-if(cache&&cache.sourceHash===sourceHash){STATS_STATE._normalizedRows=cache.normalizedRows;renderStatsSummaryFromComputed(computeStatsFromNormalized(cache.normalizedRows));updateStatsTableOnly();renderStatsFilteringState();}
-else if(cache&&Array.isArray(cache.normalizedRows)&&cache.normalizedRows.length){STATS_STATE._normalizedRows=cache.normalizedRows;renderStatsSummaryFromComputed(computeStatsFromNormalized(cache.normalizedRows));updateStatsTableOnly();const fs=document.getElementById("statsFilterState");if(fs)fs.textContent="Menampilkan cache, sinkronisasi data terbaru...";}
-else{statsCards.innerHTML=renderMetricPlaceholders(['Total SKU','Akurat (%)','Tidak Akurat','Selisih Total']);}
-const token=++STATS_STATE._computeToken;
-buildNormalizedStatsRowsAsync(rows,token).then(latest=>{if(!latest||token!==STATS_STATE._computeToken)return;const newHash=hashNormalizedRows(latest);if(newHash===STATS_STATE._lastRenderHash){const fs=document.getElementById("statsFilterState");if(fs)fs.textContent="";return;}STATS_STATE._normalizedRows=latest;STATS_STATE._lastRenderHash=newHash;renderStatsSummaryFromComputed(computeStatsFromNormalized(latest));updateStatsTableOnly();renderStatsFilteringState();saveStatsCache({sourceHash,normalizedRows:latest,cachedAt:Date.now()});});
+async function updateStats({force=false}={}){
+ renderStatsLayoutSkeleton();
+ if(STATS_STATE.loading)return STATS_STATE.promise;
+ if(!force&&STATS_STATE._normalizedRows&&Date.now()-STATS_STATE.loadedAt<60000){renderStatsSummaryFromComputed(computeStatsFromNormalized(STATS_STATE._normalizedRows));updateStatsTableOnly();return;}
+ const owner=authRequestGeneration,controller=new AbortController();STATS_STATE.controller=controller;STATS_STATE.loading=true;
+ const reference=document.getElementById('statsReference');if(reference)reference.textContent='Memuat perbandingan Kartu Stok dan NetSuite…';
+ if(!STATS_STATE._normalizedRows){statsCards.innerHTML=renderMetricPlaceholders(['Total SKU','Akurat (%)','SKU Selisih','Belum dibandingkan','Total Selisih Absolut']);document.getElementById('statsTbody').innerHTML=renderDataSkeletonRows(8);}
+ STATS_STATE.promise=(async()=>{try{
+  const {res,data}=await fetchJsonSafe('/api/inventory-accuracy',{cache:'no-store',signal:controller.signal});
+  if(owner!==authRequestGeneration)return;
+  if(!res.ok||!data?.success)throw Error(data?.message||'Akurasi stok belum dapat dimuat.');
+  if(!data.ready)throw Error('Perbandingan belum terverifikasi. Sinkronkan Kartu Stok dan NetSuite sampai kedua sumber berhasil.');
+  STATS_STATE._normalizedRows=data.rows.map(row=>({...row,lokasiText:row.lokasi_text,selisihAbs:row.selisih===null?0:Math.abs(row.selisih),_searchText:clean(`${row.sku} ${row.nama} ${row.lokasi_text}`)}));STATS_STATE.loadedAt=Date.now();
+  renderStatsSummaryFromComputed(computeStatsFromNormalized(STATS_STATE._normalizedRows));updateStatsTableOnly();
+  if(reference)reference.textContent=(data.sources||[]).map(source=>`${source.source==='netsuite'?'NetSuite':'Kartu Stok'} disinkronkan ${formatDateTime(source.last_success_at)}`).join(' · ')+(data.reportDates?.length?` · Tanggal laporan NetSuite: ${data.reportDates.join(', ')}`:' · Tanggal laporan NetSuite belum tersedia');
+ }catch(error){if(owner!==authRequestGeneration||error.name==='AbortError')return;STATS_STATE._normalizedRows=null;STATS_STATE.loadedAt=0;statsCards.innerHTML='';if(reference)reference.textContent=error.message;document.getElementById('statsTbody').innerHTML="<tr><td colspan='8'><div class='state'>Data belum dapat dibandingkan. Gunakan Refresh untuk mencoba lagi.</div></td></tr>";document.getElementById('statsPagingText').textContent='Menampilkan 0 dari 0 data';
+ }finally{if(owner===authRequestGeneration){STATS_STATE.loading=false;STATS_STATE.promise=null;renderStatsFilteringState();}}})();
+ return STATS_STATE.promise;
 }
 function normalizeDateKey(raw){
   const s=String(raw||"").trim();
@@ -2424,7 +2429,7 @@ async function refreshSearch(){if((SEARCH_STATE.inputValue||searchInput?.value||
 async function softRefreshArchive(){ARCHIVE_STATE.controller?.abort();ARCHIVE_STATE.requestId++;return refreshArchive();}
 async function softRefreshAsset(){ASSET_STORE_STATE.controller?.abort();ASSET_STORE_STATE.requestId++;return refreshAssetStore();}
 async function refreshBarangReject(){const result=await loadBarangRejectData({force:true,background:true});if(!result)throw new Error('Gagal memuat Barang Reject');}
-async function refreshAccuracy(){await refreshInventoryGroupFull();updateStats();}
+async function refreshAccuracy(){return updateStats({force:true});}
 async function refreshStokMinus(){await Promise.all([refreshInventoryGroupFull(),refreshTransaksiFull({render:false})]);localStorage.removeItem(STOK_MINUS_CACHE_KEY);refreshStokMinusInBackground();}
 async function refreshAbc(){await Promise.all([refreshInventoryGroupFull(),refreshTransaksiFull({render:false})]);return renderAbcAnalisisPage(true);}
 const SOFT_REFRESH_ROUTES={dashboard:refreshDashboard,'barang-masuk':refreshBarangMasuk,'barang-keluar':refreshBarangKeluar,locations:refreshLokasi,anomaly:refreshWarning,stats:refreshAccuracy,'stok-minus':refreshStokMinus,'abc-analisis':refreshAbc,'stock-aging':()=>loadStockAging(true),'cycle-count':refreshCycleCount,movement:refreshMovement,'balikan-store':refreshBalikanStore,detail:()=>refreshSkuDetail(currentSku),search:refreshSearch,arsip:softRefreshArchive,'asset-store':softRefreshAsset,'barang-reject':refreshBarangReject,'activity-log':renderActivityLogPage,'sku-notes':()=>{renderAllSkuNotesPage();return allSkuNotesController?.refresh();},profile:()=>loadPersonalProfile(),settings:()=>settingsDatabaseController?.refresh()};
@@ -2445,7 +2450,8 @@ const MANUAL_SYNC_SOURCES=Object.freeze([
 ['barangMasuk','/api/sync/inventory/barang-masuk'],
 ['barangKeluar','/api/sync/inventory/barang-keluar'],
 ['rpl','/api/sync/inventory/rpl'],
-['bulky','/api/sync/inventory/bulky']
+['bulky','/api/sync/inventory/bulky'],
+['netsuite','/api/sync/inventory/netsuite']
 ]);
 async function syncInventorySourcesForRefresh({onProgress=()=>{},onlySources,shouldContinue=()=>true}={}){
 const startedAt=Date.now(),sources={};
