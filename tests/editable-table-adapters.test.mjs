@@ -41,3 +41,9 @@ test('SKU detail edits retain source row references and submit optimistic checks
 test('SKU detail cannot save a draft after navigation replaced its source rows',async()=>{
  const f=fixture();f.ctx.SKU_DETAIL_EDIT_STATE={sku:'SKU1',rows:{in:[f.inbound],out:[]}};const patch=f.patch(f.cell({detailLedger:'in',row:'2',field:'qty'}),'8');f.ctx.SKU_DETAIL_EDIT_STATE.rows.in=[];await assert.rejects(f.save('sku-detail-in',[patch]),/Detail SKU berubah/);assert.equal(f.calls.length,0);
 });
+test('Movement draft edits apply and persist immediately without a transaction request',()=>{
+ const f=fixture();vm.runInContext(source.slice(source.indexOf('function applyMovementDraftChanges'),source.indexOf('function editableTableActionScope')),f.ctx);f.ctx.MOVEMENT_STATE.sessionActive=true;let persisted=0;f.ctx.persistInventoryDraft=()=>{persisted++;return true;};f.ctx.document={getElementById:()=>null};const target=f.ctx.describeEditableTableCell(f.cell({},[],{dataset:{mvm:'akt',idx:'0'}}));f.ctx.applyMovementDraftChanges('movement-session',[{target,value:'400'}]);assert.equal(f.ctx.MOVEMENT_STATE.sessionItems[0].stokAktual,400);assert.equal(persisted,1);assert.equal(f.calls.length,0);
+});
+test('Movement immediate edits preserve the prior draft when browser persistence fails',()=>{
+ const f=fixture();vm.runInContext(source.slice(source.indexOf('function applyMovementDraftChanges'),source.indexOf('function editableTableActionScope')),f.ctx);f.ctx.MOVEMENT_STATE.sessionActive=true;f.ctx.persistInventoryDraft=()=>false;const target=f.ctx.describeEditableTableCell(f.cell({},[],{dataset:{mvm:'akt',idx:'0'}}));assert.throws(()=>f.ctx.applyMovementDraftChanges('movement-session',[{target,value:'400'}]),/Draft belum tersimpan/);assert.equal(f.ctx.MOVEMENT_STATE.sessionItems[0].stokAktual,0);assert.equal(f.calls.length,0);
+});
