@@ -1,11 +1,13 @@
 name: Deploy NetSuite stock accuracy
 on:
   push:
-    branches: [main, feat/netsuite-accuracy, fix/movement-immediate-draft, fix/quick-sku-active-locations]
+    branches: [main, feat/netsuite-accuracy, fix/movement-immediate-draft, fix/quick-sku-active-locations, fix/netsuite-direct-sync]
     paths:
       - 'supabase/migrations/20261020000000_netsuite_accuracy.sql'
       - 'scripts/deploy-netsuite.mjs'
       - '.github/workflows/deploy-netsuite.yml'
+  schedule:
+    - cron: '20,50 * * * *'
   workflow_dispatch:
 permissions:
   contents: read
@@ -27,7 +29,8 @@ jobs:
         env:
           SUPABASE_PROJECT_REF: udullprykzdskrxmbbkj
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: node scripts/deploy-netsuite.mjs ${{ github.ref != 'refs/heads/main' && '--inspect' || '' }}
+          SHEET_ID_2026: ${{ secrets.SHEET_ID_2026 || vars.SHEET_ID_2026 }}
+        run: node scripts/deploy-netsuite.mjs ${{ github.ref != 'refs/heads/main' && '--inspect' || github.event_name == 'schedule' && '--sync' || '' }}
       - name: 'Source checks: ${{ steps.schema.outputs.source_checks }}'
         if: github.ref != 'refs/heads/main'
         run: echo 'Schema inspection completed.'
