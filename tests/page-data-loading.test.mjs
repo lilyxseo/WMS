@@ -91,12 +91,13 @@ test('independent inventory sources are fetched together without waiting for the
 class ActivityDom extends Element {
  set innerHTML(value){super.innerHTML=value;this.assignments=(this.assignments||0)+1;this.regions=new Map();this.controls=new Map();
   if(value.includes('activity-filters'))this.regions.set('.activity-filters',new Element());
-  for(const selector of ['.activity-summary','.activity-panel-heading > span','.activity-pagination','#activityDataError'])this.regions.set(selector,new Element());
+  for(const selector of ['.activity-filters','.activity-summary','.activity-panel-heading > span','.activity-pagination','#activityDataError'])this.regions.set(selector,new Element());
   const tbody=new Element();tbody.innerHTML=value.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/)?.[1]||'';this.regions.set('.activity-table-wrap tbody',tbody);
   for(const [,id] of value.matchAll(/id="([^"]+)"/g)){const el=new Element();el.value='';this.controls.set(id,el);}
  }
  get innerHTML(){return super.innerHTML;}
  querySelector(selector){return this.regions?.get(selector)||null;}
+ querySelectorAll(){return [];}
 }
 test('Activity Log shows controls while pending and updates only data without discarding filter drafts',async()=>{
  const root=new ActivityDom(),controls=new Map();let finish;
