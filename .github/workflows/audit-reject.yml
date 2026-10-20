@@ -1,0 +1,24 @@
+name: Inspect Reject spreadsheet
+on:
+  push:
+    branches: [feat/reject-workspace]
+    paths: ['scripts/audit-reject.mjs', '.github/workflows/audit-reject.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - id: inspect
+        run: node scripts/audit-reject.mjs
+        env:
+          SUPABASE_PROJECT_REF: udullprykzdskrxmbbkj
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          BARANG_REJECT_SHEET_ID: ${{ secrets.BARANG_REJECT_SHEET_ID || vars.BARANG_REJECT_SHEET_ID }}
+      - name: 'Reject headers: ${{ steps.inspect.outputs.report }}'
+        run: echo 'Source structure verified without modifying spreadsheet data.'
