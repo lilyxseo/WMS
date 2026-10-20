@@ -12,7 +12,7 @@ test('column presentation identifies quantities without treating dates, statuses
  assert.equal(context.workspaceColumnKind('SKU'),'sku');assert.equal(context.workspaceColumnKind('Lokasi / Sumber'),'location');
 });
 test('dashboard prioritizes operations and preserves every metric',()=>{
- const context=vm.createContext({esc});vm.runInContext(between('function dashboardMetricsMarkup','function updateDashboardAttention'),context);
+ const context=vm.createContext({esc});vm.runInContext(between('function dashboardMetricsMarkup','function updateDashboard(){'),context);
  const html=context.dashboardMetricsMarkup([{name:'Total SKU',value:5000},{name:'Barang Keluar',value:20},{name:'Barang Masuk',value:10},{name:'Stok Minus',value:2}]);
  assert.ok(html.indexOf('Barang Masuk')<html.indexOf('Barang Keluar'));assert.ok(html.indexOf('Stok Minus')<html.indexOf('Total SKU'));assert.equal((html.match(/class='metric'/g)||[]).length,4);assert.ok(html.includes('5.000'));
 });
