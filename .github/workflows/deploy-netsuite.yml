@@ -1,7 +1,7 @@
 name: Deploy NetSuite stock accuracy
 on:
   push:
-    branches: [main, feat/netsuite-accuracy]
+    branches: [main, feat/netsuite-accuracy, fix/movement-immediate-draft]
     paths:
       - 'supabase/migrations/20261020000000_netsuite_accuracy.sql'
       - 'scripts/deploy-netsuite.mjs'
@@ -22,6 +22,7 @@ jobs:
         with:
           node-version: '24'
       - id: schema
+        continue-on-error: true
         name: Inspect deployed schema or apply migration
         env:
           SUPABASE_PROJECT_REF: udullprykzdskrxmbbkj
@@ -33,3 +34,9 @@ jobs:
       - name: 'NetSuite deployment: ${{ steps.schema.outputs.health }}'
         if: github.ref == 'refs/heads/main'
         run: echo 'NetSuite schema, first synchronization and schedule verified.'
+      - name: 'Deployment state: ${{ steps.schema.outputs.deployment_state }}'
+        if: always() && github.ref != 'refs/heads/main'
+        run: echo 'Nonsecret deployment diagnostic.'
+      - name: 'Deployment failure: ${{ steps.schema.outputs.failure }}'
+        if: always() && steps.schema.outcome == 'failure'
+        run: exit 1
