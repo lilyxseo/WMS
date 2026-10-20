@@ -22,5 +22,18 @@ test('inventory search requests the fields needed by quick preview and frontend 
   const frontendSource = await readFile(new URL('../assets/js/main.js', import.meta.url), 'utf8');
   assert.match(apiSource, /sku,nama_barang,lokasi_bulky,stok_akhir/);
   assert.match(frontendSource, /item\.summary\?\.distribution/);
-  assert.match(frontendSource, /item\.summary\?\.locations/);
+  assert.match(frontendSource, /item\.summary\?\.locationStocks/);
+});
+
+test('quick preview lists only locations with positive current stock and combines duplicate location balances',()=>{
+ const item=groupInventorySearchRows([
+  {sku:'SKU',source:'Kartu Stock',qty:0,location:'ZERO'},
+  {sku:'SKU',source:'Kartu Stock',qty:-3,location:'NEGATIVE'},
+  {sku:'SKU',source:'Kartu Stock',qty:10,location:'CANCELLED'},
+  {sku:'SKU',source:'Kartu Stock',qty:-10,location:'CANCELLED'},
+  {sku:'SKU',source:'BULKY',qty:5,location:'ACTIVE'},
+  {sku:'SKU',source:'RPL',qty:-1,location:'active'},
+  {sku:'SKU',source:'Barang Masuk',qty:100,location:'HISTORY ONLY'},
+ ]).get('SKU');
+ assert.deepEqual(item.summary.locations,['ACTIVE']);assert.equal(item.summary.locationStocks.find(row=>row.location==='ACTIVE').qty,4);
 });

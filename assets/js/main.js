@@ -2034,14 +2034,15 @@ function buildQuickResultSummary(item){
 if(!item)return null;
 const sku=item.sku||"-",nama=item.nama||"-";
 const distribution={"Kartu Stock":0,RPL:0,BULKY:0};
-const lokasiSet=new Set(Array.isArray(item.summary?.locations)?item.summary.locations:[]);
+const locationTotals=new Map();
+const addLocation=(location,qty)=>{const label=String(location||'').trim();if(!label)return;const key=label.toUpperCase(),previous=locationTotals.get(key)||{location:label,qty:0};previous.qty+=parseNumber(qty);locationTotals.set(key,previous);};
+if(Array.isArray(item.summary?.locationStocks))item.summary.locationStocks.forEach(({location,qty})=>addLocation(location,qty));
 for(const sheet of Object.keys(distribution))distribution[sheet]=parseNumber(item.summary?.distribution?.[sheet]);
 (item.rows||[]).forEach(({sheet,row})=>{
 const loc=getVal(row,["lokasi","location","rak","bin","area","from","to"]);
-if(loc)lokasiSet.add(String(loc));
-if(Object.prototype.hasOwnProperty.call(distribution,sheet))distribution[sheet]+=sumRowQty(row,sheet);
+if(Object.prototype.hasOwnProperty.call(distribution,sheet)){const qty=sumRowQty(row,sheet);distribution[sheet]+=qty;addLocation(loc,qty);}
 });
-const locations=[...lokasiSet].filter(Boolean).sort((a,b)=>a.localeCompare(b));
+const locations=[...locationTotals.values()].filter(row=>row.qty>0).map(row=>row.location).sort((a,b)=>a.localeCompare(b));
 const totalQty=Object.values(distribution).reduce((n,v)=>n+(Number(v)||0),0);
 let status={label:"Stok Kritis",icon:"🔴",cls:"critical"};
 if(totalQty>=20)status={label:"Stok Aman",icon:"🟢",cls:"safe"};
@@ -2060,7 +2061,7 @@ const s=buildQuickResultSummary(item);if(!s)return;
 const locText=s.locations.length?s.locations.join(", "):"-";
 node.innerHTML=`<div class='quick-result-card' data-quick-sku='${encAttr(s.sku)}'>
   <div class='quick-main'><div class='quick-name'>📦 ${esc(s.nama)}</div><div class='quick-sku'>SKU: <strong>${esc(s.sku)}</strong></div><div class='quick-total'>Total Stok: <strong>${esc(s.totalQty)} pcs</strong></div></div>
-  <div class='quick-locations'><div class='quick-label'>Lokasi</div><div class='quick-location-text' title='${encAttr(locText)}'>${esc(locText)}</div><div class='quick-ops'><span>Total Lokasi: <strong>${s.totalLocations}</strong></span><span>Total Qty: <strong>${s.totalQty}</strong></span><span class='quick-stock-status ${s.status.cls}'>${s.status.icon} ${s.status.label}</span></div></div>
+  <div class='quick-locations'><div class='quick-label'>Lokasi stok aktif</div><div class='quick-location-text' title='${encAttr(locText)}'>${esc(locText)}</div><div class='quick-ops'><span>Total Lokasi: <strong>${s.totalLocations}</strong></span><span>Total Qty: <strong>${s.totalQty}</strong></span><span class='quick-stock-status ${s.status.cls}'>${s.status.icon} ${s.status.label}</span></div></div>
   <div class='quick-distribution'><div class='quick-label'>Distribusi</div><div>Kartu Stock : <strong>${esc(s.distribution["Kartu Stock"])} pcs</strong></div><div>RPL : <strong>${esc(s.distribution.RPL)} pcs</strong></div><div>BULKY : <strong>${esc(s.distribution.BULKY)} pcs</strong></div></div>
   <div class='quick-actions' aria-label='Action cepat'><button class='copy-mini-btn quick-icon-btn' type='button' title='Copy SKU' aria-label='Copy SKU' onclick="copyText(decodeURIComponent('${encAttr(s.sku)}'),'SKU disalin',this)">📋<span>SKU</span></button><button class='copy-mini-btn quick-icon-btn' type='button' title='Copy Nama Barang' aria-label='Copy Nama Barang' onclick="copyText(decodeURIComponent('${encAttr(s.nama)}'),'Nama barang disalin',this)">📋<span>Nama</span></button><button class='copy-mini-btn quick-icon-btn' type='button' title='Copy Semua Lokasi' aria-label='Copy Semua Lokasi' onclick="copyText(decodeURIComponent('${encAttr(locText)}'),'Lokasi disalin',this)">📋<span>Lokasi</span></button></div>
 </div>`;
