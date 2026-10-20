@@ -4,6 +4,7 @@ Berlaku untuk Barang Masuk/Keluar, Asset Store, kolom editable Balikan Store, hi
 
 - Klik sel untuk memilih; Enter, F2, atau klik dua kali untuk mengedit. Ketik langsung untuk mengganti isi.
 - Arrow/Tab berpindah sel. Shift+Arrow atau Shift+klik memilih rentang; drag juga didukung.
+- Shift+Spasi memilih baris; Ctrl+Spasi memilih kolom, mencakup data pada halaman yang tampil. Keduanya juga tersedia pada tabel baca saja (klik sel dulu), serta Form Input. Saat mengetik teks di editor tabel biasa, spasi tetap menjadi teks.
 - Ctrl+Arrow melompat ke batas data; Ctrl+Shift+Arrow memperluas rentang. Home/End dan Ctrl+Home/End tersedia.
 - Ctrl+C/X/V menyalin, memotong, dan menempel TSV pada halaman yang terlihat.
 - Ctrl+D mengisi dari atas; Ctrl+R mengisi dari kiri. Ctrl+Enter menerapkan nilai editor ke rentang.
