@@ -108,7 +108,7 @@ export function mountStockEntry(root,{owner,fetchFn=fetch,confirm,parsePdf,onErr
  function focus(row,col,extend=false,keep=false){
   const input=root.querySelector(`[data-entry-cell][data-row="${row}"][data-col="${col}"]`);if(!input)return;
   const previous=document.activeElement?.closest?.('[data-entry-cell]');
-  if(extend){const anchor=selection?.anchor||{row:Number(previous?.dataset.row??row),col:Number(previous?.dataset.col??col)};selection={anchor,active:{row,col}};}
+  if(extend){const anchor=selection?.anchor||{row:Number(previous?.dataset.row??row),col:Number(previous?.dataset.col??col)};selection=selection?.mode==='row'?{mode:'row',anchor:{row:anchor.row,col:0},active:{row,col:fields.length-1}}:selection?.mode==='column'?{mode:'column',anchor:{row:visibleOrder()[0],col:anchor.col},active:{row:visibleOrder().at(-1),col}}:{anchor,active:{row,col}};}
   else if(!keep)selection={anchor:{row,col},active:{row,col}};
   selectionMoving=true;input.focus();selectionMoving=false;if(input.type==='text')input.select();input.scrollIntoView({block:'nearest',inline:'nearest'});paintSelection();
  }
@@ -163,7 +163,7 @@ export function mountStockEntry(root,{owner,fetchFn=fetch,confirm,parsePdf,onErr
   const input=event.target.closest('[data-entry-cell]');if(!input||event.isComposing||busy||pending)return;
   if(!event.altKey&&(event.code==='Space'||event.key===' ')&&(event.shiftKey||event.ctrlKey||event.metaKey)){
    event.preventDefault();closeLookup();const order=visibleOrder(),point={row:order.indexOf(Number(input.dataset.row)),col:Number(input.dataset.col)},view=viewSelection(),b=view?selectionBounds(view):{top:point.row,bottom:point.row,left:point.col,right:point.col},column=event.ctrlKey||event.metaKey;
-   selection={anchor:{row:order[column?0:b.top],col:event.shiftKey?0:b.left},active:{row:order[column?order.length-1:b.bottom],col:event.shiftKey?fields.length-1:b.right}};paintSelection();return;
+   selection={mode:event.shiftKey&&column?'all':column?'column':'row',anchor:{row:order[column?0:b.top],col:event.shiftKey?0:b.left},active:{row:order[column?order.length-1:b.bottom],col:event.shiftKey?fields.length-1:b.right}};paintSelection();return;
   }
   if(!event.ctrlKey&&!event.metaKey&&!event.altKey&&['Backspace','Delete'].includes(event.key)&&selection){
    const view=viewSelection();if(!view)return;const bounds=selectionBounds(view);if(bounds.top!==bounds.bottom||bounds.left!==bounds.right){
