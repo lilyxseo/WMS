@@ -21,8 +21,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Inspect deployed schema or apply migration
+      - id: schema
+        name: Inspect deployed schema or apply migration
         env:
           SUPABASE_PROJECT_REF: udullprykzdskrxmbbkj
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: node scripts/deploy-netsuite.mjs ${{ github.ref != 'refs/heads/main' && '--inspect' || '' }}
+      - name: 'Source checks: ${{ steps.schema.outputs.source_checks }}'
+        if: github.ref != 'refs/heads/main'
+        run: echo 'Schema inspection completed.'
