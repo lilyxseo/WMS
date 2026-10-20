@@ -1,0 +1,28 @@
+name: Deploy NetSuite stock accuracy
+on:
+  push:
+    branches: [main, feat/netsuite-accuracy]
+    paths:
+      - 'supabase/migrations/20261020000000_netsuite_accuracy.sql'
+      - 'scripts/deploy-netsuite.mjs'
+      - '.github/workflows/deploy-netsuite.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: netsuite-schema
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Inspect deployed schema or apply migration
+        env:
+          SUPABASE_PROJECT_REF: udullprykzdskrxmbbkj
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: node scripts/deploy-netsuite.mjs ${{ github.ref != 'refs/heads/main' && '--inspect' || '' }}
