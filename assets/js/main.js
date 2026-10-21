@@ -1193,9 +1193,9 @@ refreshInventoryFull(),
 refreshRplFull(),
 refreshBulkyFull()
 ]);
-const parsedKartuStock=inventoryRes.status==='fulfilled'&&Array.isArray(inventoryRes.value?.["Kartu Stock"])?inventoryRes.value["Kartu Stock"]:[];
-const parsedRpl=rplRes.status==='fulfilled'&&Array.isArray(rplRes.value)?rplRes.value:[];
-const parsedBulky=bulkyRes.status==='fulfilled'&&Array.isArray(bulkyRes.value)?bulkyRes.value:[];
+const parsedKartuStock=inventoryRes.status==='fulfilled'&&Array.isArray(inventoryRes.value?.["Kartu Stock"])?inventoryRes.value["Kartu Stock"]:(DATA["Kartu Stock"]||[]);
+const parsedRpl=rplRes.status==='fulfilled'&&Array.isArray(rplRes.value)?rplRes.value:(DATA["RPL"]||[]);
+const parsedBulky=bulkyRes.status==='fulfilled'&&Array.isArray(bulkyRes.value)?bulkyRes.value:(DATA["BULKY"]||[]);
 DATA["Kartu Stock"]=parsedKartuStock;
 DATA["RPL"]=parsedRpl;
 DATA["BULKY"]=parsedBulky;
@@ -1203,15 +1203,17 @@ window.APP_STATE=window.APP_STATE||{};
 window.APP_STATE.inventory={"Kartu Stock":parsedKartuStock,"RPL":parsedRpl,"BULKY":parsedBulky};
 window.APP_STATE.data={...(window.APP_STATE.data||{}),...window.APP_STATE.inventory};
 console.log("MANUAL REFRESH APPLY INVENTORY",{kartuStock:parsedKartuStock.length,rpl:parsedRpl.length,bulky:parsedBulky.length});
-if(rplRes.status==='rejected')console.error('REFRESH ERROR RPL',rplRes.reason);
-if(bulkyRes.status==='rejected')console.error('REFRESH ERROR BULKY',bulkyRes.reason);
-return {inventoryRes,rplRes,bulkyRes,parsedKartuStock,parsedRpl,parsedBulky};
+const failures=[];
+if(inventoryRes.status==='rejected'){console.error('REFRESH ERROR KARTU STOK',inventoryRes.reason);failures.push(['Kartu Stok',inventoryRes.reason]);}
+if(rplRes.status==='rejected'){console.error('REFRESH ERROR RPL',rplRes.reason);failures.push(['RPL',rplRes.reason]);}
+if(bulkyRes.status==='rejected'){console.error('REFRESH ERROR BULKY',bulkyRes.reason);failures.push(['BULKY',bulkyRes.reason]);}
+return {inventoryRes,rplRes,bulkyRes,parsedKartuStock,parsedRpl,parsedBulky,failures};
 }
 async function syncData({force=false,silent=true}={}){
 if(REFRESH_STATE.isRefreshing||isSyncing){REFRESH_STATE.refreshQueue.push({force,silent,skippedAt:Date.now()});return REFRESH_STATE.refreshPromise||false;}
 isSyncing=true;
 setRefreshIndicator(true,"Refreshing...");
-if(!force&&!silent&&Object.keys(DATA).length===0){setStatus("loading","Memuat data dari Google Sheets...");setMainContentLoading(true);}
+if(!force&&!silent&&Object.keys(DATA).length===0){setStatus("loading","Memuat data dari API Supabase...");setMainContentLoading(true);}
 if(silent)setStatus("loading","Sinkronisasi...");
 try{
 const prevMasuk=Array.isArray(DATA["Barang Masuk"])?DATA["Barang Masuk"]:[];
@@ -1221,13 +1223,24 @@ const prevRpl=Array.isArray(DATA["RPL"])?DATA["RPL"]:[];
 const prevBulky=Array.isArray(DATA["BULKY"])?DATA["BULKY"]:[];
 const [inventorySyncRes,transaksiSyncRes]=await Promise.allSettled([
 refreshInventoryGroupFull(),
-refreshTransaksiFull({render:false}),
-refreshBalikanStoreFull({background:true,force:true})
+refreshTransaksiFull({render:false})
 ]);
 const nextMasuk=Array.isArray(window.APP_STATE?.barangMasuk)?window.APP_STATE.barangMasuk:prevMasuk;
 const nextKeluar=Array.isArray(window.APP_STATE?.barangKeluar)?window.APP_STATE.barangKeluar:prevKeluar;
 if(transaksiSyncRes?.status==='rejected')console.error('REFRESH ERROR TRANSAKSI',transaksiSyncRes.reason);
 const inventorySync=inventorySyncRes?.status==='fulfilled'?inventorySyncRes.value:null;
+const refreshFailures=[];
+if(inventorySyncRes.status==='rejected')refreshFailures.push(['Kartu Stok/RPL/BULKY',inventorySyncRes.reason]);
+else refreshFailures.push(...(inventorySync?.failures||[]));
+if(transaksiSyncRes.status==='rejected')refreshFailures.push(['Barang Masuk/Barang Keluar',transaksiSyncRes.reason]);
+else{
+if(transaksiSyncRes.value?.barangMasukRes?.status==='rejected')refreshFailures.push(['Barang Masuk',transaksiSyncRes.value.barangMasukRes.reason]);
+if(transaksiSyncRes.value?.barangKeluarRes?.status==='rejected')refreshFailures.push(['Barang Keluar',transaksiSyncRes.value.barangKeluarRes.reason]);
+}
+if(refreshFailures.length){
+const detail=refreshFailures.map(([source,error])=>`${source}: ${error?.message||String(error||'API gagal')}`).join(' | ');
+throw new Error(detail);
+}
 const nextKartu=Array.isArray(inventorySync?.parsedKartuStock)?inventorySync.parsedKartuStock:(Array.isArray(DATA["Kartu Stock"])?DATA["Kartu Stock"]:prevKartu);
 const nextRpl=Array.isArray(inventorySync?.parsedRpl)?inventorySync.parsedRpl:(Array.isArray(DATA["RPL"])?DATA["RPL"]:prevRpl);
 const nextBulky=Array.isArray(inventorySync?.parsedBulky)?inventorySync.parsedBulky:(Array.isArray(DATA["BULKY"])?DATA["BULKY"]:prevBulky);
@@ -1294,9 +1307,8 @@ setStatus('ok','');
 return true;
 }catch(err){
 apiConnected=false;updateApiState();
-const hasCache=!!(await loadCache());
-if(hasCache){setStatus('error','Gagal sync, memakai cache');return false;}
-setStatus('error','Gagal memuat data: '+err.message);renderError('results','Data belum berhasil dimuat');renderState('dashboardCards','Data belum berhasil dimuat');throw err;
+setStatus('error','Gagal memuat data Supabase: '+err.message);
+return false;
 }finally{
 isSyncing=false;
 REFRESH_STATE.refreshPromise=null;

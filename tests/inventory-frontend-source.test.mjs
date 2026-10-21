@@ -50,6 +50,15 @@ test('manual refresh keeps the non-migrated Balikan source on its existing loade
   assert.match(mainSource, /'balikan-store':refreshBalikanStore/);
 });
 
+test('inventory manual refresh only reads the five Supabase APIs and surfaces partial failures', () => {
+  const refreshPipeline = mainSource.slice(mainSource.indexOf('async function syncData'), mainSource.indexOf('function refreshTransaksiPageInBackground'));
+  assert.doesNotMatch(refreshPipeline, /refreshBalikanStoreFull|\/api\/sync\/inventory|sheets\.googleapis\.com/);
+  assert.match(refreshPipeline, /refreshInventoryGroupFull\(\)/);
+  assert.match(refreshPipeline, /refreshTransaksiFull\(\{render:false\}\)/);
+  assert.match(refreshPipeline, /if\(refreshFailures\.length\)/);
+  assert.match(refreshPipeline, /setStatus\('error','Gagal memuat data Supabase: '/);
+});
+
 test('login verifies its persisted session and migrated inventory fetches require auth', async () => {
   const authSource = await readFile(new URL('../assets/js/supabase.js', import.meta.url), 'utf8');
   assert.match(authSource, /JSON\.stringify\(\{ identifier, password \}\)/);
