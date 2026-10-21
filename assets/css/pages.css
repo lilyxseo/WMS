@@ -138,6 +138,18 @@
   .abc-to-menu{left:0;right:0;width:100%;max-height:min(52vh,420px)}
 }
 
+
+@media (max-width: 768px){
+  .mv-columns{max-height:70vh;padding:8px 10px 8px}
+  .mv-columns-head{padding:0 2px 4px}
+  .mv-columns-list{max-height:calc(70vh - 124px);gap:2px;padding-right:10px}
+  .mv-columns-list label{display:flex;align-items:center;gap:10px;min-height:48px;padding:6px 8px;font-size:12px;line-height:1.2}
+  .mv-columns-list input[type="checkbox"]{width:20px;height:20px;min-width:20px;flex:0 0 20px;margin:0}
+  .mv-columns-list label span{flex:1;min-width:0;padding-right:6px;word-break:break-word}
+  .mv-columns-list label em{font-size:8.5px;padding:1px 5px;line-height:1.2;white-space:nowrap}
+  .mv-columns-foot{position:sticky;bottom:0;background:var(--panel);padding:8px 0 0}
+}
+
 .search-modal-open #page-search.search-modal{
   position:fixed;
   inset:0;
