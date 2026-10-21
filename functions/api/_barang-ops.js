@@ -32,11 +32,21 @@ const res=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${ss}:batch
 
 // Optional optimistic check used by SKU detail edits, whose row references come
 // from the synchronized database rather than a fresh Google sheet read.
-export async function verifyTransactionRow({env,sheetName,rowNumber,expected}){
+export async function verifyTransactionRow({env,sheetName,rowNumber,expected,accessToken}){
  if(!expected||typeof expected!=='object'||typeof expected.sku!=='string'||!expected.cells||typeof expected.cells!=='object')throw Error('Snapshot transaksi tidak valid. Muat ulang detail SKU.');
- const access=await token(env),map=sheetName===SHEET_BARANG_KELUAR?BARANG_KELUAR_FIELD_MAP:FIELD_MAP,last=sheetName===SHEET_BARANG_KELUAR?'P':'O',range=`'${sheetName.replaceAll("'","''")}'!A${rowNumber}:${last}${rowNumber}`;
- const response=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${env.SHEET_ID_2026}/values/${encodeURIComponent(range)}`,{headers:{Authorization:`Bearer ${access}`},signal:AbortSignal.timeout(20000)}),data=await response.json();if(!response.ok)throw Error('Transaksi belum dapat diperiksa di Google Sheets.');const row=data.values?.[0]||[];
+ const access=accessToken||await token(env),map=sheetName===SHEET_BARANG_KELUAR?BARANG_KELUAR_FIELD_MAP:FIELD_MAP,last=sheetName===SHEET_BARANG_KELUAR?'P':'O',range=`'${sheetName.replaceAll("'","''")}'!A${rowNumber}:${last}${rowNumber}`;
+ let data;
+ for(let attempt=0;attempt<2;attempt++){try{const response=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${env.SHEET_ID_2026}/values/${encodeURIComponent(range)}`,{headers:{Authorization:`Bearer ${access}`},signal:AbortSignal.timeout(30000)});if(!response.ok){if(response.status===429||response.status>=500){if(attempt===0)continue;}throw Error('Transaksi belum dapat diperiksa di Google Sheets. Tidak ada perubahan disimpan.');}data=await response.json();break;}catch(error){if(attempt===0&&(error.name==='TimeoutError'||error.name==='AbortError'||error instanceof TypeError))continue;if(error.name==='TimeoutError'||error.name==='AbortError'||error instanceof TypeError)throw Error('Koneksi pemeriksaan Google Sheets terputus. Tidak ada perubahan disimpan. Draf tetap tersedia untuk dicoba kembali.');throw error;}}
+ const row=data.values?.[0]||[];
  if(String(row[3]??'').trim()!==expected.sku.trim())throw Error('SKU pada baris sumber berubah. Muat ulang detail sebelum mengedit.');
  const canonicalDate=value=>{const text=String(value??'').trim(),match=/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text);return match?`${match[3]}-${match[1].padStart(2,'0')}-${match[2].padStart(2,'0')}`:text;};
  for(const [field,value]of Object.entries(expected.cells)){if(!map[field])throw Error('Kolom snapshot tidak valid.');const current=row[map[field].charCodeAt(0)-65]??'',same=field==='tanggal'?canonicalDate(current)===canonicalDate(value):field==='qty'?Number(String(current).replaceAll(',',''))===Number(String(value).replaceAll(',','')):String(current).trim()===String(value??'').trim();if(!same)throw Error('Data transaksi berubah. Muat ulang detail sebelum mengedit.');}
+}
+
+export async function updateTransactionRows({env,sheetName,rowNumbers,updates,expectedRows}){
+ const rows=[...new Set(rowNumbers.map(Number))];if(!rows.length||rows.some(row=>!Number.isInteger(row)||row<2)||rows.length>500)throw Error('Nomor baris transaksi tidak valid (maksimal 500 baris).');
+ const access=await token(env);if(expectedRows)for(const rowNumber of rows)await verifyTransactionRow({env,sheetName,rowNumber,expected:expectedRows[rowNumber],accessToken:access});
+ const map=sheetName===SHEET_BARANG_KELUAR?BARANG_KELUAR_FIELD_MAP:FIELD_MAP,data=rows.flatMap(row=>Object.entries(updates).filter(([field])=>map[field]).map(([field,value])=>({range:`${sheetName}!${map[field]}${row}`,values:[[value??'']]})));
+ let response;try{response=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${env.SHEET_ID_2026}/values:batchUpdate`,{method:'POST',headers:{Authorization:`Bearer ${access}`,'Content-Type':'application/json'},body:JSON.stringify({valueInputOption:'USER_ENTERED',data}),signal:AbortSignal.timeout(60000)});}catch{throw Error('Penyimpanan belum terkonfirmasi. Periksa data Google Sheets sebelum mencoba kembali.');}
+ const result=await response.json().catch(()=>null);if(!response.ok||!result)throw Error('Penyimpanan Google Sheets belum terkonfirmasi. Periksa data sebelum mencoba kembali.');
 }
