@@ -374,8 +374,8 @@
 .insight-card{background:linear-gradient(180deg,#f7fafc,#fff);border:1px solid #e8edf4;border-radius:14px;padding:12px 14px;margin-bottom:12px}
 .insight-group h4{margin:6px 0;font-size:13px}
 .insight-group ul{list-style:none;padding:0;margin:0;display:grid;gap:6px}
-.insight-group li{display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.4}
-.insight-dot{color:#64748b;font-weight:700}
+.insight-group li{display:grid;grid-template-columns:14px minmax(0,1fr);column-gap:6px;align-items:start;font-size:13px;line-height:1.4}
+.insight-dot{display:block;color:#64748b;font-weight:700;line-height:1;margin-top:.12em;text-align:center}
 .insight-card strong{color:#0f766e}
 body.dark .insight-card{background:linear-gradient(180deg,#0f172a,#111827);border-color:#334155;color:#e2e8f0}
 body.dark .insight-group h4{color:#f8fafc}

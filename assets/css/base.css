@@ -187,6 +187,10 @@ textarea{resize:vertical;min-height:96px}
     .bar-row{display:grid;grid-template-columns:120px 1fr auto;gap:8px;align-items:center;margin:6px 0}
     .bar-fill{height:12px;border-radius:999px;background:linear-gradient(90deg,var(--primary-2),var(--primary))}
     .timeline{display:grid;gap:8px}.tl-item{border:1px solid var(--line);border-radius:12px;padding:10px;background:var(--panel-soft)}
+
+    .insight-group ul{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:6px}
+    .insight-group li{display:grid;grid-template-columns:14px minmax(0,1fr);align-items:start;column-gap:6px;line-height:1.45}
+    .insight-dot{display:block;line-height:1;text-align:center;margin-top:.12em}
     .dashboard-sections{display:grid;grid-template-columns:1fr;gap:16px;width:100%;max-width:100%}
     .dashboard-section{margin:16px 0}
     .dashboard-section .card{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:14px;display:grid;gap:12px;min-width:0}
