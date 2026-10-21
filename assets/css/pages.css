@@ -2720,3 +2720,25 @@ html[data-accent] .account-card .account-profile-link strong{color:var(--text)}
  .activity-modal dl>div{grid-template-columns:95px minmax(0,1fr);gap:10px}
 }
 @media(max-width:700px){#page-activity-log .activity-row-attention td:first-child{box-shadow:none}#page-activity-log .activity-table tr.activity-row-attention{border-left:3px solid var(--danger)}}
+
+/* Compact Reject input; other stock-entry forms retain their column sizes. */
+#rejectEntryApp .stock-entry-grid{width:100%;min-width:1050px;table-layout:fixed}
+#rejectEntryApp .stock-entry-grid thead th{height:30px;padding:5px 6px;font-size:10px;line-height:1.2;letter-spacing:0;text-transform:none}
+#rejectEntryApp .stock-entry-grid th:first-child{width:26px}
+#rejectEntryApp .stock-entry-grid th:last-child{width:26px}
+#rejectEntryApp .stock-entry-grid .entry-col-tanggal{width:85px}
+#rejectEntryApp .stock-entry-grid .entry-col-from,#rejectEntryApp .stock-entry-grid .entry-col-to{width:85px}
+#rejectEntryApp .stock-entry-grid .entry-col-sku{width:105px}
+#rejectEntryApp .stock-entry-grid .entry-col-namaBarang{width:180px}
+#rejectEntryApp .stock-entry-grid .entry-col-qty{width:45px}
+#rejectEntryApp .stock-entry-grid .entry-col-status{width:100px}
+#rejectEntryApp .stock-entry-grid .entry-col-pic{width:55px}
+#rejectEntryApp .stock-entry-grid .entry-col-keterangan{width:110px}
+#rejectEntryApp .stock-entry-grid .entry-col-noIseller{width:85px;min-width:0}
+#rejectEntryApp .stock-entry-grid .entry-col-keteranganLainnya{width:120px;min-width:0}
+#rejectEntryApp .stock-entry-grid :is(input,select),#rejectEntryApp .stock-entry-grid .entry-remove{height:30px;min-height:0;padding:4px 6px;font-size:11px;line-height:20px}
+#rejectEntryApp .stock-entry-grid .stock-entry-choice input{padding-right:18px}
+#rejectEntryApp .stock-entry-choice button{height:22px;top:4px;right:0;width:18px}
+#rejectEntryApp .stock-entry-grid input[data-col]{min-width:0}
+#rejectEntryApp .stock-entry-grid input[readonly]{color:var(--muted);cursor:default}
+#rejectEntryApp .stock-entry-grid td{height:30px;min-height:0;padding:0}
