@@ -2779,3 +2779,6 @@ html[data-accent] .account-card .account-profile-link strong{color:var(--text)}
 @keyframes notice-enter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @media(max-width:650px){#toast.toast{right:12px;left:12px;bottom:max(12px,env(safe-area-inset-bottom));width:auto}#toast .toast-item{padding:12px;gap:10px}#toast .toast-close{min-width:36px;min-height:36px}}
 @media(prefers-reduced-motion:reduce){#toast .toast-item{animation:none;transition:none}}
+/* Keep notifications below the application header. */
+#toast.toast{top:calc(var(--header-height,64px) + 12px + env(safe-area-inset-top,0px));bottom:auto;right:max(20px,env(safe-area-inset-right));left:auto}
+@media(max-width:650px){#toast.toast{top:calc(var(--header-height,64px) + 8px + env(safe-area-inset-top,0px));bottom:auto;right:12px;left:auto;width:min(390px,calc(100vw - 24px))}}
