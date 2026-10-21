@@ -1,3 +1,4 @@
+import { createNotifications } from './notifications.js?v=__APP_VERSION__';
 import { mountArchiveSourceManager } from './archive-source-manager.js?v=__APP_VERSION__';
 import { BUILTIN_ARCHIVE_SOURCES, archiveDeveloperRole } from './archive-source-config.js?v=__APP_VERSION__';
 import { mountBalikanEntry } from './balikan-entry.js?v=__APP_VERSION__';
@@ -690,6 +691,7 @@ const logoutIdentity=currentUserIdentity();
 rejectEntryController?.dispose();rejectEntryController=null;isBarangRejectLoading=false;BARANG_REJECT_STATE.loading=false;BARANG_REJECT_STATE.refreshing=false;REJECT_REQUEST_IDS.clear();
 STATS_STATE.controller?.abort();STATS_STATE._normalizedRows=null;STATS_STATE.loadedAt=0;STATS_STATE.loading=false;STATS_STATE.promise=null;
 ++authRequestGeneration;
+notificationCenter?.clear();
 archiveManagerController?.dispose();archiveManagerController=null;archiveSourcesPromise=null;archiveSourcesLoaded=false;archiveSourcesError='';++ARCHIVE_STATE.requestId;ARCHIVE_STATE.loadingList=false;ARCHIVE_STATE.loadingData=false;ARCHIVE_SOURCES.splice(0,ARCHIVE_SOURCES.length,...BUILTIN_ARCHIVE_SOURCES.map(source=>({...source})));ARCHIVE_STATE.selectedSpreadsheetKey='';ARCHIVE_STATE.selectedSheet='';ARCHIVE_STATE.cache={};ARCHIVE_STATE.sheetList=[];
 document.getElementById('assetStoreEditor')?.remove();document.getElementById('profileForm')?.reset();
 cancelStartupPrefetch();
@@ -2521,18 +2523,8 @@ return REFRESH_STATE.refreshPromise;
 function syncRefreshButton(){if(!refreshToggleHeader)return;refreshToggleHeader.innerHTML=`<i data-lucide="refresh-cw"></i>`;refreshToggleHeader.title="Refresh data manual";refreshToggleHeader.setAttribute("aria-label","Refresh data manual");if(window.lucide)lucide.createIcons();}
 function hideInitialLoader(){const ld=document.getElementById("initialLoader");if(ld)ld.remove();}
 function toggleCompact(){document.body.classList.toggle("compact");toast("Compact mode diubah");}
-function toast(msg,type="info",showClose=true){
- const container=document.getElementById('toast');if(!container)return;
- const kind=['success','error','warning','info'].includes(type)?type:'info',message=String(msg||'');
- const existing=[...container.children].find(item=>item.dataset.message===message&&item.dataset.kind===kind);
- if(existing){existing.classList.add('show');return;}
- while(container.children.length>=3)container.firstElementChild.remove();
- const item=document.createElement('div');item.className=`toast-item ${kind}`;item.dataset.message=message;item.dataset.kind=kind;item.setAttribute('role',kind==='error'?'alert':'status');
- item.innerHTML=`<span class="toast-icon" aria-hidden="true">${{success:'✓',error:'×',warning:'!',info:'i'}[kind]}</span><span class="toast-message">${esc(message)}</span>${showClose?'<button class="toast-close" aria-label="Tutup notifikasi" type="button">×</button>':''}`;
- container.appendChild(item);requestAnimationFrame(()=>item.classList.add('show'));
- let timer;const remove=()=>{clearTimeout(timer);item.classList.remove('show');setTimeout(()=>item.remove(),180);};
- const schedule=()=>{clearTimeout(timer);timer=setTimeout(remove,kind==='error'?7000:4000);};item.onmouseenter=()=>clearTimeout(timer);item.onmouseleave=schedule;item.onfocusin=()=>clearTimeout(timer);item.onfocusout=schedule;item.querySelector('.toast-close')?.addEventListener('click',remove);schedule();
-}
+let notificationCenter=null;
+function toast(msg,type="info",showClose=true){if(!notificationCenter){const root=document.getElementById('toast');if(!root)return;notificationCenter=createNotifications(root);}notificationCenter.show(msg,type,showClose);}
 
 function showConfirmModal({title='Konfirmasi',message='',confirmText='Ya',cancelText='Batal',type='default',allowHtmlMessage=false,onConfirm}={}){
   const root=document.getElementById('confirmModalRoot');
