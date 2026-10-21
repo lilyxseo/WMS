@@ -1,0 +1,54 @@
+name: Deploy server warning snapshot
+on:
+  push:
+    branches: [main, feat/server-warning-snapshot]
+    paths:
+      - 'supabase/functions/warning-snapshot/**'
+      - 'supabase/migrations/20261021000000_warning_snapshot.sql'
+      - 'functions/api/_warning*.js'
+      - 'functions/api/_inventory-warnings.js'
+      - 'functions/api/_movement-warning.js'
+      - 'scripts/deploy-warning-snapshot.mjs'
+      - '.github/workflows/deploy-warning-snapshot.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: warning-snapshot-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      SUPABASE_PROJECT_REF: udullprykzdskrxmbbkj
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test tests/*.test.mjs
+      - id: inspect
+        if: github.ref != 'refs/heads/main'
+        run: node scripts/deploy-warning-snapshot.mjs --inspect
+      - name: 'Warning health: ${{ steps.inspect.outputs.health }}'
+        if: github.ref != 'refs/heads/main'
+        run: echo 'Read-only synchronization health inspected.'
+      - name: 'Warning inspection: ${{ steps.inspect.outputs.result }}'
+        if: github.ref != 'refs/heads/main'
+        run: echo 'Read-only detector inspection completed.'
+      - if: github.ref == 'refs/heads/main'
+        run: node scripts/deploy-warning-snapshot.mjs --configure
+      - uses: supabase/setup-cli@v1
+        if: github.ref == 'refs/heads/main'
+        with:
+          version: '2.120.0'
+      - if: github.ref == 'refs/heads/main'
+        run: supabase functions deploy warning-snapshot --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
+      - id: publish
+        if: github.ref == 'refs/heads/main'
+        run: node scripts/deploy-warning-snapshot.mjs
+      - name: 'Stored warnings: ${{ steps.publish.outputs.result }}'
+        if: github.ref == 'refs/heads/main'
+        run: echo 'Persisted detection and scheduler verified.'
