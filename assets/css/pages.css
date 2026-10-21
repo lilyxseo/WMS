@@ -1778,6 +1778,16 @@ body.dark #outResults input[type='checkbox'][data-mv-select-all]{accent-color:va
 .mv-bulkbar.is-loading{opacity:.9}
 
 
+
+#page-abc-analisis button{
+  padding:8px 12px;
+}
+#page-abc-analisis #abcToSelectAll,
+#page-abc-analisis #abcToClear{
+  padding:6px 8px !important;
+}
+
+
 #page-abc-analisis .abc-action-btn{
   min-width:92px;
   min-height:36px;
