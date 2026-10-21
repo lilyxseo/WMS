@@ -2742,3 +2742,23 @@ html[data-accent] .account-card .account-profile-link strong{color:var(--text)}
 #rejectEntryApp .stock-entry-grid input[data-col]{min-width:0}
 #rejectEntryApp .stock-entry-grid input[readonly]{color:var(--muted);cursor:default}
 #rejectEntryApp .stock-entry-grid td{height:30px;min-height:0;padding:0}
+
+/* Warning results use the available page width, including when evidence opens. */
+#page-anomaly .anomaly-table-wrap{width:100%;height:auto;max-height:65dvh;min-height:240px;scrollbar-gutter:stable}
+#page-anomaly .anomaly-table-wrap .warning-table{width:100%;min-width:1000px;max-width:none;table-layout:fixed;border-collapse:collapse}
+.warning-table .warning-col-priority{width:10%}.warning-table .warning-col-product{width:25%}.warning-table .warning-col-issue{width:25%}.warning-table .warning-col-location{width:15%}.warning-table .warning-col-proof{width:16%}.warning-table .warning-col-action{width:9%}
+#page-anomaly .warning-table :is(th,td){padding:11px 12px;white-space:normal;word-break:normal;overflow-wrap:anywhere;vertical-align:top;min-width:0;max-width:none;line-height:1.5}
+#page-anomaly .warning-table thead th{font-size:11px;font-weight:600;color:var(--primary)}
+#page-anomaly .warning-table tbody td{font-size:12px;border-bottom:1px solid var(--line)}
+#page-anomaly .warning-sku{display:block;font-size:11px;font-weight:600;color:var(--primary);letter-spacing:.015em}
+#page-anomaly .warning-product-name{font-size:12px;font-weight:500;max-width:none;margin-top:5px;line-height:1.5}
+#page-anomaly .warning-category{font-size:12px;font-weight:600}
+#page-anomaly .warning-issue{max-width:none;margin:5px 0 0;font-size:12px;line-height:1.5}
+#page-anomaly .warning-source,#page-anomaly .warning-confidence{font-size:10px;line-height:1.45;margin-top:5px}
+#page-anomaly .warning-proof{width:100%;max-width:none;font-size:11px}
+#page-anomaly .warning-proof summary{white-space:normal;font-weight:500;padding:3px 0}
+#page-anomaly .warning-proof p{margin:8px 0;line-height:1.6}
+#page-anomaly .warning-table td:last-child .btn-ghost{padding:6px 9px;min-height:30px;font-size:11px;white-space:nowrap}
+#page-anomaly .anomaly-toolbar{margin:12px 0;align-items:center;gap:10px}
+#page-anomaly .anomaly-toolbar>.row{align-items:center;gap:6px;flex-wrap:wrap}
+@media(max-width:700px){#page-anomaly .anomaly-table-wrap{max-height:65dvh;min-height:260px}#page-anomaly .anomaly-toolbar{align-items:flex-start;flex-direction:column}#page-anomaly .warning-table :is(th,td){padding:9px 10px}}
