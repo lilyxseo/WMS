@@ -22,6 +22,7 @@ export function verifiedWarningSnapshot(before,after,key,proofBefore=[],proofAft
 }
 export async function loadWarningData(env){
  const config=getSecretSupabaseConfig(env);
+ if(env.WMS_WARNING_ATOMIC_READ==='true')return loadAtomicWarningData(config);
  const sync=()=>read(config,'inventory_sync_status?select=*');
  let before=[];try{before=await sync();}catch{}
  const signatures=async()=>{try{const response=await fetch(`${config.url}/rest/v1/rpc/inventory_warning_snapshot_signatures`,{method:'POST',headers:{apikey:config.key,Authorization:`Bearer ${config.key}`,'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(20000)});const body=await response.json();return response.ok&&Array.isArray(body)?body:[];}catch{return [];}};
@@ -71,4 +72,19 @@ export async function loadWarningData(env){
  if(results.every(result=>result.status==='rejected')){const error=new Error('All warning stock sources unavailable');error.failures=sources.map(([,source])=>({source:source.table}));throw error;}
  const staleSources=verification.filter(item=>item.stale).map(item=>item.source);
  return {rows,ledger,staleSources,unavailableSources:[...new Set(unavailableSources)],verification,ledgerReady,movement,movementReady};
+}
+
+export function atomicWarningSource(sync,signatures,key){
+ const status=sync.find(item=>item.source===key),proof=signatures.find(item=>item.source===key);
+ const ready=!!(status?.last_success_at&&/^[a-f0-9]{64}$/.test(status.source_version||'')&&proof?.content_version===status.source_version);
+ return {source:key,ready,stale:ready&&(status.status!=='success'||!!status.locked_at),rowCount:ready?proof.row_count:null,lastSuccess:status?.last_success_at||null,reason:ready?'Data dibaca atomik dan checksum cocok dengan sinkronisasi terakhir.':'Checksum data belum cocok dengan snapshot sinkronisasi terakhir.'};
+}
+async function loadAtomicWarningData(config){
+ const response=await fetch(config.url+'/rest/v1/rpc/inventory_warning_detection_data',{method:'POST',headers:{apikey:config.key,Authorization:`Bearer ${config.key}`,'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(60000)}),data=await response.json();
+ if(!response.ok||!data?.stocks||!Array.isArray(data.sync)||!Array.isArray(data.signatures))throw Error('Atomic warning snapshot unavailable');
+ const keys=['kartu_stok','rpl','bulky','barang_masuk','barang_keluar'],verification=keys.map(key=>atomicWarningSource(data.sync,data.signatures,key)),rows={kartuStok:[],rpl:[],bulky:[],barangMasuk:[],barangKeluar:[]};
+ for(const [name,source]of Object.entries(WARNING_SOURCES)){const check=verification.find(item=>item.source===source.key),stock=data.stocks[name];if(!Array.isArray(stock)||check.rowCount!==stock.length){check.ready=false;check.reason='Snapshot stok tidak lengkap.';}if(check.ready)rows[name]=stock;}
+ const unavailableSources=verification.filter(item=>!item.ready).map(item=>item.source),ledgerReady=!unavailableSources.length&&data.ledgerAvailable===true,movementReady=ledgerReady&&data.movementAvailable===true&&Array.isArray(data.movement?.movements)&&Array.isArray(data.movement?.activity);
+ if(!data.ledgerAvailable)unavailableSources.push('ledger_review');if(!movementReady)unavailableSources.push('movement_impact');
+ return {rows,ledger:ledgerReady?data.ledger:[],ledgerReady,movement:movementReady?data.movement:null,movementReady,verification,unavailableSources,staleSources:verification.filter(item=>item.stale&&item.ready).map(item=>item.source)};
 }

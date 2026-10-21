@@ -17,9 +17,11 @@ do $$declare owner uuid:=gen_random_uuid();other uuid:=gen_random_uuid();sample 
 end$$;rollback;`;
 if(process.argv.includes('--inspect')){
  await sql('begin;'+migration+'rollback;');
+ // Install only the service-only read RPC for source verification; no data writes.
+ await sql(migration.slice(migration.indexOf('create or replace function public.inventory_warning_detection_data()')));
  const {loadInventoryWarnings}=await import('../functions/api/_inventory-warnings.js');
  const keys=await manage('/api-keys?reveal=true'),key=keys.find(item=>item.api_key?.startsWith('sb_secret_'))?.api_key;if(!key)throw Error('Snapshot data credential unavailable');
- const result=await loadInventoryWarnings({SUPABASE_URL:`https://${project}.supabase.co`,SUPABASE_SECRET_KEY:key},{full:true});
+ const result=await loadInventoryWarnings({SUPABASE_URL:`https://${project}.supabase.co`,SUPABASE_SECRET_KEY:key,WMS_WARNING_ATOMIC_READ:'true'},{full:true});
  const health=await sql("select source,status,last_success_at,locked_at,source_version is not null as has_version from public.inventory_sync_status where source in ('kartu_stok','rpl','bulky','barang_masuk','barang_keluar') order by source");
  const proof=await fetch(`https://${project}.supabase.co/rest/v1/rpc/inventory_warning_snapshot_signatures`,{method:'POST',headers:{apikey:key,Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:'{}'});
  const signatures=await proof.json().catch(()=>[]);
