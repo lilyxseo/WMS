@@ -7,4 +7,4 @@ export function archiveSpreadsheetId(value){
  if(text.startsWith('https://')){try{const url=new URL(text);if(url.hostname!=='docs.google.com')throw Error();id=/^\/spreadsheets\/d\/([A-Za-z0-9_-]+)(?:\/|$)/.exec(url.pathname)?.[1]||'';}catch{throw Error('Gunakan ID spreadsheet atau link Google Sheets yang valid.');}}
  if(!/^[A-Za-z0-9_-]{20,120}$/.test(id))throw Error('ID spreadsheet tidak valid.');return id;
 }
-export const archiveDeveloperRole=role=>/^(developer|mode development)$/i.test(String(role??'').trim());
+export const archiveDeveloperRole=role=>/^(developer|mode development|pic inventory)$/i.test(String(role??'').trim());
