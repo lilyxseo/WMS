@@ -2963,7 +2963,7 @@ async function loadArchiveSources({force=false}={}){
  if(archiveSourcesPromise)return archiveSourcesPromise;if(archiveSourcesLoaded&&!force)return;
  const generation=authRequestGeneration;
  archiveSourcesPromise=(async()=>{try{const {res,data}=await fetchJsonSafe('/api/archive-sources',{cache:'no-store'});if(!res.ok||!data?.success)throw Error(data?.message||'Spreadsheet tambahan belum dapat dimuat.');if(generation!==authRequestGeneration)return;
- const seen=new Set(BUILTIN_ARCHIVE_SOURCES.map(source=>source.spreadsheetId));ARCHIVE_SOURCES.splice(0,ARCHIVE_SOURCES.length,...BUILTIN_ARCHIVE_SOURCES.map(source=>({...source})),...(data.items||[]).filter(item=>{if(seen.has(item.spreadsheetId))return false;seen.add(item.spreadsheetId);return true;}));archiveSourcesLoaded=true;archiveSourcesError='';
+ const builtins=data.builtins||BUILTIN_ARCHIVE_SOURCES;const seen=new Set(builtins.map(source=>source.spreadsheetId));ARCHIVE_SOURCES.splice(0,ARCHIVE_SOURCES.length,...builtins.map(source=>({...source})),...(data.items||[]).filter(item=>{if(seen.has(item.spreadsheetId))return false;seen.add(item.spreadsheetId);return true;}));archiveSourcesLoaded=true;archiveSourcesError='';
  if(ARCHIVE_STATE.selectedSpreadsheetKey&&!getArchiveActiveSource()){++ARCHIVE_STATE.requestId;ARCHIVE_STATE.loadingList=false;ARCHIVE_STATE.loadingData=false;ARCHIVE_STATE.selectedSpreadsheetKey='';ARCHIVE_STATE.selectedSheet='';ARCHIVE_STATE.sheetList=[];ARCHIVE_STATE.cache={};}
  }catch(error){if(generation===authRequestGeneration)archiveSourcesError=error.message;}finally{if(generation===authRequestGeneration){archiveSourcesPromise=null;if(getActivePage()==='arsip')renderArchivePage();}}})();return archiveSourcesPromise;
 }
