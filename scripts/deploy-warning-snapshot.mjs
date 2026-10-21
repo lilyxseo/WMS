@@ -20,6 +20,10 @@ if(process.argv.includes('--inspect')){
  const {loadInventoryWarnings}=await import('../functions/api/_inventory-warnings.js');
  const keys=await manage('/api-keys?reveal=true'),key=keys.find(item=>item.api_key?.startsWith('sb_secret_'))?.api_key;if(!key)throw Error('Snapshot data credential unavailable');
  const result=await loadInventoryWarnings({SUPABASE_URL:`https://${project}.supabase.co`,SUPABASE_SECRET_KEY:key},{full:true});
+ const health=await sql("select source,status,last_success_at,locked_at,source_version is not null as has_version from public.inventory_sync_status where source in ('kartu_stok','rpl','bulky','barang_masuk','barang_keluar') order by source");
+ const proof=await fetch(`https://${project}.supabase.co/rest/v1/rpc/inventory_warning_snapshot_signatures`,{method:'POST',headers:{apikey:key,Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:'{}'});
+ const signatures=await proof.json().catch(()=>[]);
+ await output('health',{sync:health,proofStatus:proof.status,proofSources:Array.isArray(signatures)?signatures.map(item=>({source:item.source,rowCount:item.row_count,hasHash:!!item.content_version})):[]});
  await output('result',{mode:'inspect',ready:result.verification.filter(item=>item.ready).length,total:result.summary.total,partial:result.partial,sources:result.verification.map(item=>({source:item.source,ready:item.ready,readCode:item.readCode,reason:item.reason}))});
  console.log('Read-only snapshot detection inspected; schema changes rolled back.');
 }else if(process.argv.includes('--configure')){

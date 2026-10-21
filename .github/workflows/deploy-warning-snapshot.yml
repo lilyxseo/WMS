@@ -32,6 +32,9 @@ jobs:
       - id: inspect
         if: github.ref != 'refs/heads/main'
         run: node scripts/deploy-warning-snapshot.mjs --inspect
+      - name: 'Warning health: ${{ steps.inspect.outputs.health }}'
+        if: github.ref != 'refs/heads/main'
+        run: echo 'Read-only synchronization health inspected.'
       - name: 'Warning inspection: ${{ steps.inspect.outputs.result }}'
         if: github.ref != 'refs/heads/main'
         run: echo 'Read-only detector inspection completed.'
