@@ -729,7 +729,7 @@ body.dark .metric-delta--out{color:#f87171}
 .confirm-modal-message{margin:0 0 16px;color:var(--muted,#64748b);font-size:14px;line-height:1.5}
 .confirm-modal-actions{display:flex;gap:10px;justify-content:flex-end}
 .confirm-modal-actions .btn-ghost,.confirm-modal-actions .btn-primary{min-width:120px}
-.confirm-modal-confirm.danger{background:var(--danger,#dc2626);border-color:var(--danger,#dc2626);color:#fff}
+.confirm-modal-confirm.danger{background:var(--primary-2);border-color:var(--primary-2);color:#fff}
 .confirm-modal-confirm.danger:hover{filter:brightness(.95)}
 @media (max-width:640px){
   .confirm-modal{place-items:center}
