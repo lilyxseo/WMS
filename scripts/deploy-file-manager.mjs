@@ -7,6 +7,7 @@ const verify=`do $$begin
  if not (select relrowsecurity from pg_class where oid='public.wms_files'::regclass) then raise exception 'RLS disabled';end if;
  if has_table_privilege('anon','public.wms_files','SELECT') or has_table_privilege('authenticated','public.wms_files','INSERT') or has_table_privilege('authenticated','public.wms_files','SELECT') then raise exception 'Public file access';end if;
  if not has_table_privilege('service_role','public.wms_files','SELECT,INSERT,DELETE') then raise exception 'Server privileges missing';end if;
+ if not exists(select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='wms_file_bin_server_only' and permissive='RESTRICTIVE') then raise exception 'Storage server access rule missing';end if;
  if not exists(select 1 from storage.buckets where id='wms-file-bin' and public=false and file_size_limit=20971520) then raise exception 'Private bucket missing';end if;
 end$$;`;
 const inspect=process.argv.includes('--inspect');await sql('begin;'+migration+verify+(inspect?'rollback;':'commit;'));
