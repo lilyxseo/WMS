@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createHandler,fingerprint,formatMessage} from '../supabase/functions/warning-whatsapp/handler.js';
+import {createHandler,fingerprint,formatMessage,contentSignature} from '../supabase/functions/warning-whatsapp/handler.js';
 const row={category:'NEGATIVE_STOCK',source:'Kartu Stok',sourceRecord:4,sku:'0012',namaBarang:'Barang',categoryLabel:'Saldo Negatif',issue:'Saldo negatif',location:'A1'};
 test('identity ignores quantity/evidence but distinguishes SKU and source row',()=>{
  assert.equal(fingerprint(row),fingerprint({...row,issue:'Saldo -100',evidence:'changed'}));
@@ -10,12 +10,12 @@ test('identity ignores quantity/evidence but distinguishes SKU and source row',(
 });
 const env={SUPABASE_URL:'https://project.test',WMS_WARNING_DATA_KEY:'sb_secret_test',WMS_WARNING_NOTIFY_SECRET:'private',WMS_WARNING_RECIPIENTS:'628996628761',FONNTE_TOKEN:'fonnte'};
 const request=action=>new Request('https://edge.test',{method:'POST',headers:{'X-WMS-Warning-Secret':'private'},body:JSON.stringify({action})});
-function fixture({partial=false,action='run',send='ok'}={}){
+function fixture({partial=false,action='run',send='ok',stale=false,unverified=false,eventType='new'}={}){
  const calls=[];let claimed=false;
- const handler=createHandler(env,{load:async(_e,options)=>{assert.equal(options.full,true);return {partial,total:150,rows:[row]};},fetchFn:async(url,options)=>{
+ const handler=createHandler(env,{load:async(_e,options)=>{assert.equal(options.full,true);return {partial,snapshotStale:stale,total:150,verification:Array.from({length:5},()=>({ready:!unverified})),rows:[row]};},fetchFn:async(url,options)=>{
   calls.push({url,body:options.body});
   if(url.includes('fonnte')){if(send==='timeout')throw new Error('Timeout');return Response.json({status:send==='ok'});}
-  const name=url.split('/').at(-1);return Response.json(name==='warning_notify_lock'?true:name==='warning_notify_claim'?(claimed?[]:(claimed=true,[{id:'id',recipient:'628996628761',warning:row}])):{});
+  const name=url.split('/').at(-1);return Response.json(name==='warning_notify_lock'?true:name==='warning_notify_claim'?(claimed?[]:(claimed=true,[{id:'id',recipient:'628996628761',warning:row,event_type:eventType}])):{});
  }});
  return {handler,calls,action};
 }
@@ -25,3 +25,10 @@ test('partial snapshot does not reconcile or notify',async()=>{const f=fixture({
 test('accepted delivery is recorded and no repeat in same run',async()=>{const f=fixture();await f.handler(request('run'));assert.equal(f.calls.filter(c=>c.url.includes('fonnte')).length,1);assert.equal(JSON.parse(f.calls.find(c=>c.url.endsWith('warning_notify_finish')).body).p_status,'sent');});
 test('uncertain delivery is recorded without retry',async()=>{const f=fixture({send:'timeout'});await f.handler(request('run'));assert.equal(f.calls.filter(c=>c.url.includes('fonnte')).length,1);assert.equal(JSON.parse(f.calls.find(c=>c.url.endsWith('warning_notify_finish')).body).p_status,'uncertain');});
 test('review messages preserve uncertainty',()=>assert.match(formatMessage([{...row,confidence:'review'}]),/Perlu verifikasi/));
+
+test('content changes produce update signatures without changing warning identity',()=>{assert.notEqual(contentSignature(row),contentSignature({...row,issue:'Qty -100'}));assert.equal(contentSignature(row),contentSignature({...row,checkedAt:'later',id:'different'}));});
+test('messages distinguish resolved, updated and reopened events and link to the primary domain',()=>{const message=formatMessage([{event_type:'resolved',warning:row},{event_type:'updated',warning:{...row,issue:'Qty -10'},previous_warning:row},{event_type:'reopened',warning:row}]);assert.match(message,/Selesai/);assert.match(message,/Diperbarui/);assert.match(message,/Muncul kembali/);assert.match(message,/gotoliving.app\/warning/);assert.match(message,/Sebelumnya/);});
+
+test('stale or unverified snapshots never reconcile or deliver queued messages',async()=>{for(const options of [{stale:true},{unverified:true}]){const f=fixture(options);await f.handler(request('run'));assert.deepEqual(f.calls.map(call=>call.url.split('/').at(-1)),['warning_notify_lock','warning_notify_unlock']);}});
+test('resolved messages are delivered with their event type and content signatures are persisted',async()=>{const f=fixture({eventType:'resolved'});await f.handler(request('run'));const send=f.calls.find(call=>call.url.includes('fonnte'));assert.match(send.body.get('message'),/Selesai/);const collect=JSON.parse(f.calls.find(call=>call.url.endsWith('warning_notify_collect')).body);assert.equal(collect.p_findings[0].content_signature,contentSignature(row));});
+test('explicit provider rejection is marked failed for scheduled retry',async()=>{const f=fixture({send:'failed'});await f.handler(request('run'));assert.equal(JSON.parse(f.calls.find(call=>call.url.endsWith('warning_notify_finish')).body).p_status,'failed');});
