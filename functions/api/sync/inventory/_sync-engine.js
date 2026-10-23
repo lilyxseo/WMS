@@ -93,7 +93,7 @@ export function createInventorySyncService(config) {
     const range = config.sheetRange || `'${sheetName}'!A:ZZ`;
     for (let attempt = 0; ; attempt += 1) {
       if (dependencies.requestMetrics) dependencies.requestMetrics.googleRequests += 1;
-      const response = await fetchFn(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}/values/${encodeURIComponent(range)}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+      let response;try{response = await fetchFn(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}/values/${encodeURIComponent(range)}`, { headers: { Authorization: `Bearer ${accessToken}` },signal:AbortSignal.timeout(30000) });}catch{throw new SyncError('GOOGLE_READ_CONNECTION_FAILED',`Koneksi baca ${sheetName} belum berhasil. Snapshot sebelumnya dipertahankan.`);}
       if (response.status === 429 && attempt < GOOGLE_429_DELAYS_MS.length) { await wait(GOOGLE_429_DELAYS_MS[attempt]); continue; }
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new SyncError(response.status === 429 ? 'GOOGLE_RATE_LIMITED' : 'GOOGLE_FETCH_FAILED', body?.error?.message || `Gagal membaca ${sheetName}`);

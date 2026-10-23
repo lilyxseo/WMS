@@ -23,6 +23,19 @@ create table if not exists public.inventory_refresh_requests(source text primary
 alter table public.inventory_refresh_requests enable row level security;
 revoke all on public.inventory_refresh_requests from public,anon,authenticated;
 grant select,insert,update on public.inventory_refresh_requests to service_role;
+-- Cron commands contain the existing private server credential. Normalize them
+-- inside PostgreSQL so no credential needs to leave the database.
+create or replace function public.inventory_sync_http_command(p_command text) returns text language plpgsql immutable set search_path=public as $$
+begin
+ if p_command !~* '^[[:space:]]*select[[:space:]]+net[.]http_post[[:space:]]*[(]' then raise exception 'Unsupported sync dispatch template';end if;
+ if p_command ~* 'timeout_milliseconds[[:space:]]*(:=|=>)' then
+  return regexp_replace(p_command,'timeout_milliseconds[[:space:]]*(:=|=>)[[:space:]]*[0-9]+','timeout_milliseconds := 120000','gi');
+ end if;
+ if p_command !~ '[)][[:space:]]*;?[[:space:]]*$' then raise exception 'Invalid sync dispatch command';end if;
+ return regexp_replace(p_command,'[)][[:space:]]*;?[[:space:]]*$' ,', timeout_milliseconds := 120000);');
+end$$;
+revoke all on function public.inventory_sync_http_command(text) from public,anon,authenticated;
+grant execute on function public.inventory_sync_http_command(text) to service_role;
 create or replace function public.request_inventory_refresh(p_sources text[]) returns jsonb language plpgsql security definer set search_path=public as $$
 declare src text; slug text; template text; previous_dispatch timestamptz; dispatched integer:=0;
 begin
@@ -37,7 +50,7 @@ begin
   end if;
   if template is null then update public.inventory_refresh_requests set last_error='SCHEDULE_TEMPLATE_MISSING' where source=src;continue;end if;
   begin
-   execute template;
+   execute case when src='netsuite' then template else public.inventory_sync_http_command(template) end;
    update public.inventory_refresh_requests set dispatched_at=now(),last_error=null where source=src;
    dispatched:=dispatched+1;
   exception when others then update public.inventory_refresh_requests set last_error='DISPATCH_FAILED' where source=src;
