@@ -17,6 +17,7 @@ const checks=`do $$declare lease uuid:=gen_random_uuid();proof jsonb;rejected bo
  if has_function_privilege('anon','public.request_inventory_refresh(text[])','EXECUTE') or has_function_privilege('authenticated','public.inventory_client_versions()','EXECUTE') then raise exception 'Public sync access';end if;
  begin perform public.request_inventory_refresh(array['not-a-source']);exception when others then rejected:=true;end;
  if not rejected then raise exception 'Invalid dispatch source accepted';end if;
+ delete from public.inventory_refresh_requests where source='kartu_stok';
  proof:=public.request_inventory_refresh(array['kartu_stok']);if proof->>'dispatched'<>'1' then raise exception 'Immediate dispatch unavailable';end if;
  proof:=public.request_inventory_refresh(array['kartu_stok']);if proof->>'dispatched'<>'0' then raise exception 'Duplicate dispatch not coalesced';end if;
 end$$;`;
