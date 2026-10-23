@@ -1,0 +1,53 @@
+name: Deploy warning WhatsApp lifecycle
+on:
+  push:
+    branches: [main, fix/warning-whatsapp-lifecycle]
+    paths:
+      - 'supabase/functions/warning-whatsapp/**'
+      - 'supabase/migrations/20261023000000_warning_notification_lifecycle.sql'
+      - 'scripts/deploy-warning-notifications.mjs'
+      - '.github/workflows/deploy-warning-notifications.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: warning-notification-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_PROJECT_REF: udullprykzdskrxmbbkj
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      WMS_WARNING_RECIPIENTS: '628996628761'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test tests/*.test.mjs
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: '2.9.6'
+      - run: deno check supabase/functions/warning-whatsapp/index.ts
+      - id: inspect
+        if: github.ref != 'refs/heads/main'
+        run: node scripts/deploy-warning-notifications.mjs --inspect
+      - name: 'Warning validation: ${{ steps.inspect.outputs.result }}'
+        if: github.ref != 'refs/heads/main'
+        run: echo 'Notification state changes rolled back.'
+      - if: github.ref == 'refs/heads/main'
+        run: node scripts/deploy-warning-notifications.mjs --configure
+      - uses: supabase/setup-cli@v1
+        if: github.ref == 'refs/heads/main'
+        with:
+          version: '2.120.0'
+      - if: github.ref == 'refs/heads/main'
+        run: supabase functions deploy warning-whatsapp --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
+      - id: publish
+        if: github.ref == 'refs/heads/main'
+        run: node scripts/deploy-warning-notifications.mjs
+      - name: 'Warning delivery: ${{ steps.publish.outputs.result }}'
+        if: github.ref == 'refs/heads/main'
+        run: echo 'Read-only health and scheduler verified.'
