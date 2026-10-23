@@ -7,6 +7,11 @@ on:
       - '.github/workflows/deploy-sync-pipeline.yml'
       - 'supabase/migrations/20261023010000_sync_pipeline.sql'
   workflow_dispatch:
+    inputs:
+      audit_only:
+        description: Read synchronization metadata without changing configuration
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -21,7 +26,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - run: node --test tests/*.test.mjs
       - id: inspect
-        run: node scripts/deploy-sync-pipeline.mjs --inspect
-      - name: 'Synchronization: ${{ steps.inspect.outputs.result }}'
+        if: github.ref != 'refs/heads/main' || inputs.audit_only == true
+        run: node scripts/deploy-sync-pipeline.mjs ${{ inputs.audit_only && '--audit' || '--inspect' }}
+      - id: publish
+        if: github.ref == 'refs/heads/main' && inputs.audit_only != true
+        run: node scripts/deploy-sync-pipeline.mjs --configure
+      - name: 'Synchronization: ${{ steps.inspect.outputs.result }}${{ steps.publish.outputs.result }}'
         run: echo 'Read-only sync health checked.'

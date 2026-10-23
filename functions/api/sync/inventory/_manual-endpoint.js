@@ -33,7 +33,7 @@ export async function handleManualInventorySync({ request, env }, { source, sync
   const authorized = isInventorySyncAuthorized(request, env) || await hasApplicationSession(request, env);
   if (!authorized) return inventorySyncJson({ success: false, reason: 'UNAUTHORIZED' }, 401);
   try {
-    const result = await sync(env);
+    const result = await sync(env,{forceFull:!isInventorySyncAuthorized(request,env)});
     return inventorySyncJson(result, result.skipped ? 409 : 200);
   } catch (error) {
     console.error(`[InventorySync:${source}] ERROR ${error?.code || 'SYNC_FAILED'}: ${error?.message || error}`);

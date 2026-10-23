@@ -11,12 +11,12 @@ test('inventory version endpoint returns metadata only and remains authenticated
   assert.match(endpoint, /barangKeluarVersion/);
   assert.match(endpoint, /rplVersion/);
   assert.match(endpoint, /bulkyVersion/);
-  assert.match(endpoint, /select=synced_at/);
+  assert.match(endpoint, /rpc\/inventory_client_versions/);assert.doesNotMatch(endpoint,/count=exact|order=synced_at/);
   assert.doesNotMatch(endpoint, /select=\*/);
 });
 
 test('version watcher pauses when hidden or offline and checks lifecycle signals', () => {
-  assert.match(frontend, /INVENTORY_VERSION_CHECK_INTERVAL_MS=45\*1000/);
+  assert.match(frontend, /INVENTORY_VERSION_CHECK_INTERVAL_MS=10\*1000/);
   assert.match(frontend, /document\.hidden\|\|navigator\.onLine===false/);
   assert.match(frontend, /visibilitychange/);
   assert.match(frontend, /window\.addEventListener\('focus'/);

@@ -28,7 +28,7 @@ const ABC_ANALYSIS_CACHE_KEY="ABC_ANALYSIS_CACHE";
 const CACHE_VERSION="2";
 const AUTO_SYNC_INTERVAL_MS=5*60*1000;
 const AUTO_SYNC_CHECK_INTERVAL_MS=30*1000;
-const INVENTORY_VERSION_CHECK_INTERVAL_MS=45*1000;
+const INVENTORY_VERSION_CHECK_INTERVAL_MS=10*1000;
 const IDB_NAME="inventory_cache_db";
 const IDB_VERSION=1;
 const IDB_STORE="sheets";
@@ -698,7 +698,7 @@ archiveManagerController?.dispose();archiveManagerController=null;archiveSources
 document.getElementById('assetStoreEditor')?.remove();document.getElementById('profileForm')?.reset();
 cancelStartupPrefetch();
 INVENTORY_VERSION_STATE.controller?.abort();
-INVENTORY_VERSION_STATE.versions=null;
+INVENTORY_VERSION_STATE.versions=null;INVENTORY_VERSION_STATE.pendingSources.clear();
 TRANSACTION_PAGE_CACHE.clearSource('barang_masuk');
 TRANSACTION_PAGE_CACHE.clearSource('barang_keluar');
 TRANSACTION_PREFETCH_IN_FLIGHT.clear();
@@ -1634,16 +1634,20 @@ setInterval(maybeAutoSync,AUTO_SYNC_CHECK_INTERVAL_MS);
 startInventoryVersionWatcher();
 }
 
-const INVENTORY_VERSION_STATE={versions:null,inFlight:null,controller:null,generation:0,timer:null,lastCheckAt:0};
+const INVENTORY_VERSION_STATE={versions:null,inFlight:null,controller:null,generation:0,timer:null,lastCheckAt:0,pendingSources:new Set()};
 function comparableInventoryVersions(payload){return Object.fromEntries(Object.entries(payload||{}).filter(([key])=>key.endsWith('Version')));}
 function changedInventorySources(previous,next){return Object.keys(next).filter(key=>previous?.[key]!==next[key]);}
 async function refreshVisibleInventoryPage(changed,generation){
-const page=getActivePage();
+const page=getActivePage();if(!['barang-masuk','barang-keluar','stats','dashboard','anomaly','detail','locations','search','stok-minus','abc-analisis','stock-aging'].includes(page))return;const inventoryChanged=changed.some(key=>key!=='warningVersion');if(page==='anomaly'&&!changed.includes('warningVersion'))return;if(page!=='anomaly'&&!inventoryChanged)return;
 setRefreshIndicator(true,'Memperbarui data...');
 try{
 if(page==='barang-masuk'&&changed.includes('barangMasukVersion')){TRANSACTION_PAGE_CACHE.clearSource('barang_masuk');await loadTransactionTablePage('in',{page:TABLE_STATE.in.page,force:true,background:true});}
 else if(page==='barang-keluar'&&changed.includes('barangKeluarVersion')){TRANSACTION_PAGE_CACHE.clearSource('barang_keluar');await loadTransactionTablePage('out',{page:TABLE_STATE.out.page,force:true,background:true});}
 else if(page==='stats'&&changed.some(key=>['kartuStokVersion','netsuiteVersion'].includes(key))){await updateStats({force:true});}
+else if(page==='search'){await refreshSearch();}
+else if(page==='stok-minus'){await refreshStokMinus();}
+else if(page==='abc-analisis'){await refreshAbc();}
+else if(page==='stock-aging'){await loadStockAging(true);}
 else if(page==='dashboard'){await loadDashboardPayload();}
 else if(page==='anomaly'){await refreshAnomalyInBackground();}
 else if(page==='detail'&&currentSku){await showDetail(currentSku,{background:true});}
@@ -1651,11 +1655,12 @@ else if(page==='locations'&&changed.some(key=>['kartuStokVersion','rplVersion','
 if(generation===INVENTORY_VERSION_STATE.generation)toast('Data diperbarui','success');
 }finally{if(generation===INVENTORY_VERSION_STATE.generation)setRefreshIndicator(false);}
 }
+function inventoryAutoRefreshBlocked(){const focused=document.activeElement;return !!editableTablesController?.hasChanges()||!!editableTablesController?.isEditing?.()||!!INLINE_EDIT_STATE?.isEditing||!!focused?.closest?.('td.editing,td:has(.inline-editor),td:has(.sheet-grid-editor)');}
 async function checkInventoryVersion(){
 if(!user||document.hidden||navigator.onLine===false)return;
 if(INVENTORY_VERSION_STATE.inFlight)return INVENTORY_VERSION_STATE.inFlight;
 const controller=new AbortController();INVENTORY_VERSION_STATE.controller=controller;const generation=++INVENTORY_VERSION_STATE.generation;
-INVENTORY_VERSION_STATE.inFlight=(async()=>{try{const {res,data}=await fetchJsonSafe('/api/inventory-version',{signal:controller.signal});if(!res.ok||data?.success===false)throw new Error(data?.message||'Gagal memeriksa versi inventory');if(generation!==INVENTORY_VERSION_STATE.generation)return;const next=comparableInventoryVersions(data),previous=INVENTORY_VERSION_STATE.versions;INVENTORY_VERSION_STATE.versions=next;INVENTORY_VERSION_STATE.lastCheckAt=Date.now();if(previous){const changed=changedInventorySources(previous,next);if(changed.length){DASHBOARD_SUMMARY=null;DASHBOARD_MONTHLY_INSIGHT=null;}if(changed.includes('barangMasukVersion'))TRANSACTION_PAGE_CACHE.markSourceStale('barang_masuk');if(changed.includes('barangKeluarVersion'))TRANSACTION_PAGE_CACHE.markSourceStale('barang_keluar');if(changed.some(key=>['kartuStokVersion','rplVersion','bulkyVersion'].includes(key))){LOCATION_STATE.summary=null;LOCATION_STATE.pageCache.clear();STARTUP_PREFETCH.warningSummary=null;}if(changed.length)await refreshVisibleInventoryPage(changed,generation);}}catch(err){if(err?.name!=='AbortError')console.warn('[InventoryVersion]',err?.message||err);}finally{if(generation===INVENTORY_VERSION_STATE.generation){INVENTORY_VERSION_STATE.inFlight=null;INVENTORY_VERSION_STATE.controller=null;}}})();
+INVENTORY_VERSION_STATE.inFlight=(async()=>{try{const {res,data}=await fetchJsonSafe('/api/inventory-version',{signal:controller.signal});if(!res.ok||data?.success===false)throw new Error(data?.message||'Gagal memeriksa versi inventory');if(generation!==INVENTORY_VERSION_STATE.generation)return;const next=comparableInventoryVersions(data),previous=INVENTORY_VERSION_STATE.versions;INVENTORY_VERSION_STATE.versions=next;INVENTORY_VERSION_STATE.lastCheckAt=Date.now();if(data.syncStatus?.last_success_at&&Number.isFinite(Date.parse(data.syncStatus.last_success_at))){window.__inventorySyncStatus=data.syncStatus;inventorySyncStatusState='loaded';renderInventorySyncStatus();}if(previous){const changed=changedInventorySources(previous,next);if(changed.some(key=>key!=='warningVersion')){DASHBOARD_SUMMARY=null;DASHBOARD_MONTHLY_INSIGHT=null;SEARCH_STATE.completedQuery=null;detailHydrationNeedsRefresh=true;STOCK_AGING_STATE.loaded=false;for(const page of ['abc-analisis','stok-minus','movement','cycle-count'])LOADED_DETAIL_PAGES.delete(page);}if(changed.includes('barangMasukVersion'))TRANSACTION_PAGE_CACHE.markSourceStale('barang_masuk');if(changed.includes('barangKeluarVersion'))TRANSACTION_PAGE_CACHE.markSourceStale('barang_keluar');if(changed.some(key=>['kartuStokVersion','rplVersion','bulkyVersion'].includes(key))){LOCATION_STATE.summary=null;LOCATION_STATE.pageCache.clear();LOCATION_STATE.detailCache.clear();STARTUP_PREFETCH.warningSummary=null;}changed.forEach(key=>INVENTORY_VERSION_STATE.pendingSources.add(key));}if(INVENTORY_VERSION_STATE.pendingSources.size&&!inventoryAutoRefreshBlocked()){const pending=[...INVENTORY_VERSION_STATE.pendingSources];await refreshVisibleInventoryPage(pending,generation);pending.forEach(key=>INVENTORY_VERSION_STATE.pendingSources.delete(key));}}catch(err){if(err?.name!=='AbortError')console.warn('[InventoryVersion]',err?.message||err);}finally{if(generation===INVENTORY_VERSION_STATE.generation){INVENTORY_VERSION_STATE.inFlight=null;INVENTORY_VERSION_STATE.controller=null;}}})();
 return INVENTORY_VERSION_STATE.inFlight;
 }
 function startInventoryVersionWatcher(){
@@ -2448,7 +2453,7 @@ async function softRefreshArchive(){await loadArchiveSources({force:true});ARCHI
 async function softRefreshAsset(){ASSET_STORE_STATE.controller?.abort();ASSET_STORE_STATE.requestId++;return refreshAssetStore();}
 async function refreshBarangReject(){const result=await loadBarangRejectData({force:true,background:true});if(!result)throw new Error('Gagal memuat Barang Reject');}
 async function refreshAccuracy(){return updateStats({force:true});}
-async function refreshStokMinus(){await Promise.all([refreshInventoryGroupFull(),refreshTransaksiFull({render:false})]);localStorage.removeItem(STOK_MINUS_CACHE_KEY);refreshStokMinusInBackground();}
+async function refreshStokMinus(){await refreshInventoryGroupFull();localStorage.removeItem(STOK_MINUS_CACHE_KEY);return refreshStokMinusInBackground();}
 async function refreshAbc(){await Promise.all([refreshInventoryGroupFull(),refreshTransaksiFull({render:false})]);return renderAbcAnalisisPage(true);}
 const SOFT_REFRESH_ROUTES={dashboard:refreshDashboard,'barang-masuk':refreshBarangMasuk,'barang-keluar':refreshBarangKeluar,locations:refreshLokasi,anomaly:refreshWarning,stats:refreshAccuracy,'stok-minus':refreshStokMinus,'abc-analisis':refreshAbc,'stock-aging':()=>loadStockAging(true),'cycle-count':refreshCycleCount,movement:refreshMovement,'balikan-store':refreshBalikanStore,detail:()=>refreshSkuDetail(currentSku),search:refreshSearch,arsip:softRefreshArchive,'file-manager':()=>fileManagerController?.refresh(),'archive-sources':()=>archiveManagerController?.refresh(),'asset-store':softRefreshAsset,'barang-reject':refreshBarangReject,'activity-log':renderActivityLogPage,'sku-notes':()=>{renderAllSkuNotesPage();return allSkuNotesController?.refresh();},profile:()=>loadPersonalProfile(),settings:()=>settingsDatabaseController?.refresh()};
 window.SOFT_REFRESH_ROUTES=SOFT_REFRESH_ROUTES;
@@ -2476,17 +2481,13 @@ const startedAt=Date.now(),sources={};
 // Do not combine these jobs in one Worker: every source performs multiple
 // upstream requests and the combined invocation can exceed Cloudflare limits.
 const jobs=onlySources?MANUAL_SYNC_SOURCES.filter(([name])=>onlySources.includes(name)):MANUAL_SYNC_SOURCES;
-for(const [index,[name,url]] of jobs.entries()){
-if(!shouldContinue()){sources[name]={success:false,reason:'SESSION_CHANGED'};break;}
-onProgress({name,index:index+1,total:jobs.length});
+let cursor=0,completed=0;
+async function worker(){while(cursor<jobs.length){if(!shouldContinue()){while(cursor<jobs.length){const [name]=jobs[cursor++];sources[name]={success:false,reason:'SESSION_CHANGED'};}return;}const [name,url]=jobs[cursor++];
 const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),120000);
-try{
-const {res,data}=await fetchJsonSafe(url,{method:'POST',cache:'no-store',signal:controller.signal,silentInvalidJson:true});
-sources[name]={...(data||{}),success:res.ok&&data?.success===true};
-if(!sources[name].success&&!sources[name].reason)sources[name].reason=data?.message||`HTTP_${res.status}`;
-}catch(error){sources[name]={success:false,reason:error?.name==='AbortError'?'TIMEOUT':(error?.message||'SYNC_FAILED')};}
-finally{clearTimeout(timeout);}
+try{const {res,data}=await fetchJsonSafe(url,{method:'POST',cache:'no-store',signal:controller.signal,silentInvalidJson:true});sources[name]={...(data||{}),success:res.ok&&data?.success===true};if(!sources[name].success&&!sources[name].reason)sources[name].reason=data?.message||`HTTP_${res.status}`;}catch(error){sources[name]={success:false,reason:error?.name==='AbortError'?'TIMEOUT':(error?.message||'SYNC_FAILED')};}finally{clearTimeout(timeout);completed++;onProgress({name,index:completed,total:jobs.length});}}
 }
+// Two separate endpoint requests run together; each retains its own Worker budget.
+await Promise.all(Array.from({length:Math.min(2,jobs.length)},()=>worker()));
 const outcomes=Object.values(sources),succeeded=outcomes.filter(result=>result.success).length;
 return {success:outcomes.length>0&&succeeded===outcomes.length,partialSuccess:succeeded>0&&succeeded<outcomes.length,sources,durationMs:Date.now()-startedAt};
 }
