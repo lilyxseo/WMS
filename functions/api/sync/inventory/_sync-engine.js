@@ -117,13 +117,15 @@ export function createInventorySyncService(config) {
       else requestMetrics.supabaseWrites += 1;
       const response = await fetchFn(`${url}${path}`, { ...options, headers: { ...headers, ...(options.headers || {}) } });
       const body = response.status === 204 ? null : await response.json().catch(() => null);
-      if (!response.ok) throw new Error(body?.message || body?.hint || `Supabase request gagal (${response.status})`);
+      if (!response.ok){const error=new Error(body?.message || body?.hint || `Supabase request gagal (${response.status})`);error.rpcMissing=body?.code==='PGRST202';throw error;}
       return body;
     }
+    let fastProof=null;
     const rpc = (name, args) => request(`/rest/v1/rpc/${name}`, { method: 'POST', body: JSON.stringify(args) }, 'rpc');
     return {
-      async acquireLock(lockSource, lockId) { const result = await rpc('acquire_inventory_sync_lock', { p_source: lockSource, p_lock_id: lockId, p_stale_after_seconds: 120 }); return result === true || result?.acquire_inventory_sync_lock === true; },
-      finishSuccess(args) { return rpc('finish_inventory_sync_success', { p_source: args.source, p_lock_id: args.lock_id, p_row_count: args.row_count, p_inserted_count: args.inserted_count, p_updated_count: args.updated_count, p_deleted_count: args.deleted_count, p_duration_ms: args.duration_ms, p_source_version: args.source_version }); },
+      async acquireLock(lockSource, lockId) {const args={p_source:lockSource,p_lock_id:lockId,p_stale_after_seconds:120};try{const result=await rpc('acquire_inventory_sync_fast',args);fastProof=result?.allow_fast?result.source_version:null;return result?.acquired===true;}catch(error){if(!error.rpcMissing)throw error;fastProof=null;const result=await rpc('acquire_inventory_sync_lock',args);return result===true||result?.acquire_inventory_sync_lock===true;}},
+      committedSourceVersion(){return fastProof;},
+      async finishSuccess(args) {const payload={p_source:args.source,p_lock_id:args.lock_id,p_row_count:args.row_count,p_inserted_count:args.inserted_count,p_updated_count:args.updated_count,p_deleted_count:args.deleted_count,p_duration_ms:args.duration_ms,p_source_version:args.source_version};try{return await rpc('finish_inventory_sync_fast',{...payload,p_full:args.fullReconcile!==false});}catch(error){if(!error.rpcMissing)throw error;return rpc('finish_inventory_sync_success',payload);}},
       finishError(lockSource, lockId, message, durationMs) { return rpc('finish_inventory_sync_error', { p_source: lockSource, p_lock_id: lockId, p_error: message, p_duration_ms: durationMs }); },
       async insertHistory(row) { const result = await request('/rest/v1/inventory_sync_history?select=id', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) }); return result?.[0]?.id; },
       updateHistory(id, row) { return request(`/rest/v1/inventory_sync_history?id=eq.${encodeURIComponent(id)}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) }); },
@@ -148,8 +150,12 @@ export function createInventorySyncService(config) {
       if (!lockAcquired) { await gateway.insertHistory({ source, status: 'skipped', started_at: startedAt, finished_at: new Date().toISOString(), source_row_count: 0, inserted_count: 0, updated_count: 0, deleted_count: 0, duration_ms: Date.now() - started, error_message: 'SYNC_ALREADY_RUNNING', source_version: null }); return { success: false, skipped: true, reason: 'SYNC_ALREADY_RUNNING', source, durationMs: Date.now() - started }; }
       historyId = await gateway.insertHistory({ source, status: 'syncing', started_at: startedAt, source_row_count: 0, inserted_count: 0, updated_count: 0, deleted_count: 0, duration_ms: 0, error_message: null, source_version: null });
       log('START');
-      const parsed = await parseValues(await (dependencies.fetchValues || fetchValues)(env, { ...dependencies, requestMetrics }), { buildSourceRowKey, buildSourceHash, logger });
+      const parsed = await parseValues(await (dependencies.fetchValues || fetchValues)(env, { ...dependencies, requestMetrics }), { buildSourceRowKey, buildSourceHash:async()=>'', logger });
+      for(const batch of chunks(parsed.rows,128))await Promise.all(batch.map(async row=>{row.source_hash=await buildSourceHash(row);}));
       metrics.sourceRows = parsed.sourceRowCount; metrics.invalidRows = parsed.invalidRows.length;
+      const sourceVersion = await sha256(JSON.stringify(parsed.rows.map(row => [row.source_row_key, row.source_hash])));
+      const fullReconcile=dependencies.forceFull===true||parsed.invalidRows.length>0||gateway.committedSourceVersion?.()!==sourceVersion;
+      if(!fullReconcile){metrics.unchanged=parsed.rows.length;}else{
       const existing = await gateway.existingMetadata();
       log(`sheet rows: ${metrics.sourceRows}\nexisting rows: ${existing.length}`);
       if (existing.length > 0 && parsed.sourceRowCount === 0) throw new SyncError('SUSPICIOUS_SOURCE_SIZE', 'Source kosong sementara database masih berisi data');
@@ -157,15 +163,15 @@ export function createInventorySyncService(config) {
       const diff = diffRows(parsed.rows, parsed.sourceKeys, existing, config.needsUpdate);
       metrics = { ...metrics, inserted: diff.rowsToInsert.length, updated: diff.rowsToUpdate.length, deleted: diff.keysToDelete.length, unchanged: diff.unchanged };
       if (config.buildMetrics) metrics = { ...metrics, ...config.buildMetrics({ parsed, existing, diff }) };
-      const sourceVersion = await sha256(JSON.stringify(parsed.rows.map(row => [row.source_row_key, row.source_hash])));
       await gateway.upsertRows([...diff.rowsToInsert, ...diff.rowsToUpdate].map(row => ({ ...row, synced_at: new Date().toISOString() })));
       await gateway.deleteKeys(diff.keysToDelete);
+      }
       const durationMs = Date.now() - started;
-      await gateway.finishSuccess({ source, lock_id: lockId, row_count: metrics.sourceRows, inserted_count: metrics.inserted, updated_count: metrics.updated, deleted_count: metrics.deleted, duration_ms: durationMs, source_version: sourceVersion }); lockAcquired = false;
+      await gateway.finishSuccess({ source, lock_id: lockId, row_count: metrics.sourceRows, inserted_count: metrics.inserted, updated_count: metrics.updated, deleted_count: metrics.deleted, duration_ms: durationMs, source_version: sourceVersion,fullReconcile }); lockAcquired = false;
       await gateway.updateHistory(historyId, { status: 'success', finished_at: new Date().toISOString(), source_row_count: metrics.sourceRows, inserted_count: metrics.inserted, updated_count: metrics.updated, deleted_count: metrics.deleted, duration_ms: durationMs, error_message: null, source_version: sourceVersion });
       log(`insert: ${metrics.inserted}\nupdate: ${metrics.updated}\ndelete: ${metrics.deleted}\nunchanged: ${metrics.unchanged}\nduration: ${durationMs}ms`);
       const requests = logRequestSummary();
-      return { success: true, source, ...metrics, invalidRowDiagnostics: parsed.invalidRows, durationMs, sourceVersion, requests };
+      return { success: true, source, ...metrics, invalidRowDiagnostics: parsed.invalidRows, durationMs, sourceVersion, requests,fastPath:!fullReconcile };
     } catch (error) {
       const durationMs = Date.now() - started;
       if (lockAcquired) { try { await gateway.finishError(source, lockId, errorText(error), durationMs); } catch (releaseError) { logger.error?.(`[InventorySync:${source}] lock release failed: ${releaseError.message}`); } }

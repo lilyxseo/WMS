@@ -17,24 +17,13 @@ function json(body, status = 200) {
   });
 }
 
-async function sourceVersion(config, table) {
-  // One row plus an exact count detects inserts/deletes; synced_at detects edits.
-  const response = await fetch(`${config.url}/rest/v1/${table}?select=synced_at&order=synced_at.desc.nullslast&limit=1`, {
-    headers: { apikey: config.key, Authorization: `Bearer ${config.key}`, Prefer: 'count=exact' },
-  });
-  const rows = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(rows?.message || `${table} HTTP ${response.status}`);
-  const count = String(response.headers.get('content-range') || '').split('/')[1] || '0';
-  return `${rows?.[0]?.synced_at || 'unsynced'}:${count}`;
-}
-
 export async function handleInventoryVersionRequest({ request, env }) {
   if (!(await getRequestRole(request, env))) return json({ success: false, message: 'Sesi tidak valid' }, 401);
   try {
     const config = getSecretSupabaseConfig(env);
-    const entries = await Promise.all(Object.entries(SOURCES).map(async ([name, table]) => [name, await sourceVersion(config, table).catch(error=>{if(name==='netsuiteVersion')return 'unavailable';throw error;})]));
-    const versions = Object.fromEntries(entries);
-    return json({ ...versions, updatedAt: new Date().toISOString() });
+    const response=await fetch(`${config.url}/rest/v1/rpc/inventory_client_versions`,{method:'POST',headers:{apikey:config.key,Authorization:`Bearer ${config.key}`,'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(10000)});
+    let versions=await response.json();if(!response.ok&&versions?.code==='PGRST202'){const fallback=await fetch(`${config.url}/rest/v1/inventory_sync_status?select=source,source_version`,{headers:{apikey:config.key,Authorization:`Bearer ${config.key}`},signal:AbortSignal.timeout(10000)}),rows=await fallback.json();if(!fallback.ok||!Array.isArray(rows))throw Error('Version metadata unavailable');const names={barangMasukVersion:'barang_masuk',barangKeluarVersion:'barang_keluar',kartuStokVersion:'kartu_stok',rplVersion:'rpl',bulkyVersion:'bulky',netsuiteVersion:'netsuite'};return json({...Object.fromEntries(Object.entries(names).map(([key,source])=>[key,rows.find(row=>row.source===source)?.source_version||'unsynced'])),updatedAt:new Date().toISOString()});}if(!response.ok||!versions||Array.isArray(versions)||Object.keys(SOURCES).some(key=>typeof versions[key]!=='string'))throw Error('Inventory versions unavailable');
+    return json(versions);
   } catch (error) {
     console.error('[InventoryVersion]', error?.message || error);
     return json({ success: false, message: 'Gagal memuat versi inventory.' }, 502);

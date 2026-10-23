@@ -82,7 +82,7 @@ test('Supabase lock and success RPCs use exact PostgreSQL parameter names', asyn
   const fetch = async (url, options = {}) => {
     const path = new URL(url).pathname;
     if (path.includes('/rpc/')) rpcCalls.push({ path, body: JSON.parse(options.body) });
-    if (path.endsWith('/rpc/acquire_inventory_sync_lock')) return { ok: true, status: 200, json: async () => true };
+    if (path.endsWith('/rpc/acquire_inventory_sync_fast')) return { ok: true, status: 200, json: async () => ({acquired:true,allow_fast:false}) };
     if (path.endsWith('/inventory_sync_history') && options.method === 'POST') return { ok: true, status: 201, json: async () => [{ id: 'history-1' }] };
     if (path.endsWith('/inventory_kartu_stok') && !options.method) return { ok: true, status: 200, json: async () => [] };
     return { ok: true, status: 204, json: async () => null };
@@ -97,7 +97,7 @@ test('Supabase lock and success RPCs use exact PostgreSQL parameter names', asyn
   });
   assert.deepEqual(Object.keys(rpcCalls[1].body), [
     'p_source', 'p_lock_id', 'p_row_count', 'p_inserted_count', 'p_updated_count',
-    'p_deleted_count', 'p_duration_ms', 'p_source_version',
+    'p_deleted_count', 'p_duration_ms', 'p_source_version','p_full',
   ]);
 });
 
@@ -106,7 +106,7 @@ test('Supabase error RPC uses exact PostgreSQL parameter names', async () => {
   const fetch = async (url, options = {}) => {
     const path = new URL(url).pathname;
     if (path.includes('/rpc/')) rpcCalls.push({ path, body: JSON.parse(options.body) });
-    if (path.endsWith('/rpc/acquire_inventory_sync_lock')) return { ok: true, status: 200, json: async () => true };
+    if (path.endsWith('/rpc/acquire_inventory_sync_fast')) return { ok: true, status: 200, json: async () => ({acquired:true,allow_fast:false}) };
     if (path.endsWith('/inventory_sync_history') && options.method === 'POST') return { ok: true, status: 201, json: async () => [{ id: 'history-1' }] };
     return { ok: true, status: 204, json: async () => null };
   };

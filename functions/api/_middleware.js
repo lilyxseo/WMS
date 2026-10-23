@@ -1,0 +1,2 @@
+import {mutationSyncSources,requestInventoryRefresh} from './_sync-refresh.js';
+export async function onRequest(context){const response=await context.next(),sources=mutationSyncSources(context.request);if(response.ok&&sources.length){const result=await response.clone().json().catch(()=>null);if(result?.success===true){const task=requestInventoryRefresh(context.env,sources);if(context.waitUntil)context.waitUntil(task);else await task;}}return response;}

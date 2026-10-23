@@ -114,7 +114,7 @@ test('7000-row sync uses paged metadata and 1000-row mutation batches', async ()
     const path = parsedUrl.pathname;
     if (path.includes('/rpc/')) {
       calls.rpc += 1;
-      return { ok: true, status: 200, json: async () => path.endsWith('/acquire_inventory_sync_lock') ? true : null };
+      return { ok: true, status: 200, json: async () => path.endsWith('/acquire_inventory_sync_fast') ? {acquired:true,allow_fast:false} : null };
     }
     if (path.endsWith('/inventory_sync_history')) {
       calls.history += 1;
