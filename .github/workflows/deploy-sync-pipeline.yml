@@ -1,0 +1,27 @@
+name: Improve inventory synchronization
+on:
+  push:
+    branches: [main, feat/sync-pipeline]
+    paths:
+      - 'scripts/deploy-sync-pipeline.mjs'
+      - '.github/workflows/deploy-sync-pipeline.yml'
+      - 'supabase/migrations/20261023010000_sync_pipeline.sql'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      SUPABASE_PROJECT_REF: udullprykzdskrxmbbkj
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - id: inspect
+        run: node scripts/deploy-sync-pipeline.mjs --inspect
+      - name: 'Synchronization: ${{ steps.inspect.outputs.result }}'
+        run: echo 'Read-only sync health checked.'
