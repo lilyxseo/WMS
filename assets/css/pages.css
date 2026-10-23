@@ -2800,3 +2800,18 @@ html[data-accent] .account-card .account-profile-link strong{color:var(--text)}
  #toast .toast-close{min-width:28px;min-height:28px;width:28px;height:28px;font-size:18px;margin:-3px -3px 0 0}
  #toast .toast-repeat{font-size:9px;padding:0 4px}
 }
+
+/* Arsip keeps the source sheet's A1 coordinates; header letters are UI chrome. */
+.archive-sheet-meta{display:flex;align-items:center;gap:10px 20px;flex-wrap:wrap;color:var(--muted);font-size:11px}.archive-sheet-meta strong{color:var(--text);font-size:13px}.archive-sheet-meta span:last-child{margin-left:auto}
+.archive-formula-bar{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:8px;min-width:0;padding:4px 8px;background:var(--panel)}
+.archive-formula-bar input{width:86px;min-width:0;min-height:32px;padding:5px 8px;font-size:12px}.archive-fx{font-style:italic;color:var(--muted);border-right:1px solid var(--line);padding-right:10px}.archive-formula-bar output{font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+#mainContentPages .archive-table-wrap{max-height:65vh;overflow:auto;border:1px solid var(--line);border-radius:8px;overscroll-behavior:contain}
+#mainContentPages table.archive-sheet-grid{table-layout:fixed;width:max-content;min-width:100%;border-collapse:separate;border-spacing:0;font-size:12px}
+.archive-sheet-grid .archive-row-number-col{width:52px}.archive-sheet-grid .archive-value-col{width:160px}
+#mainContentPages .archive-sheet-grid :is(th,td){min-width:160px;max-width:160px;width:160px;height:34px;padding:6px 9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:0;border-right:1px solid var(--line);border-bottom:1px solid var(--line);line-height:20px;box-sizing:border-box;text-align:left}
+#mainContentPages .archive-sheet-grid thead th{position:sticky;top:0;z-index:4;background:var(--panel);color:var(--primary);text-align:center;font-weight:600}
+#mainContentPages .archive-sheet-grid :is(.archive-row-number,.archive-corner){position:sticky;left:0;z-index:3;min-width:52px;max-width:52px;width:52px;background:var(--panel);color:var(--muted);text-align:center;cursor:pointer;font-variant-numeric:tabular-nums}
+#mainContentPages .archive-sheet-grid .archive-corner{z-index:5;top:0}.archive-column-select{border:0;background:none;color:inherit;font:inherit;cursor:pointer;min-width:45px;padding:0 4px}.archive-sheet-grid .archive-th-filter{justify-content:center}.archive-sheet-grid .sheet-cell-editor{padding:5px 7px!important;min-height:34px}
+@media(max-width:700px){.archive-sheet-meta span:last-child{margin-left:0}.archive-formula-bar{gap:6px}.archive-formula-bar input{width:70px}.archive-sheet-grid .archive-value-col{width:140px}#mainContentPages .archive-sheet-grid :is(th,td){width:140px;min-width:140px;max-width:140px}.archive-filters{grid-template-columns:minmax(0,1fr)}.archive-page-controls{flex-wrap:wrap}.archive-table-card{min-width:0}}
+.archive-view-options{position:relative;align-self:center;font-size:12px;min-width:0}.archive-view-options summary{cursor:pointer;color:var(--primary);padding:9px 12px;border:1px solid var(--line);border-radius:8px;list-style:none;text-align:center}.archive-view-options-fields{display:grid;gap:8px;padding:10px;min-width:210px;border:1px solid var(--line);border-radius:8px;background:var(--panel);position:absolute;right:0;top:calc(100% + 6px);z-index:12;box-shadow:0 8px 24px #0002}.archive-view-options-fields select{width:100%;min-width:0}.archive-filters{grid-template-columns:minmax(0,1fr) auto;align-items:start}
+@media(max-width:700px){.archive-filters{grid-template-columns:minmax(0,1fr) auto;gap:7px}.archive-view-options summary{font-size:11px;padding:12px 8px}.archive-sheet-meta{gap:6px 12px}}
