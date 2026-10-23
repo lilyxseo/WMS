@@ -2476,7 +2476,7 @@ const MANUAL_SYNC_SOURCES=Object.freeze([
 ['bulky','/api/sync/inventory/bulky'],
 ['netsuite','/api/sync/inventory/netsuite']
 ]);
-async function syncInventorySourcesForRefresh({onProgress=()=>{},onlySources,shouldContinue=()=>true}={}){
+async function syncInventorySourcesForRefresh({onProgress=()=>{},onlySources,shouldContinue=()=>true,pause=ms=>new Promise(resolve=>setTimeout(resolve,ms))}={}){
 const startedAt=Date.now(),sources={};
 // Do not combine these jobs in one Worker: every source performs multiple
 // upstream requests and the combined invocation can exceed Cloudflare limits.
@@ -2484,7 +2484,7 @@ const jobs=onlySources?MANUAL_SYNC_SOURCES.filter(([name])=>onlySources.includes
 let cursor=0,completed=0;
 async function worker(){while(cursor<jobs.length){if(!shouldContinue()){while(cursor<jobs.length){const [name]=jobs[cursor++];sources[name]={success:false,reason:'SESSION_CHANGED'};}return;}const [name,url]=jobs[cursor++];
 const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),120000);
-try{const {res,data}=await fetchJsonSafe(url,{method:'POST',cache:'no-store',signal:controller.signal,silentInvalidJson:true});sources[name]={...(data||{}),success:res.ok&&data?.success===true};if(!sources[name].success&&!sources[name].reason)sources[name].reason=data?.message||`HTTP_${res.status}`;}catch(error){sources[name]={success:false,reason:error?.name==='AbortError'?'TIMEOUT':(error?.message||'SYNC_FAILED')};}finally{clearTimeout(timeout);completed++;onProgress({name,index:completed,total:jobs.length});}}
+try{let response;for(let attempt=0;attempt<4;attempt++){if(!shouldContinue()){response={res:{ok:false},data:{success:false,reason:'SESSION_CHANGED'}};break;}response=await fetchJsonSafe(url,{method:'POST',cache:'no-store',signal:controller.signal,silentInvalidJson:true});if(response.data?.reason!=='SYNC_ALREADY_RUNNING'||attempt===3)break;await pause([2000,4000,8000][attempt]);}const {res,data}=response;sources[name]={...(data||{}),success:res.ok&&data?.success===true};if(!sources[name].success&&!sources[name].reason)sources[name].reason=data?.message||`HTTP_${res.status}`;}catch(error){sources[name]={success:false,reason:error?.name==='AbortError'?'TIMEOUT':(error?.message||'SYNC_FAILED')};}finally{clearTimeout(timeout);completed++;onProgress({name,index:completed,total:jobs.length});}}
 }
 // Two separate endpoint requests run together; each retains its own Worker budget.
 await Promise.all(Array.from({length:Math.min(2,jobs.length)},()=>worker()));
