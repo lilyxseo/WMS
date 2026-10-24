@@ -4753,7 +4753,7 @@ function editableTableActionScope(target){
 }
 let editableTablesController,tableFiltersController;
 function setupEditableTableGrid(){
- if(editableTablesController)return;editableTablesController=mountEditableTables({root:document.getElementById('mainContentPages'),describe:describeEditableTableCell,save:saveEditableTableChanges,canEdit:canCrud,notify:toast,confirm:showConfirmModal,owner:inventoryDraftOwner,actionScope:editableTableActionScope,immediateDraft:scope=>scope==='movement-session',applyDraft:applyMovementDraftChanges});
+ if(editableTablesController)return;editableTablesController=mountEditableTables({root:document.getElementById('mainContentPages'),describe:describeEditableTableCell,save:saveEditableTableChanges,canEdit:canCrud,notify:toast,confirm:showConfirmModal,owner:inventoryDraftOwner,actionScope:editableTableActionScope,immediateDraft:scope=>scope==='movement-session',applyDraft:applyMovementDraftChanges,autoSave:scope=>scope==='balikan'});
  tableFiltersController=mountTableFilters(document.getElementById('mainContentPages'));
  window.addEventListener('auth:logout',()=>{editableTablesController?.reset();tableFiltersController?.reset();});
 }
