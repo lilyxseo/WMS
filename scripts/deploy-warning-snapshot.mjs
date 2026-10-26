@@ -26,7 +26,7 @@ if(process.argv.includes('--inspect')){
  const proof=await fetch(`https://${project}.supabase.co/rest/v1/rpc/inventory_warning_snapshot_signatures`,{method:'POST',headers:{apikey:key,Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:'{}'});
  const signatures=await proof.json().catch(()=>[]);
  await output('health',{sync:health,proofStatus:proof.status,proofSources:Array.isArray(signatures)?signatures.map(item=>({source:item.source,rowCount:item.row_count,hasHash:!!item.content_version})):[]});
- await output('result',{mode:'inspect',ready:result.verification.filter(item=>item.ready).length,total:result.summary.total,partial:result.partial,sources:result.verification.map(item=>({source:item.source,ready:item.ready,readCode:item.readCode,reason:item.reason}))});
+ await output('result',{mode:'inspect',ready:result.verification.filter(item=>item.ready).length,total:result.summary.total,nameConflicts:result.summary.byCategory.NAME_MISMATCH,partial:result.partial,sources:result.verification.map(item=>({source:item.source,ready:item.ready,readCode:item.readCode,reason:item.reason}))});
  console.log('Read-only snapshot detection inspected; schema changes rolled back.');
 }else if(process.argv.includes('--configure')){
  await sql(migration);await sql(stateTests);
@@ -42,6 +42,6 @@ if(process.argv.includes('--inspect')){
  const endpoint=`https://${project}.supabase.co/functions/v1/warning-snapshot`,denied=await fetch(endpoint,{method:'POST'});if(denied.status!==401)throw Error('Snapshot worker must reject anonymous calls');
  const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json','X-WMS-Snapshot-Secret':secret},body:'{}',signal:AbortSignal.timeout(240000)}),result=await response.json();if(!response.ok||!result.success)throw Error('Initial snapshot refresh failed');
  await sql("do $$begin if not exists(select 1 from cron.job where jobname='wms-warning-snapshot') then perform cron.schedule('wms-warning-snapshot','2-59/5 * * * *','select public.dispatch_warning_snapshot()');end if;end$$");
- const state=(await sql("select jsonb_build_object('stored',payload is not null,'rows',jsonb_array_length(payload->'rows'),'ready',(select count(*) from jsonb_array_elements(payload->'verification') v where v->>'ready'='true'),'partial',payload->'partial','schedule',(select schedule from cron.job where jobname='wms-warning-snapshot' and active),'last_error',last_error) as state from public.inventory_warning_snapshot where id"))[0]?.state;
+ const state=(await sql("select jsonb_build_object('stored',payload is not null,'rows',jsonb_array_length(payload->'rows'),'nameConflicts',payload->'summary'->'byCategory'->'NAME_MISMATCH','ready',(select count(*) from jsonb_array_elements(payload->'verification') v where v->>'ready'='true'),'partial',payload->'partial','schedule',(select schedule from cron.job where jobname='wms-warning-snapshot' and active),'last_error',last_error) as state from public.inventory_warning_snapshot where id"))[0]?.state;
  await output('result',state);if(!state?.stored||!state?.schedule)throw Error('Stored warning snapshot not ready');console.log('Server warning snapshot stored and scheduled. No WhatsApp messages sent.');
 }
