@@ -5,6 +5,19 @@ const base=`https://api.supabase.com/v1/projects/${project}`;
 async function management(path,body){const res=await fetch(base+path,{method:body?'POST':'GET',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(60000)});if(!res.ok)throw Error(`Warning management operation failed (${res.status})`);const text=await res.text();return text.trim()?JSON.parse(text):[];}
 const sql=query=>management('/database/query',{query}),literal=value=>"'"+String(value).replaceAll("'","''")+"'";
 const output=async result=>{if(process.env.GITHUB_OUTPUT)await appendFile(process.env.GITHUB_OUTPUT,`result=${result}\n`);console.log(result);};
+if(process.argv.includes('--diagnose')){
+ const rows=await sql(`select jsonb_build_object(
+ 'state',(select jsonb_build_object('initialized',initialized,'lifecycle',lifecycle_initialized,'lease',lease,'activeLease',lease>now()) from public.warning_notify_state where id),
+ 'tracking',(select jsonb_build_object('active',count(*) filter(where active),'resolved',count(*) filter(where not active),'lastChanged',max(changed_at),'lastSeen',max(last_seen)) from public.warning_notify_seen),
+ 'queue',(select coalesce(jsonb_agg(x),'[]') from (select event_type,status,count(*) as count,max(created_at) as latest,max(attempts) as attempts from public.warning_notify_outbox group by event_type,status order by event_type,status) x),
+ 'snapshot',(select jsonb_build_object('published',published_at,'attempt',last_attempt_at,'error',last_error,'total',jsonb_array_length(payload->'rows'),'partial',payload->'partial','verification',payload->'verification') from public.inventory_warning_snapshot where id),
+ 'cron',(select jsonb_agg(x) from (select j.jobname,j.active,j.schedule,d.status,d.start_time,d.end_time from cron.job j left join lateral (select status,start_time,end_time from cron.job_run_details where jobid=j.jobid order by start_time desc limit 1) d on true where j.jobname in ('wms-warning-snapshot','wms-warning-notifications')) x)
+ ) as health`);
+ const health=rows[0]?.health||{};
+ if(health.snapshot?.verification)health.snapshot.verification=health.snapshot.verification.map(item=>({source:item.source,ready:item.ready,readCode:item.readCode,reason:item.reason}));
+ await output(JSON.stringify(health));exitDiagnostic();
+}
+function exitDiagnostic(){process.exit(0);}
 const baseMigration=await readFile(new URL('../supabase/migrations/20261013030000_warning_notifications.sql',import.meta.url),'utf8'),migration=await readFile(new URL('../supabase/migrations/20261023000000_warning_notification_lifecycle.sql',import.meta.url),'utf8');
 const tests=`do $$declare owner uuid:=gen_random_uuid();contender uuid:=gen_random_uuid();finding jsonb;answer jsonb;event_id uuid;amount integer;begin
  delete from public.warning_notify_outbox;delete from public.warning_notify_seen;

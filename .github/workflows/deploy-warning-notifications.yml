@@ -8,13 +8,34 @@ on:
       - 'scripts/deploy-warning-notifications.mjs'
       - '.github/workflows/deploy-warning-notifications.yml'
   workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        options: [deploy, diagnose]
+        default: deploy
 permissions:
   contents: read
 concurrency:
   group: warning-notification-deploy
   cancel-in-progress: false
 jobs:
+  diagnose:
+    if: inputs.mode == 'diagnose'
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_PROJECT_REF: udullprykzdskrxmbbkj
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - id: health
+        run: node scripts/deploy-warning-notifications.mjs --diagnose
+      - name: 'Warning diagnostics: ${{ steps.health.outputs.result }}'
+        run: echo 'Read-only notification state inspected; no messages sent.'
   deploy:
+    if: inputs.mode != 'diagnose'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
