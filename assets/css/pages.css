@@ -2826,3 +2826,8 @@ html[data-accent] .account-card .account-profile-link strong{color:var(--text)}
 #page-movement .movement-session-card .session-draft-status>span{min-width:0;flex:0 1 auto;font-size:10px}
 #page-movement .movement-session-card .session-draft-status small{margin:0;line-height:1.4}
 #page-movement .movement-session-search{margin-top:8px}
+
+.file-toolbar .file-refresh{display:inline-flex;align-items:center;justify-content:center;gap:6px;flex-shrink:0;min-height:36px;font-size:11px;white-space:nowrap}
+.file-refresh[aria-busy="true"] svg{animation:file-refresh-spin 1s linear infinite}
+@keyframes file-refresh-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.file-refresh[aria-busy="true"] svg{animation:none}}
