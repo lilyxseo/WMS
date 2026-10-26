@@ -70,6 +70,7 @@ export async function onRequestPatch({ request, env, data: contextData }) {
     const data = await res.json();
     if (!res.ok) return json({ message: data.error?.message || 'Gagal update cell' }, res.status);
 
+    if(!data.updatedData)return json({success:false,message:'Penyimpanan Google Sheets belum terkonfirmasi. Periksa sheet sebelum mencoba lagi.'},502);
     const change=contextData?.operationAudit?.metadata?.changes?.find(change=>change.rowNumber===rowNumber&&change.field===field);if(change&&data.updatedData){change.newValue=data.updatedData.values?.[0]?.[0]??'';change.afterSource='GOOGLE_SHEETS';}
     return json({ success: true });
   } catch (err) {

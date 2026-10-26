@@ -126,7 +126,7 @@ test('Balikan checkbox writes TRUE/FALSE with Gmail and hides its token from the
   if(url.endsWith('/app-google-auth')) return Response.json({access_token:'gmail-access'});
   assert.equal(init.headers.Authorization,'Bearer gmail-access');
   if(init.method!=='PUT') return Response.json({values:[['Centang','SKU','Nama Barang','Qty']]});
-  writes.push(JSON.parse(init.body).values[0][0]);return Response.json({});
+  writes.push(JSON.parse(init.body).values[0][0]);return Response.json({updatedData:{values:[[writes.at(-1)]]}});
  });
  for(const checked of [true,false]) {
   const response=await onRequestPatch({request:crudRequest('PATCH',{sheetName:'TRIP 1',rowNumber:12,checked}),env:appEnv});

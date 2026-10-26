@@ -104,7 +104,7 @@ export async function onRequestPost({ request, env, data: contextData }) {
       });
       const out = await res.json();
       if (!res.ok) return json({ success: false, message: out.error?.message || 'Gagal update data' }, res.status);
-      if(!Array.isArray(out.responses)||out.responses.length!==data.length)return json({success:false,message:'Penyimpanan Google Sheets belum terkonfirmasi. Periksa sheet sebelum mencoba lagi.'},502);
+      if(!Array.isArray(out.responses)||out.responses.length!==data.length||out.responses.some(response=>!response?.updatedData))return json({success:false,message:'Penyimpanan Google Sheets belum terkonfirmasi. Periksa sheet sebelum mencoba lagi.'},502);
       auditTargets.forEach((target,index)=>{const change=contextData?.operationAudit?.metadata?.changes?.find(change=>change.rowNumber===target.rowNumber&&change.field===target.field);if(change){change.newValue=out.responses[index]?.updatedData?.values?.[0]?.[0]??'';change.afterSource='GOOGLE_SHEETS';}});
     }
 
