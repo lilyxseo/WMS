@@ -14,3 +14,12 @@ test('worker records a failure without deleting stored results',async()=>{const 
 
 import {atomicWarningSource} from '../functions/api/_warning-data.js';
 test('atomic database snapshot accepts a matching last-success fingerprint during a sync but rejects partial writes',()=>{const hash='a'.repeat(64),sync=[{source:'kartu_stok',status:'syncing',locked_at:'2026-10-21T01:00:00Z',last_success_at:'2026-10-21T00:00:00Z',source_version:hash}];assert.equal(atomicWarningSource(sync,[{source:'kartu_stok',content_version:hash,row_count:100}],'kartu_stok').ready,true);assert.equal(atomicWarningSource(sync,[{source:'kartu_stok',content_version:'b'.repeat(64),row_count:100}],'kartu_stok').ready,false);assert.equal(atomicWarningSource([{...sync[0],last_success_at:null}],[{source:'kartu_stok',content_version:hash,row_count:100}],'kartu_stok').ready,false);});
+
+test('fresh checksum-proven atomic data remains notification-ready during background sync',()=>{
+ const version='c'.repeat(64),source={source:'barang_keluar',status:'syncing',locked_at:new Date().toISOString(),last_success_at:new Date(Date.now()-60000).toISOString(),source_version:version},proof=[{source:'barang_keluar',content_version:version,row_count:500}];
+ assert.equal(atomicWarningSource([source],proof,'barang_keluar').stale,false);
+ assert.equal(atomicWarningSource([{...source,status:'error'}],proof,'barang_keluar').stale,true);
+ assert.equal(atomicWarningSource([{...source,last_success_at:new Date(Date.now()-16*60000).toISOString()}],proof,'barang_keluar').stale,true);
+ assert.equal(atomicWarningSource([{...source,status:'success',locked_at:null,last_success_at:new Date(Date.now()-16*60000).toISOString()}],proof,'barang_keluar').stale,true);
+ assert.equal(atomicWarningSource([source],[{...proof[0],content_version:'d'.repeat(64)}],'barang_keluar').ready,false);
+});

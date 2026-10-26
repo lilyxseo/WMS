@@ -77,7 +77,11 @@ export async function loadWarningData(env){
 export function atomicWarningSource(sync,signatures,key){
  const status=sync.find(item=>item.source===key),proof=signatures.find(item=>item.source===key);
  const ready=!!(status?.last_success_at&&/^[a-f0-9]{64}$/.test(status.source_version||'')&&proof?.content_version===status.source_version);
- return {source:key,ready,stale:ready&&(status.status!=='success'||!!status.locked_at),rowCount:ready?proof.row_count:null,lastSuccess:status?.last_success_at||null,reason:ready?'Data dibaca atomik dan checksum cocok dengan sinkronisasi terakhir.':'Checksum data belum cocok dengan snapshot sinkronisasi terakhir.'};
+ // An in-flight refresh does not invalidate the previous committed MVCC snapshot.
+ // Only trust it while its checksum matches and its successful sync is recent.
+ const age=Date.now()-Date.parse(status?.last_success_at||''),fresh=Number.isFinite(age)&&age>=0&&age<=15*60*1000;
+ const refreshing=status?.status==='syncing'&&fresh;
+ return {source:key,ready,stale:ready&&(!fresh||status.status!=='success'&&!refreshing),rowCount:ready?proof.row_count:null,lastSuccess:status?.last_success_at||null,reason:ready?'Data dibaca atomik dan checksum cocok dengan sinkronisasi terakhir.':'Checksum data belum cocok dengan snapshot sinkronisasi terakhir.'};
 }
 async function loadAtomicWarningData(config){
  const response=await fetch(config.url+'/rest/v1/rpc/inventory_warning_detection_data',{method:'POST',headers:{apikey:config.key,Authorization:`Bearer ${config.key}`,'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(60000)}),data=await response.json();
