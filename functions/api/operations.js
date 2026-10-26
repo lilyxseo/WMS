@@ -1,0 +1,16 @@
+import {getNoteIdentity} from './_note-identity.js';
+import {archiveDeveloperRole} from '../../assets/js/archive-source-config.js';
+import {workStore,json} from './_work-store.js';
+export function operationSyncState(row,sources){if(row.status!=='SUCCESS'&&row.status!=='PARTIAL')return 'NOT_WRITTEN';if(!row.sync_sources?.length)return 'DIRECT';if(!sources)return 'UNKNOWN';const states=row.sync_sources.map(source=>sources.find(item=>item.source===source));if(states.every(state=>Date.parse(state?.last_success_at||0)>=Date.parse(row.finished_at)))return 'READY';return states.some(state=>state?.status==='error')?'ERROR':'WAITING';}
+export async function onRequestGet({request,env}){try{const who=await getNoteIdentity(request,env);if(!who)return json({success:false,message:'Silakan login kembali.'},401);if(!archiveDeveloperRole(who.role))return json({success:false,message:'Akses Log Aktivitas hanya untuk PIC Inventory atau Developer.'},403);
+ await workStore(env,'wms_operations?'+new URLSearchParams({status:'eq.PENDING',created_at:'lt.'+new Date(Date.now()-180000).toISOString()}),{method:'PATCH',body:JSON.stringify({status:'UNCERTAIN',detail:'Proses belum mengonfirmasi hasil. Periksa data sebelum mencoba lagi.'})});
+ const query=new URL(request.url).searchParams,limit=Math.min(100,Math.max(1,Number(query.get('limit'))||25)),offset=Math.max(0,Number(query.get('offset'))||0),params=new URLSearchParams({select:'*',order:'created_at.desc,id.desc',limit:String(Math.trunc(limit)),offset:String(Math.trunc(offset))});
+ for(const [key,column] of [['module','module'],['action','action'],['status','status']])if(query.get(key))params.set(column,'eq.'+query.get(key).slice(0,100));
+ if(query.get('user_name'))params.set('user_name','ilike.*'+query.get('user_name').replace(/[%_*]/g,'').slice(0,100)+'*');
+ const from=query.get('from'),to=query.get('to'),valid=value=>/^\d{4}-\d{2}-\d{2}$/.test(value)&&new Date(value).toISOString().slice(0,10)===value;
+ if(from&&!valid(from)||to&&!valid(to)||from&&to&&from>to)return json({success:false,message:'Rentang tanggal tidak valid.'},400);
+ if(from)params.append('created_at','gte.'+from+'T00:00:00+07:00');if(to)params.append('created_at','lt.'+new Date(Date.parse(to)+86400000).toISOString().slice(0,10)+'T00:00:00+07:00');
+ const term=String(query.get('search')||'').replace(/[\\"*,()%_]/g,' ').trim().slice(0,100);if(term)params.set('or','('+['detail','reference','user_name','module','action','endpoint','page'].map(field=>`${field}.ilike."*${term}*"`).join(',')+')');
+ const {data,response}=await workStore(env,'wms_operations?'+params,{headers:{Prefer:'count=exact'}});let sources=null;try{sources=(await workStore(env,'inventory_sync_status?select=source,status,last_success_at')).data;}catch{}
+ return json({success:true,total:Number(response.headers.get('content-range')?.split('/')[1])||0,data:data.map(row=>({...row,user_id:row.owner,reference:row.id,metadata:{...row.metadata,page:row.page,source:row.source,editor:row.editor,endpoint:row.endpoint,verified:true,syncState:operationSyncState(row,sources),requestReference:row.reference,httpStatus:row.http_status,durationMs:row.duration_ms,details:{sheet:row.metadata?.sheet,rows:row.metadata?.rows,fields:row.metadata?.fields}}}))});
+ }catch{return json({success:false,message:'Log transaksi belum dapat dimuat.'},503);}}

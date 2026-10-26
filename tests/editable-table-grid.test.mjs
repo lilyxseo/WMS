@@ -21,3 +21,5 @@ test('paste rejects protected cells and page overflow before any writes',()=>{
  assert.throws(()=>planGridPaste(matrix,{row:0,col:0},[Array(1001).fill('x')]),/1000/);
  const patches=planGridPaste(matrix,{row:1,col:0},[['2','3']]);assert.deepEqual(patches.map(p=>p.value),['2','3']);
 });
+
+test('selectable readonly cells support arrow navigation while paste still rejects their modification',()=>{const matrix=[[{value:'45',editable:false,selectable:true},{value:'SKU-A',editable:false,selectable:true},{value:'Item',editable:false,selectable:true},{value:'A10-1',editable:true}]];assert.deepEqual(gridMove(matrix,{row:0,col:3},'ArrowLeft'),{row:0,col:2});assert.deepEqual(gridMove(matrix,{row:0,col:0},'ArrowRight'),{row:0,col:1});assert.throws(()=>planGridPaste(matrix,{row:0,col:0},[['46','NEW','New name']]),/tidak dapat diedit/);assert.equal(matrix[0][0].value,'45');});
