@@ -10,11 +10,12 @@ if(process.argv.includes('--diagnose')){
  'state',(select jsonb_build_object('initialized',initialized,'lifecycle',lifecycle_initialized,'lease',lease,'activeLease',lease>now()) from public.warning_notify_state where id),
  'tracking',(select jsonb_build_object('active',count(*) filter(where active),'resolved',count(*) filter(where not active),'lastChanged',max(changed_at),'lastSeen',max(last_seen)) from public.warning_notify_seen),
  'queue',(select coalesce(jsonb_agg(x),'[]') from (select event_type,status,count(*) as count,max(created_at) as latest,max(attempts) as attempts from public.warning_notify_outbox group by event_type,status order by event_type,status) x),
- 'snapshot',(select jsonb_build_object('published',published_at,'attempt',last_attempt_at,'error',last_error,'total',jsonb_array_length(payload->'rows'),'partial',payload->'partial','verification',payload->'verification') from public.inventory_warning_snapshot where id),
+ 'snapshot',(select jsonb_build_object('published',published_at,'attempt',last_attempt_at,'error',last_error,'total',jsonb_array_length(payload->'rows'),'partial',payload->'partial','unavailable',payload->'unavailableSources','verification',payload->'verification') from public.inventory_warning_snapshot where id),
+ 'sync',(select jsonb_agg(x) from (select source,status,last_success_at,locked_at from public.inventory_sync_status where source in ('kartu_stok','rpl','bulky','barang_masuk','barang_keluar')) x),
  'cron',(select jsonb_agg(x) from (select j.jobname,j.active,j.schedule,d.status,d.start_time,d.end_time from cron.job j left join lateral (select status,start_time,end_time from cron.job_run_details where jobid=j.jobid order by start_time desc limit 1) d on true where j.jobname in ('wms-warning-snapshot','wms-warning-notifications')) x)
  ) as health`);
  const health=rows[0]?.health||{};
- if(health.snapshot?.verification)health.snapshot.verification=health.snapshot.verification.map(item=>({source:item.source,ready:item.ready,readCode:item.readCode,reason:item.reason}));
+ if(health.snapshot?.verification)health.snapshot.verification=health.snapshot.verification.map(item=>({source:item.source,ready:item.ready,stale:item.stale,readCode:item.readCode,reason:item.reason}));
  await output(JSON.stringify(health));exitDiagnostic();
 }
 function exitDiagnostic(){process.exit(0);}
