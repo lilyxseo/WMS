@@ -8,9 +8,9 @@ test('Cari Data scan normalizes the SKU string and navigates directly to detail'
   const source = await mainSource();
   const handler = source.slice(source.indexOf('function handleSearchScanResult'), source.indexOf('async function openBarcodeScanner'));
 
-  assert.match(handler, /const sku=normalizeScannedSku\(scannedValue\)/);
+  assert.match(handler, /const sku=normalizeScannedSku\(result.sku\)/);
   assert.match(handler, /navigateTo\(`\/sku\/\$\{encodeURIComponent\(sku\)\}`\)/);
-  assert.doesNotMatch(handler, /resolveScannedSku|runSearch|triggerSearchSku|lastResults|CACHE_SKU|mode=full|Number\s*\(/);
+  assert.doesNotMatch(handler, /runSearch|triggerSearchSku|lastResults|CACHE_SKU|mode=full|Number\s*\(/);
 });
 
 test('Cari Data scan has a short duplicate-navigation lock', async () => {

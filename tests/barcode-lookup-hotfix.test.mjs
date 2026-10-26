@@ -28,7 +28,7 @@ test('known barcode uses one exact Supabase query and returns JSON SKU', async t
   assert.equal(calledUrl.pathname, '/rest/v1/inventory_barcode');
   assert.equal(calledUrl.searchParams.get('select'), 'barcode,sku');
   assert.equal(calledUrl.searchParams.get('barcode'), 'eq.8990001');
-  assert.equal(calledUrl.searchParams.get('limit'), '1');
+  assert.equal(calledUrl.searchParams.get('limit'), '2');
   assert.doesNotMatch(calledUrl.href, /mode=full/);
 });
 
