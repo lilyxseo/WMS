@@ -1,3 +1,4 @@
+import {writeDraftValue} from './draft-storage.js?v=__APP_VERSION__';
 import {createAccountDraft,accountDraftMarkup} from './account-drafts.js?v=__APP_VERSION__';
 export const ENTRY_MAX_ROWS=1000;
 export const ENTRY_FIELDS=['tanggal','from','to','sku','namaBarang','qty','status','pic','keterangan'];
@@ -91,7 +92,7 @@ export function mountStockEntry(root,{owner,fetchFn=fetch,confirm,parsePdf,onErr
  const record=(before,group=null)=>history.record(before,capture(),group);
  const alive=()=>!disposed&&isCurrent();
  try{const saved=JSON.parse(localStorage.getItem(key)||'null');if(saved?.version===1&&Array.isArray(saved.rows)&&saved.rows.length<=ENTRY_MAX_ROWS){rows=saved.rows.map(row=>row.used===true||row.edited===true?({...makeEntry(),...Object.fromEntries(fields.map(f=>[f,String(row?.[f]??'')])),tanggal:row.used===true?entryDate(row.tanggal):entryNow(),used:row.used===true,edited:row.edited===true,pdfWarning:String(row.pdfWarning||'')}):makeEntry());while(rows.length<20)rows.push(makeEntry());pending=saved.pending||null;if(defaultValues.keterangan&&!pending)rows.forEach(row=>{if(['','RECEIPT','PENGELUARAN'].includes(row.keterangan))row.keterangan=defaultValues.keterangan;});}}catch{}
- function persist(){try{localStorage.setItem(key,JSON.stringify({version:1,rows,pending}));storageError=false;if(!applyingCloud)cloudDraft?.save(cloudSnapshot());return true;}catch{storageError=true;setMessage('Draft tidak dapat disimpan di perangkat. Aktifkan penyimpanan browser sebelum mengirim.');return false;}}
+ function persist(){try{if(!writeDraftValue(localStorage,key,JSON.stringify({version:1,rows,pending})))throw Error('Draft storage unavailable');storageError=false;if(!applyingCloud)cloudDraft?.save(cloudSnapshot());return true;}catch{storageError=true;setMessage('Draft tidak dapat disimpan di perangkat. Aktifkan penyimpanan browser sebelum mengirim.');return false;}}
  function setMessage(text,error=false){message=text;if(error)onError(text);const el=root.querySelector('[data-entry-message]');if(el)el.textContent=text;}
  function updateTotals(){const total=entryTotals(rows);for(const name of ['rows','sku','qty']){const el=root.querySelector(`[data-entry-total="${name}"]`);if(el)el.textContent=total[name].toLocaleString('id-ID');}const save=root.querySelector('[data-entry-save]');if(save)save.disabled=!config?.canWrite||busy||!!pending||!total.rows||['loading','conflict'].includes(cloudDraft?.state.status);}
  function cell(row,index,col){const field=fields[col],value=row[field],disabled=busy||!!pending||!config?.canWrite;
