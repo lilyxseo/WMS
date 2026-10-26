@@ -40,6 +40,7 @@ export async function onRequestPatch({ request, env, data: contextData }) {
     const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${env.SHEET_ID_INVENTORY}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED&includeValuesInResponse=true&responseValueRenderOption=FORMATTED_VALUE`, { method: 'PUT', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[checked ? 'TRUE' : 'FALSE']] }) });
     const data = await res.json();
     if (!res.ok) return json({ message: data.error?.message || 'Gagal update centang' }, res.status);
+    if(!data.updatedData)return json({success:false,message:'Penyimpanan Google Sheets belum terkonfirmasi. Periksa sheet sebelum mencoba lagi.'},502);
     const change=contextData?.operationAudit?.metadata?.changes?.find(change=>change.rowNumber===rowNumber&&change.field==='checked');if(change&&data.updatedData){change.newValue=data.updatedData.values?.[0]?.[0]??'';change.afterSource='GOOGLE_SHEETS';}
     return json({ success: true });
   } catch (err) { return json({ message: err?.message || 'Internal server error' }, 500); }
