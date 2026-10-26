@@ -1,4 +1,4 @@
-import { json, getAccessToken, escSheet, buildHeaderInfo } from './_utils';
+import { json, getAccessToken, escSheet, buildHeaderInfo } from './_utils.js';
 import { requirePicRole } from '../_authz.js';
 
 const EDITABLE_FIELDS = {
@@ -43,7 +43,7 @@ const resolveColumn = (field, headers, headerInfo) => {
   return colIndex;
 };
 
-export async function onRequestPost({ request, env }) {
+export async function onRequestPost({ request, env, data: contextData }) {
   const authz = await requirePicRole({ request, env });
   if (!authz.ok) return authz.response;
   try {
@@ -54,19 +54,21 @@ export async function onRequestPost({ request, env }) {
     if (!sheetName) return json({ success: false, message: 'sheetName wajib diisi' }, 400);
     if (!edits.length) return json({ success: false, message: 'edits wajib diisi' }, 400);
 
-    const accessToken = await getAccessToken(env);
+    const snapshot=contextData?.operationSnapshot;
+    const accessToken = snapshot?.token || await getAccessToken(env);
     const readRange = `${escSheet(sheetName)}!A1:ZZ10`;
-    const readRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${env.SHEET_ID_INVENTORY}/values/${encodeURIComponent(readRange)}`, { headers: { Authorization: `Bearer ${accessToken}` } });
-    const readData = await readRes.json();
-    if (!readRes.ok) return json({ success: false, message: readData.error?.message || 'Gagal membaca header sheet' }, readRes.status);
-
+    let readData;
+    if(snapshot?.headerValues)readData={values:snapshot.headerValues};else{
+      const readRes=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${env.SHEET_ID_INVENTORY}/values/${encodeURIComponent(readRange)}`,{headers:{Authorization:`Bearer ${accessToken}`}});
+      readData=await readRes.json();if(!readRes.ok)return json({success:false,message:'Gagal membaca header sheet'},readRes.status);
+    }
     const rows = readData.values || [];
     const headerInfo = buildHeaderInfo(rows);
     if (!headerInfo) return json({ success: false, message: 'Header tidak valid. Pastikan ada kolom SKU, Nama Barang, dan Qty.' }, 400);
     const headers = rows[headerInfo.headerRowIndex] || [];
 
     const failed = [];
-    const data = [];
+    const data = [], auditTargets=[];
     const seen = new Set();
 
     for (const edit of edits) {
@@ -86,6 +88,7 @@ export async function onRequestPost({ request, env }) {
         const key = `${rowNumber}:${field}`;
         if (seen.has(key)) continue;
         seen.add(key);
+        auditTargets.push({rowNumber,field});
         data.push({
           range: `${escSheet(sheetName)}!${colToLetter(colIndex)}${rowNumber}`,
           values: [[field === 'lokasi' ? decodeLocationValue(rawValue) : (rawValue == null ? '' : String(rawValue))]]
@@ -97,10 +100,12 @@ export async function onRequestPost({ request, env }) {
       const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${env.SHEET_ID_INVENTORY}/values:batchUpdate`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data })
+        body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data, includeValuesInResponse:true, responseValueRenderOption:'FORMATTED_VALUE' })
       });
       const out = await res.json();
       if (!res.ok) return json({ success: false, message: out.error?.message || 'Gagal update data' }, res.status);
+      if(!Array.isArray(out.responses)||out.responses.length!==data.length)return json({success:false,message:'Penyimpanan Google Sheets belum terkonfirmasi. Periksa sheet sebelum mencoba lagi.'},502);
+      auditTargets.forEach((target,index)=>{const change=contextData?.operationAudit?.metadata?.changes?.find(change=>change.rowNumber===target.rowNumber&&change.field===target.field);if(change){change.newValue=out.responses[index]?.updatedData?.values?.[0]?.[0]??'';change.afterSource='GOOGLE_SHEETS';}});
     }
 
     return json({ success: true, updated: data.length, failed });
