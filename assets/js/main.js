@@ -1,3 +1,4 @@
+import {normalizeScanValue} from './utils/scan-value.js?v=__APP_VERSION__';
 import {writeDraftValue} from './draft-storage.js?v=__APP_VERSION__';
 import {createAccountDraft,accountDraftMarkup} from './account-drafts.js?v=__APP_VERSION__';
 import { parseArchiveGrid, extendArchiveGrid, archiveAddress, archiveCellDescriptor } from './archive-grid.js?v=__APP_VERSION__';
@@ -44,7 +45,7 @@ if(mode==='in'||mode==='out')rerenderTableWithScrollRestore(mode,true);
 },180);
 const BARCODE_STATE={barcodeToSku:new Map(),barcodeToName:new Map(),loaded:false,updatedAt:0};
 const SEARCH_STATE={inputValue:"",filterValue:"",page:1,pageSize:50,minChars:2,debounceMs:500,debounceTimer:null,idleTimer:null,abortController:null,runToken:0,lastRenderedHtml:"",completedQuery:null,completedSource:null};
-const SCANNER_STATE={instance:null,isScannerRunning:false,isClosing:false,hasScanned:false,targetInputId:"searchInput",resultHandler:null,lastSearchSku:"",lastSearchNavigationAt:0,libraryPromise:null};
+const SCANNER_STATE={generation:0,instance:null,isScannerRunning:false,isClosing:false,hasScanned:false,targetInputId:"searchInput",resultHandler:null,lastSearchSku:"",lastSearchNavigationAt:0,libraryPromise:null};
 const SEARCH_SCAN_NAVIGATION_LOCK_MS=750;
 const PAGE_REQUEST_TIMEOUT_MS=12000;
 function pageLog(page,event,detail){const suffix=detail===undefined?'':` ${typeof detail==='object'?JSON.stringify(detail):detail}`;console.info(`[${page}] ${event}${suffix}`);}
@@ -1876,6 +1877,7 @@ SEARCH_STATE.idleTimer=setTimeout(run,0);
 async function runSearch(){const qRaw=SEARCH_STATE.filterValue||"",q=normalizeSearch(qRaw),prevQuery=lastQuery;lastQuery=qRaw;const minChars=SEARCH_STATE.minChars||2;if(q.length<minChars){SEARCH_STATE.completedQuery=null;SEARCH_STATE.completedSource=null;lastResults=[];SEARCH_STATE.page=1;renderQuickResultCard(null,qRaw,"hint");return renderState("results",`Ketik minimal ${minChars} huruf untuk mencari.`);}saveRecentSearch(qRaw);if(SEARCH_STATE.abortController)SEARCH_STATE.abortController.abort();SEARCH_STATE.abortController=new AbortController();const signal=SEARCH_STATE.abortController.signal;const token=++SEARCH_STATE.runToken;renderState("results","Mencari di database...");try{const headers=await awaitPageAuth('CariData');const filter=currentFilter==="Semua"?"":`&source=${encodeURIComponent(currentFilter)}`;const {res,data}=await fetchPageJson('CariData',`/api/inventory-search?q=${encodeURIComponent(qRaw)}${filter}`,{headers,signal,cache:'no-store'});if(signal.aborted||token!==SEARCH_STATE.runToken)return;if(!res.ok||!data?.success)throw new Error(data?.message||"Pencarian gagal");const nextResults=Array.isArray(data.rows)?data.rows:[];if(nextResults.length!==lastResults.length||normalizeSearch(prevQuery)!==q)SEARCH_STATE.page=1;lastResults=nextResults;SEARCH_STATE.completedQuery=qRaw;SEARCH_STATE.completedSource=currentFilter;renderQuickResultCard(pickQuickResult(lastResults,qRaw),qRaw,nextResults.length?"result":"empty");renderResults(lastResults,qRaw);pageLog('CariData','renderMs',Math.round(performance.now()-startupMark));}catch(err){if(err?.name!=="AbortError"&&token===SEARCH_STATE.runToken){pageLog('CariData','error',err?.message||err);const node=document.getElementById('results');if(node)node.innerHTML=`<div class='state error'>Gagal memuat data. <button type='button' class='btn-ghost' data-retry-search>Coba Lagi</button></div>`;}}}
 
 const SCANNER_LIBRARY_URLS=[
+"/assets/vendor/html5-qrcode-2.3.8.min.js",
 "https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js",
 "https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"
 ];
@@ -1885,7 +1887,7 @@ if(SCANNER_STATE.libraryPromise)return SCANNER_STATE.libraryPromise;
 SCANNER_STATE.libraryPromise=(async()=>{
 for(const src of SCANNER_LIBRARY_URLS){
 try{
-await new Promise((resolve,reject)=>{const script=document.createElement("script");script.src=src;script.async=true;script.onload=resolve;script.onerror=()=>{script.remove();reject(new Error("LOAD_FAILED"));};document.head.appendChild(script);});
+await new Promise((resolve,reject)=>{const script=document.createElement("script");const timer=setTimeout(()=>{script.remove();reject(new Error("LOAD_TIMEOUT"));},12000);script.src=src;script.async=true;script.onload=()=>{clearTimeout(timer);resolve();};script.onerror=()=>{clearTimeout(timer);script.remove();reject(new Error("LOAD_FAILED"));};document.head.appendChild(script);});
 if(typeof window.Html5Qrcode==="function")return;
 }catch(_){}
 }
@@ -1899,14 +1901,13 @@ const config={
 fps:15,
 qrbox:(viewfinderWidth,viewfinderHeight)=>{
 const minEdge=Math.min(viewfinderWidth,viewfinderHeight);
-const size=Math.floor(minEdge*0.7);
-return {width:size,height:size};
+return {width:Math.floor(viewfinderWidth*0.9),height:Math.floor(minEdge*0.65)};
 },
-aspectRatio:1,
+aspectRatio:1.333334,
 disableFlip:false,
-useBarCodeDetectorIfSupported:true
+useBarCodeDetectorIfSupported:false
 };
-if(supported)config.formatsToSupport=[supported.QR_CODE,supported.CODE_128,supported.EAN_13,supported.EAN_8,supported.UPC_A,supported.UPC_E].filter(Number.isInteger);
+if(supported)config.formatsToSupport=[supported.QR_CODE,supported.CODE_128,supported.CODE_39,supported.CODE_93,supported.ITF,supported.CODABAR,supported.DATA_MATRIX,supported.PDF_417,supported.EAN_13,supported.EAN_8,supported.UPC_A,supported.UPC_E].filter(Number.isInteger);
 return config;
 }
 
@@ -1916,12 +1917,10 @@ navigator.vibrate(100);
 }
 }
 function cleanScannedSku(text){
-const raw=String(text||"").trim();
-const match=raw.match(/\d{8,20}/);
-return match?match[0]:raw;
+return normalizeScanValue(text);
 }
 function normalizeScannedSku(scannedValue){
-return String(scannedValue??"").trim();
+return normalizeScanValue(scannedValue);
 }
 function findSkuByBarcode(barcode){
 const key=cleanScannedSku(barcode);
@@ -1935,7 +1934,7 @@ const cleaned=cleanScannedSku(rawText);
 if(!cleaned)return {scanned:"",sku:"",mapped:false};
 const headers=await getAuthHeaders();
 if(!headers.Authorization)throw new Error("AUTH_REQUIRED");
-const response=await nativeFetch(`/api/barcode-lookup?barcode=${encodeURIComponent(cleaned)}`,{headers});
+const response=await nativeFetch(`/api/barcode-lookup?barcode=${encodeURIComponent(cleaned)}`,{headers,signal:AbortSignal.timeout(15000),cache:"no-store"});
 const contentType=String(response.headers.get("content-type")||"").toLowerCase();
 if(!contentType.includes("application/json")){
 const text=String(await response.text()).trim();
@@ -1943,7 +1942,10 @@ throw new Error(`Barcode lookup failed: HTTP ${response.status}${text?` ${text}`
 }
 const payload=await response.json();
 if(!response.ok||payload?.success!==true)throw new Error(payload?.error||`Barcode lookup failed: HTTP ${response.status}`);
-return {scanned:cleaned,sku:String(payload?.sku||"").trim(),mapped:payload?.found===true};
+if(payload?.found===true&&String(payload.sku||'').trim())return {scanned:cleaned,sku:String(payload.sku).trim(),mapped:true};
+// A TRIP can contain an SKU that is not present in the stock/barcode master yet.
+const local=(window.BALIKAN_ROWS||[]).find(row=>String(row.sku||'').trim().toUpperCase()===cleaned.toUpperCase());
+return {scanned:cleaned,sku:local?String(local.sku).trim():cleaned,mapped:!!local};
 }
 function triggerSearchSku(sku){
 SEARCH_STATE.inputValue=sku;
@@ -1957,8 +1959,10 @@ if(!exact)return false;
 navigateTo('/sku/'+encodeURIComponent(exact.sku));
 return true;
 }
-function handleSearchScanResult(scannedValue){
-const sku=normalizeScannedSku(scannedValue);
+async function handleSearchScanResult(scannedValue){
+let result;try{result=await resolveScannedSku(scannedValue);}catch(error){toast('Gagal mencocokkan hasil scan. Coba lagi.','error');return;}
+if(!result.mapped){toast('Barcode atau SKU tidak ditemukan: '+result.scanned,'error');return;}
+const sku=normalizeScannedSku(result.sku);
 if(!sku)return;
 const now=Date.now();
 if(SCANNER_STATE.lastSearchSku===sku&&now-SCANNER_STATE.lastSearchNavigationAt<SEARCH_SCAN_NAVIGATION_LOCK_MS)return;
@@ -1987,7 +1991,10 @@ SCANNER_STATE.resultHandler=typeof onResult==="function"?onResult:handleSearchSc
 return openScannerModal();
 }
 async function openScannerModal(){
+if(SCANNER_STATE.isScannerRunning)return;
+const generation=++SCANNER_STATE.generation;
 try{await ensureScannerLibrary();}catch(err){toast(err?.message||"Scanner belum tersedia.","error");return;}
+if(generation!==SCANNER_STATE.generation)return;
 if(!navigator.mediaDevices?.getUserMedia){toast("Kamera tidak didukung browser ini. Gunakan browser terbaru melalui HTTPS.","error");return;}
 const modal=document.getElementById("scannerModal"),readerId="barcode-reader";
 if(!modal||SCANNER_STATE.isScannerRunning)return;
@@ -1995,25 +2002,31 @@ modal.hidden=false;
 document.body.classList.add("scanner-modal-open");
 if(window.lucide)window.lucide.createIcons();
 try{
-SCANNER_STATE.instance=new window.Html5Qrcode(readerId);
+const config=getScannerConfig();
+const scanner=new window.Html5Qrcode(readerId,{formatsToSupport:config.formatsToSupport,verbose:false,experimentalFeatures:{useBarCodeDetectorIfSupported:false}});
+SCANNER_STATE.instance=scanner;
 SCANNER_STATE.isScannerRunning=true;
 SCANNER_STATE.isClosing=false;
 SCANNER_STATE.hasScanned=false;
-const config=getScannerConfig();
+let handled=false;
 const onSuccess=async(decodedText)=>{
-if(SCANNER_STATE.isClosing||SCANNER_STATE.hasScanned||!decodedText)return;
-SCANNER_STATE.hasScanned=true;
+if(generation!==SCANNER_STATE.generation||handled||SCANNER_STATE.isClosing||SCANNER_STATE.hasScanned||!decodedText)return;
+handled=true;SCANNER_STATE.hasScanned=true;
 playScanSuccessFeedback();
 const resultHandler=SCANNER_STATE.resultHandler;
 const closePromise=closeScannerModal();
-resultHandler?.(decodedText);
 await closePromise;
+try{await resultHandler?.(decodedText);}catch(error){console.error('Scan result failed',error);toast('Hasil scan belum dapat diproses. Coba lagi.','error');}
 };
 try{
-await SCANNER_STATE.instance.start({facingMode:{exact:"environment"}},config,onSuccess,()=>{});
+await scanner.start({facingMode:{exact:"environment"}},config,onSuccess,()=>{});
 }catch(_cameraErr){
-await SCANNER_STATE.instance.start({facingMode:"environment"},config,onSuccess,()=>{});
+if(generation!==SCANNER_STATE.generation)return;
+await scanner.start({facingMode:"environment"},config,onSuccess,()=>{});
 }
+if(generation!==SCANNER_STATE.generation){try{await scanner.stop();scanner.clear();}catch{}return;}
+const capabilities=scanner.getRunningTrackCapabilities?.();
+if(capabilities?.focusMode?.includes('continuous'))await scanner.applyVideoConstraints({advanced:[{focusMode:'continuous'}]}).catch(()=>{});
 setTimeout(()=>{
 const video=document.querySelector("#barcode-reader video");
 if(video){
@@ -2025,15 +2038,13 @@ video.play().catch(()=>{});
 }
 },300);
 }catch(err){
-SCANNER_STATE.isScannerRunning=false;
-SCANNER_STATE.hasScanned=false;
-SCANNER_STATE.instance=null;
-modal.hidden=true;
-document.body.classList.remove("scanner-modal-open");
+if(generation!==SCANNER_STATE.generation)return;
+await closeScannerModal();
 toast(err?.message||"Gagal membuka kamera scanner.","error");
 }
 }
 async function closeScannerModal(){
+++SCANNER_STATE.generation;
 const modal=document.getElementById("scannerModal");
 if(!modal)return;
 SCANNER_STATE.isClosing=true;

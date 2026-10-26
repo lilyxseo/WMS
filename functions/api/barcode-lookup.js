@@ -1,3 +1,4 @@
+import {normalizeScanValue} from '../../assets/js/utils/scan-value.js';
 import { getRequestRole } from './_authz.js';
 import { getSecretSupabaseConfig } from './_supabase-config.js';
 
@@ -12,7 +13,7 @@ function json(body, status = 200) {
 }
 
 function normalizedBarcode(value) {
-  return String(value || '').trim();
+  return normalizeScanValue(value);
 }
 
 function diagnostic(message, details) {
@@ -42,21 +43,38 @@ export async function handleBarcodeLookupRequest({ request, env }) {
     const query = new URL(`${config.url}/rest/v1/${BARCODE_TABLE}`);
     query.searchParams.set('select', BARCODE_COLUMNS);
     query.searchParams.set('barcode', `eq.${barcode}`);
-    query.searchParams.set('limit', '1');
+    query.searchParams.set('limit', '2');
     diagnostic('db query start');
     const response = await fetch(query, {
       headers: { apikey: config.key, Authorization: `Bearer ${config.key}` },
+      signal:AbortSignal.timeout(10000),
     });
     const payload = await response.json().catch(() => null);
-    if (!response.ok) {
+    if (!response.ok || !Array.isArray(payload)) {
       const error = new Error(payload?.message || `Supabase HTTP ${response.status}`);
       error.code = payload?.code || 'SUPABASE_QUERY_FAILED';
       throw error;
     }
     const rows = Array.isArray(payload) ? payload : [];
     diagnostic('db query result count', { count: rows.length });
-    const sku = String(rows[0]?.sku || '').trim();
-    return sku ? json({ success: true, found: true, sku }) : json({ success: true, found: false });
+    const mapped=[...new Set(rows.map(row=>String(row.sku??'').trim()).filter(Boolean))];
+    if(mapped.length>1)return json({success:false,error:'BARCODE_AMBIGUOUS'},409);
+    if(mapped.length===1)return json({success:true,found:true,sku:mapped[0]});
+    // The label may encode the SKU itself, rather than a separate product barcode.
+    // Exact identifiers only: never cast to numbers or strip SKU prefixes/suffixes.
+    const tables=['inventory_kartu_stok','inventory_rpl','inventory_bulky','inventory_barang_masuk','inventory_barang_keluar','inventory_barcode'];
+    const candidates=[...new Set([barcode,barcode.toUpperCase()])];
+    for(const candidate of candidates){
+      const results=await Promise.allSettled(tables.map(async table=>{
+        const url=new URL(`${config.url}/rest/v1/${table}`);url.searchParams.set('select','sku');url.searchParams.set('sku',`eq.${candidate}`);url.searchParams.set('limit','1');
+        const res=await fetch(url,{headers:{apikey:config.key,Authorization:`Bearer ${config.key}`},signal:AbortSignal.timeout(10000)}),data=await res.json();
+        if(!res.ok||!Array.isArray(data))throw Error('SKU lookup unavailable');return data;
+      }));
+      const sku=results.filter(item=>item.status==='fulfilled').flatMap(item=>item.value).map(row=>String(row.sku??'').trim()).find(Boolean);
+      if(sku)return json({success:true,found:true,sku});
+      if(results.some(item=>item.status==='rejected'))throw Error('SKU lookup unavailable');
+    }
+    return json({success:true,found:false});
   } catch (error) {
     console.error('[BarcodeLookup] error code/message', {
       code: String(error?.code || 'BARCODE_LOOKUP_FAILED'),
