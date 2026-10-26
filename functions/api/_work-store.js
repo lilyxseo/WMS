@@ -1,0 +1,3 @@
+import {getSecretSupabaseConfig} from './_supabase-config.js';
+export const json=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'private, no-store'}});
+export async function workStore(env,path,options={}){const {url,key}=getSecretSupabaseConfig(env);const response=await fetch(url+'/rest/v1/'+path,{...options,headers:{apikey:key,Authorization:`Bearer ${key}`,'Content-Type':'application/json',Prefer:'return=representation',...options.headers},signal:AbortSignal.timeout(12000)});const data=await response.json().catch(()=>null);if(!response.ok)throw Error('Penyimpanan akun belum tersedia.');return {data,response};}

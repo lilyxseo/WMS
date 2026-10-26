@@ -1,0 +1,35 @@
+name: Deploy account drafts and operation audit
+on:
+  push:
+    branches: [main, feat/operation-log-cloud-drafts]
+    paths:
+      - 'supabase/migrations/20261026000000_operations_and_work_drafts.sql'
+      - 'scripts/deploy-account-work.mjs'
+      - '.github/workflows/deploy-account-work.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: account-work-schema
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      SUPABASE_PROJECT_REF: udullprykzdskrxmbbkj
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test tests/*.test.mjs
+      - id: inspect
+        if: github.ref != 'refs/heads/main'
+        run: node scripts/deploy-account-work.mjs --inspect
+      - id: publish
+        if: github.ref == 'refs/heads/main'
+        run: node scripts/deploy-account-work.mjs
+      - name: 'Account work: ${{ steps.inspect.outputs.result }}${{ steps.publish.outputs.result }}'
+        run: echo 'Private draft and operation schema checked.'
