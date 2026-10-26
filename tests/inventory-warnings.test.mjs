@@ -62,3 +62,14 @@ test('warning endpoint never downloads the large transaction ledgers', async () 
     assert.equal(urls.some(url => /rest\/v1\/inventory_barang_(masuk|keluar)/.test(url)), false);
   } finally { globalThis.fetch = originalFetch; }
 });
+
+test('same SKU with different names is checked on negative and positive balances, once per SKU',()=>{
+ const rows={kartuStok:[{sku:' SKU-10 ',nama_barang:'GOTO MERLYN WHITE',stok_akhir:-1,source_row_number:10,lokasi_bulky:'A10-1'},{sku:'SKU-10',nama_barang:'GOTO MERLYN WHITE',stok_akhir:2,source_row_number:11,lokasi_bulky:'A10-2'}],rpl:[{sku:'sku-10',nama_barang:'GOTO MERLYN GOLD',stok_akhir:5,source_row_number:22,lokasi_bulky:'AA-1-1-A'}]};
+ const conflicts=buildInventoryWarnings(rows).filter(row=>row.category==='NAME_MISMATCH');assert.equal(conflicts.length,1);const conflict=conflicts[0];assert.equal(conflict.confidence,'review');assert.equal(conflict.nameVariants.length,2);for(const text of ['GOTO MERLYN WHITE','GOTO MERLYN GOLD','Kartu Stok baris 10','RPL baris 22','saldo -1','AA-1-1-A'])assert.ok(conflict.evidence.includes(text),text);
+});
+test('name conflict proof always includes the differing name beyond many identical location rows',()=>{
+ const rows={kartuStok:[...Array.from({length:12},(_,i)=>({sku:'001',nama_barang:'MERLYN WHITE',stok_akhir:1,source_row_number:i+5})),{sku:'001',nama_barang:'MERLYN GOLD',stok_akhir:3,source_row_number:17}]};const conflicts=buildInventoryWarnings(rows).filter(row=>row.category==='NAME_MISMATCH');assert.equal(conflicts.length,1);assert.match(conflicts[0].evidence,/MERLYN GOLD/);assert.match(conflicts[0].evidence,/baris 17/);assert.match(conflicts[0].issue,/2 nama berbeda/);
+});
+test('name comparison ignores formatting and historical zero stock but preserves distinct SKU identities',()=>{
+ const rows={kartuStok:[{sku:'001',nama_barang:'GOTO Merlyn - White',stok_akhir:-1},{sku:' 001 ',nama_barang:'goto MERLYN white',stok_akhir:2},{sku:'001',nama_barang:'Previous Name',stok_akhir:0},{sku:'01',nama_barang:'Other Product',stok_akhir:3}]};assert.equal(buildInventoryWarnings(rows).some(row=>row.category==='NAME_MISMATCH'),false);
+});

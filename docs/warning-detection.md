@@ -16,7 +16,7 @@ All 4,342 RPL/BULKY rows had no Netsuite or difference reference. There were no 
 - Incorrect same-row Kartu Stok arithmetic only when all five numeric components are valid. Missing/ambiguous numbers are not coerced to zero; tiny floating-point differences are tolerated.
 - Missing SKU on a meaningful stock row; blank templates and header rows are ignored.
 - Missing name for a nonzero-stock SKU; missing location only for positive stock.
-- Material name differences among positive-stock rows. Case, whitespace and punctuation are ignored; historical zero-stock names are excluded. This is a review item, not an automatic rename instruction.
+- Material name differences for the same normalized SKU among nonzero-stock rows, including negative balances. Each distinct name includes source rows, locations and balances in the evidence. Case, whitespace and punctuation are ignored; historical zero-stock names are excluded. This is a review item, not an automatic rename instruction.
 - Accuracy difference only when every participating SKU row has coherent stock, Netsuite and difference values. Offsetting differences remain zero. Unavailable reference data is reported as skipped coverage.
 - Positive outbound PENGELUARAN with no SKU in inbound or any of the three stock sources. Inbound rows of any status and zero-stock opening-balance records count as evidence. This is Medium/review: missing history does not establish that goods were never received.
 

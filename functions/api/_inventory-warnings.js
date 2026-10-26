@@ -5,7 +5,7 @@ import {movementImpactFindings} from './_movement-warning.js';
 export const WARNING_CATEGORIES=Object.freeze({
  NEGATIVE_STOCK:'Saldo Negatif',STOCK_BALANCE_MISMATCH:'Rumus Saldo Tidak Sesuai',
  EMPTY_SKU:'SKU Kosong',EMPTY_NAME:'Nama Barang Kosong',EMPTY_LOCATION:'Lokasi Stok Kosong',
- NAME_MISMATCH:'Nama SKU Aktif Berbeda',ACCURACY_MISMATCH:'Selisih Data Referensi',
+ NAME_MISMATCH:'Nama Berbeda pada SKU Sama',ACCURACY_MISMATCH:'Selisih Data Referensi',
  OUTBOUND_WITHOUT_INBOUND:'Riwayat Masuk Perlu Verifikasi',
  MOVEMENT_NOT_REFLECTED:'Movement Belum Berdampak',MOVEMENT_NO_EFFECT:'Movement Tanpa Perubahan',
 });
@@ -46,14 +46,22 @@ export function buildInventoryWarnings(input,{allowCrossSource=true}={}){
   if(sku&&stock!==null&&stock>0&&!normalizeWarningSku(row.lokasi_bulky))result.push(warning('EMPTY_LOCATION','Medium',source,row,'Stok positif tidak memiliki lokasi.',`${rowLabel}: saldo ${stock}, lokasi kosong.`,'Tetapkan lokasi fisik atau lokasi operasional yang sesuai.'));
   if(key==='kartuStok'&&stock!==null&&stock<0)result.push(warning('NEGATIVE_STOCK','High',source,row,`Saldo pada baris ini negatif: ${stock}.`,`${rowLabel}, lokasi ${text(row.lokasi_bulky)||'-'}: stok akhir ${stock}.`,'Periksa saldo awal dan mutasi baris ini; cocokkan dengan kondisi fisik sebelum koreksi.'));
   if(key==='kartuStok'&&sku){const balance=stockBalance(row);if(balance&&differs(balance.expected,balance.closing))result.push(warning('STOCK_BALANCE_MISMATCH','High',source,row,`Stok akhir ${balance.closing} berbeda dari hasil rumus ${balance.expected}.`,`${rowLabel}: ${balance.opening} − ${balance.internal} − ${balance.replenishment} − ${balance.outgoing} = ${balance.expected}; stok akhir tercatat ${balance.closing}.`,'Periksa formula STOK AKHIR pada baris sumber. Tidak dibandingkan dengan total riwayat transaksi.'));}
-  if(sku&&name&&stock!==null&&stock>0){const item=names.get(sku)||[];item.push({source,row,name});names.set(sku,item);}
+  if(sku&&name&&stock!==null&&stock!==0){const item=names.get(sku)||[];item.push({source,row,name});names.set(sku,item);}
  }
  for(const items of names.values()){
   const groups=allowCrossSource?[items]:[...new Set(items.map(item=>item.source))].map(source=>items.filter(item=>item.source===source));
   for(const group of groups)if(new Set(group.map(item=>item.name)).size>1){
    const sources=[...new Set(group.map(item=>item.source))];
-   const evidence=group.slice(0,8).map(item=>`${item.source} baris ${item.row.source_row_number??'-'} (${text(item.row.lokasi_bulky)||'-'}): "${text(item.row.nama_barang)}"`).join('; ');
-   result.push(warning('NAME_MISMATCH','Medium',sources.join(' / '),group[0].row,'SKU bersaldo positif memiliki nama yang berbeda.',evidence,'Verifikasi master dan kemungkinan perubahan nama. Perbedaan spasi, tanda baca, huruf besar, dan baris stok 0 diabaikan.','review'));
+   const variants=new Map();
+   for(const item of group){const variant=variants.get(item.name)||[];variant.push(item);variants.set(item.name,variant);}
+   // Show different names, not eight duplicates that can hide the actual conflict.
+   const evidence=[...variants.values()].slice(0,8).map(items=>{
+    const examples=items.slice(0,3).map(item=>`${item.source} baris ${item.row.source_row_number??'-'} (${text(item.row.lokasi_bulky)||'-'}, saldo ${warningNumber(item.row.stok_akhir)})`).join('; ');
+    return `"${text(items[0].row.nama_barang)}": ${examples}${items.length>3?`; +${items.length-3} baris lainnya`:''}`;
+   }).join(' | ')+(variants.size>8?` | +${variants.size-8} variasi nama lainnya`:'');
+   const finding=warning('NAME_MISMATCH','Medium',sources.join(' / '),group[0].row,`SKU yang sama memiliki ${variants.size} nama berbeda pada ${group.length} baris bersaldo nonnol.`,evidence,'Bandingkan nama dengan master SKU dan dokumen barang. Konfirmasi kemungkinan perubahan nama; jangan otomatis mengganti nama. Huruf besar/kecil, spasi, tanda baca, serta baris stok 0 diabaikan.','review');
+   finding.nameVariants=[...variants.values()].map(items=>({name:text(items[0].row.nama_barang),count:items.length}));
+   result.push(finding);
   }
  }
  const accuracy=new Map();
