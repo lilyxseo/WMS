@@ -701,6 +701,8 @@ archiveManagerController?.dispose();archiveManagerController=null;archiveSources
 document.getElementById('assetStoreEditor')?.remove();document.getElementById('profileForm')?.reset();
 cancelStartupPrefetch();
 INVENTORY_VERSION_STATE.controller?.abort();
+++INVENTORY_VERSION_STATE.generation;INVENTORY_VERSION_STATE.inFlight=null;
+SPREADSHEET_LIVE_STATE.page='';SPREADSHEET_LIVE_STATE.checkedAt=0;
 INVENTORY_VERSION_STATE.versions=null;INVENTORY_VERSION_STATE.pendingSources.clear();
 TRANSACTION_PAGE_CACHE.clearSource('barang_masuk');
 TRANSACTION_PAGE_CACHE.clearSource('barang_keluar');
@@ -1402,6 +1404,8 @@ return detailHydrationPromise;
 async function initAppData(){
 if(hasInitializedDataFlow)return;
 hasInitializedDataFlow=true;
+// Start metadata polling even on lightweight routes that return before hydration.
+startInventoryVersionWatcher();
 console.log("INIT APP START");
 console.log("CURRENT ROUTE", location.pathname);
 window.APP_STATE=window.APP_STATE||{};
@@ -1637,11 +1641,12 @@ setInterval(maybeAutoSync,AUTO_SYNC_CHECK_INTERVAL_MS);
 startInventoryVersionWatcher();
 }
 
-const INVENTORY_VERSION_STATE={versions:null,inFlight:null,controller:null,generation:0,timer:null,lastCheckAt:0,pendingSources:new Set()};
+const INVENTORY_VERSION_STATE={lastInteractionAt:0,versions:null,inFlight:null,controller:null,generation:0,timer:null,lastCheckAt:0,pendingSources:new Set()};
 function comparableInventoryVersions(payload){return Object.fromEntries(Object.entries(payload||{}).filter(([key])=>key.endsWith('Version')));}
 function changedInventorySources(previous,next){return Object.keys(next).filter(key=>previous?.[key]!==next[key]);}
 async function refreshVisibleInventoryPage(changed,generation){
-const page=getActivePage();if(!['barang-masuk','barang-keluar','stats','dashboard','anomaly','detail','locations','search','stok-minus','abc-analisis','stock-aging'].includes(page))return;const inventoryChanged=changed.some(key=>key!=='warningVersion');if(page==='anomaly'&&!changed.includes('warningVersion'))return;if(page!=='anomaly'&&!inventoryChanged)return;if((page==='stock-aging'&&STOCK_AGING_STATE.loading)||(page==='stats'&&STATS_STATE.loading))return false;
+const page=getActivePage();if(!['barang-masuk','barang-keluar','stats','dashboard','anomaly','detail','locations','search','stok-minus','abc-analisis','stock-aging'].includes(page))return false;const inventoryChanged=changed.some(key=>key!=='warningVersion');if(page==='anomaly'&&!changed.includes('warningVersion'))return false;if(page!=='anomaly'&&!inventoryChanged)return false;if((page==='stock-aging'&&STOCK_AGING_STATE.loading)||(page==='stats'&&STATS_STATE.loading))return false;
+const scroll=captureActivePageScroll(page);
 setRefreshIndicator(true,'Memperbarui data...');
 try{
 if(page==='barang-masuk'&&changed.includes('barangMasukVersion')){TRANSACTION_PAGE_CACHE.clearSource('barang_masuk');await loadTransactionTablePage('in',{page:TABLE_STATE.in.page,force:true,background:true});}
@@ -1651,28 +1656,44 @@ else if(page==='search'){await refreshSearch();}
 else if(page==='stok-minus'){await refreshStokMinus();}
 else if(page==='abc-analisis'){await refreshAbc();}
 else if(page==='stock-aging'){await loadStockAging(true);}
-else if(page==='dashboard'){await loadDashboardPayload();}
-else if(page==='anomaly'){await refreshAnomalyInBackground();}
+else if(page==='dashboard'){await refreshDashboard();}
+else if(page==='anomaly'){await refreshWarning();}
 else if(page==='detail'&&currentSku){await showDetail(currentSku,{background:true});}
 else if(page==='locations'&&changed.some(key=>['kartuStokVersion','rplVersion','bulkyVersion'].includes(key))){LOCATION_STATE.summary=null;LOCATION_STATE.pageCache.clear();LOCATION_STATE.detailCache.clear();await Promise.all([loadLocationSummary(),loadLocationPage(LOCATION_STATE.page),loadEmptyLocations(LOCATION_STATE.emptyPage)]);if(LOCATION_STATE.selected)await selectLocationDetail(encodeURIComponent(LOCATION_STATE.selected));}
-if(generation===INVENTORY_VERSION_STATE.generation)toast('Data diperbarui','success');
+// Automatic revalidation stays quiet; keep the current scroll position.
+if(generation===INVENTORY_VERSION_STATE.generation)await restoreActivePageScroll(page,scroll);
 }finally{if(generation===INVENTORY_VERSION_STATE.generation)setRefreshIndicator(false);}
 }
-function inventoryAutoRefreshBlocked(){const focused=document.activeElement;return !!editableTablesController?.hasChanges()||!!editableTablesController?.isEditing?.()||!!INLINE_EDIT_STATE?.isEditing||!!focused?.closest?.('td.editing,td:has(.inline-editor),td:has(.sheet-grid-editor)');}
+function inventoryAutoRefreshBlocked(){const focused=document.activeElement;return !!editableTablesController?.hasChanges()||!!editableTablesController?.isEditing?.()||!!INLINE_EDIT_STATE?.isEditing||!!focused?.closest?.('td.editing,td:has(.inline-editor),td:has(.sheet-grid-editor),[data-col-filter-menu]')||!!document.querySelector?.('[role="dialog"][aria-modal="true"]')||Date.now()-(INVENTORY_VERSION_STATE.lastInteractionAt||0)<1000;}
 async function checkInventoryVersion(){
 if(!user||document.hidden||navigator.onLine===false)return;
 if(INVENTORY_VERSION_STATE.inFlight)return INVENTORY_VERSION_STATE.inFlight;
 const controller=new AbortController();INVENTORY_VERSION_STATE.controller=controller;const generation=++INVENTORY_VERSION_STATE.generation;
-INVENTORY_VERSION_STATE.inFlight=(async()=>{try{const {res,data}=await fetchJsonSafe('/api/inventory-version',{signal:controller.signal});if(!res.ok||data?.success===false)throw new Error(data?.message||'Gagal memeriksa versi inventory');if(generation!==INVENTORY_VERSION_STATE.generation)return;const next=comparableInventoryVersions(data),previous=INVENTORY_VERSION_STATE.versions;INVENTORY_VERSION_STATE.versions=next;INVENTORY_VERSION_STATE.lastCheckAt=Date.now();if(data.syncStatus?.last_success_at&&Number.isFinite(Date.parse(data.syncStatus.last_success_at))){window.__inventorySyncStatus=data.syncStatus;inventorySyncStatusState='loaded';renderInventorySyncStatus();}if(previous){const changed=changedInventorySources(previous,next);if(changed.some(key=>key!=='warningVersion')){DASHBOARD_SUMMARY=null;DASHBOARD_MONTHLY_INSIGHT=null;SEARCH_STATE.completedQuery=null;localStorage.removeItem(STOK_MINUS_CACHE_KEY);localStorage.removeItem(ABC_ANALYSIS_CACHE_KEY);detailHydrationNeedsRefresh=true;STOCK_AGING_STATE.loaded=false;for(const page of ['abc-analisis','stok-minus','movement','cycle-count'])LOADED_DETAIL_PAGES.delete(page);}if(changed.includes('barangMasukVersion'))TRANSACTION_PAGE_CACHE.markSourceStale('barang_masuk');if(changed.includes('barangKeluarVersion'))TRANSACTION_PAGE_CACHE.markSourceStale('barang_keluar');if(changed.some(key=>['kartuStokVersion','rplVersion','bulkyVersion'].includes(key))){LOCATION_STATE.summary=null;LOCATION_STATE.pageCache.clear();LOCATION_STATE.detailCache.clear();STARTUP_PREFETCH.warningSummary=null;}changed.forEach(key=>INVENTORY_VERSION_STATE.pendingSources.add(key));}if(INVENTORY_VERSION_STATE.pendingSources.size&&!inventoryAutoRefreshBlocked()){const pending=[...INVENTORY_VERSION_STATE.pendingSources];const applied=await refreshVisibleInventoryPage(pending,generation);if(applied!==false&&generation===INVENTORY_VERSION_STATE.generation)pending.forEach(key=>INVENTORY_VERSION_STATE.pendingSources.delete(key));}}catch(err){if(err?.name!=='AbortError')console.warn('[InventoryVersion]',err?.message||err);}finally{if(generation===INVENTORY_VERSION_STATE.generation){INVENTORY_VERSION_STATE.inFlight=null;INVENTORY_VERSION_STATE.controller=null;}}})();
+INVENTORY_VERSION_STATE.inFlight=(async()=>{try{const {res,data}=await fetchJsonSafe('/api/inventory-version',{signal:controller.signal});if(!res.ok||data?.success===false)throw new Error(data?.message||'Gagal memeriksa versi inventory');if(generation!==INVENTORY_VERSION_STATE.generation)return;const next=comparableInventoryVersions(data),previous=INVENTORY_VERSION_STATE.versions;INVENTORY_VERSION_STATE.versions=next;INVENTORY_VERSION_STATE.lastCheckAt=Date.now();if(data.syncStatus?.last_success_at&&Number.isFinite(Date.parse(data.syncStatus.last_success_at))){window.__inventorySyncStatus=data.syncStatus;inventorySyncStatusState='loaded';renderInventorySyncStatus();}if(previous){const changed=changedInventorySources(previous,next);if(changed.some(key=>key!=='warningVersion')){DASHBOARD_SUMMARY=null;DASHBOARD_MONTHLY_INSIGHT=null;SEARCH_STATE.completedQuery=null;try{localStorage.removeItem(STOK_MINUS_CACHE_KEY);localStorage.removeItem(ABC_ANALYSIS_CACHE_KEY);}catch{}detailHydrationNeedsRefresh=true;STOCK_AGING_STATE.loaded=false;for(const page of ['abc-analisis','stok-minus','movement','cycle-count'])LOADED_DETAIL_PAGES.delete(page);}if(changed.includes('barangMasukVersion'))TRANSACTION_PAGE_CACHE.markSourceStale('barang_masuk');if(changed.includes('barangKeluarVersion'))TRANSACTION_PAGE_CACHE.markSourceStale('barang_keluar');if(changed.some(key=>['kartuStokVersion','rplVersion','bulkyVersion'].includes(key))){LOCATION_STATE.summary=null;LOCATION_STATE.pageCache.clear();LOCATION_STATE.detailCache.clear();STARTUP_PREFETCH.warningSummary=null;}changed.forEach(key=>INVENTORY_VERSION_STATE.pendingSources.add(key));}if(INVENTORY_VERSION_STATE.pendingSources.size&&!inventoryAutoRefreshBlocked()){const pending=[...INVENTORY_VERSION_STATE.pendingSources];const applied=await refreshVisibleInventoryPage(pending,generation);if(applied!==false&&generation===INVENTORY_VERSION_STATE.generation)pending.forEach(key=>INVENTORY_VERSION_STATE.pendingSources.delete(key));}}catch(err){if(err?.name!=='AbortError')console.warn('[InventoryVersion]',err?.message||err);}finally{if(generation===INVENTORY_VERSION_STATE.generation){INVENTORY_VERSION_STATE.inFlight=null;INVENTORY_VERSION_STATE.controller=null;}}})();
 return INVENTORY_VERSION_STATE.inFlight;
+}
+const SPREADSHEET_LIVE_STATE={page:'',checkedAt:0,inFlight:false};
+async function refreshVisibleSpreadsheetPage(){
+if(!user||document.hidden||navigator.onLine===false||SPREADSHEET_LIVE_STATE.inFlight||inventoryAutoRefreshBlocked())return;
+const page=getActivePage();
+// These sheets have no committed inventory version; revalidate only the open page.
+if(!['balikan-store','asset-store','arsip','barang-reject','movement','cycle-count'].includes(page))return;
+if(page==='balikan-store'&&hasBalikanUnfinishedLocalChange())return;
+const now=Date.now();if(SPREADSHEET_LIVE_STATE.page!==page){SPREADSHEET_LIVE_STATE.page=page;SPREADSHEET_LIVE_STATE.checkedAt=now;return;}
+if(now-SPREADSHEET_LIVE_STATE.checkedAt<60000)return;
+if(REFRESH_STATE.isRefreshing||isSyncing)return;
+SPREADSHEET_LIVE_STATE.inFlight=true;SPREADSHEET_LIVE_STATE.checkedAt=now;
+const generation=authRequestGeneration,scroll=captureActivePageScroll(page);
+try{await SOFT_REFRESH_ROUTES[page]();if(generation===authRequestGeneration)await restoreActivePageScroll(page,scroll);}catch(error){console.warn('[SpreadsheetLive]',error?.message||error);}finally{SPREADSHEET_LIVE_STATE.inFlight=false;}
 }
 function startInventoryVersionWatcher(){
 if(INVENTORY_VERSION_STATE.timer)return;
-INVENTORY_VERSION_STATE.timer=setInterval(checkInventoryVersion,INVENTORY_VERSION_CHECK_INTERVAL_MS);
+INVENTORY_VERSION_STATE.timer=setInterval(()=>{void checkInventoryVersion();void refreshVisibleSpreadsheetPage();},INVENTORY_VERSION_CHECK_INTERVAL_MS);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)INVENTORY_VERSION_STATE.controller?.abort();else checkInventoryVersion();});
 window.addEventListener('focus',()=>{if(Date.now()-INVENTORY_VERSION_STATE.lastCheckAt>5000)checkInventoryVersion();});
 window.addEventListener('offline',()=>INVENTORY_VERSION_STATE.controller?.abort());
 window.addEventListener('online',checkInventoryVersion);
+document.addEventListener('input',()=>{INVENTORY_VERSION_STATE.lastInteractionAt=Date.now();});
 checkInventoryVersion();
 }
 
@@ -3100,8 +3121,8 @@ function bindAssetStoreEvents(){document.addEventListener('click',event=>{const 
 async function fetchAssetStoreSheetList(){const url=`https://sheets.googleapis.com/v4/spreadsheets/${ASSET_STORE_SPREADSHEET_ID}?fields=sheets.properties.title&key=${API_KEY}`;const {res,data:json}=await fetchPageJson('Asset',url);if(!res.ok||json.error)throw new Error((json.error&&json.error.message)||res.statusText||'Gagal memuat daftar sheet');return (json.sheets||[]).map((s,idx)=>({key:String(s?.properties?.title||`Sheet${idx+1}`),name:String(s?.properties?.title||`Sheet ${idx+1}`)})).filter(sheet=>sheet.name.toLowerCase().includes('asset'));}
 async function fetchAssetStoreSheetData(sheetName){const range=`${sheetName}!A1:ZZ`;const url=`https://sheets.googleapis.com/v4/spreadsheets/${ASSET_STORE_SPREADSHEET_ID}/values/${encodeURIComponent(range)}?key=${API_KEY}`;const {res,data:json}=await fetchPageJson('Asset',url);if(!res.ok||json.error)throw new Error((json.error&&json.error.message)||res.statusText||'Gagal memuat data sheet');const values=Array.isArray(json.values)?json.values:[];if(!values.length)return {columns:[],rows:[],headerError:false};const headers=(values[0]||[]).map(v=>String(v||'').trim());if(!headers.some(Boolean))return {columns:[],rows:[],headerError:true};const columns=headers.map((h,i)=>h||`Column ${i+1}`);const rows=[];for(let i=1;i<values.length;i++){const line=values[i]||[];if(!line.some(c=>String(c||'').trim()))continue;const row={__rowNumber:i+1};columns.forEach((c,idx)=>{row[c]=line[idx]??'';});rows.push(row);}return {columns,rows,headerError:false};}
 async function ensureAssetStoreList(){if(ASSET_STORE_STATE.sheetList.length||ASSET_STORE_STATE.loadingList)return;ASSET_STORE_STATE.loadingList=true;ASSET_STORE_STATE.listError="";renderAssetStorePage();try{ASSET_STORE_STATE.sheetList=await fetchAssetStoreSheetList();}catch(err){ASSET_STORE_STATE.listError=err.message||"Gagal memuat daftar sheet";}finally{ASSET_STORE_STATE.loadingList=false;if(!ASSET_STORE_STATE.selectedSheet&&ASSET_STORE_STATE.sheetList.length)ASSET_STORE_STATE.selectedSheet=ASSET_STORE_STATE.sheetList[0].key;renderAssetStorePage();if(ASSET_STORE_STATE.selectedSheet)selectAssetStoreSheet(ASSET_STORE_STATE.selectedSheet);}}
-async function selectAssetStoreSheet(sheetName){ASSET_STORE_STATE.selectedSheet=sheetName||"";ASSET_STORE_STATE.page=1;ASSET_STORE_STATE.dataError="";const sheets=sheetName?[sheetName]:ASSET_STORE_STATE.sheetList.map(s=>s.key);const unloaded=sheets.filter(name=>!ASSET_STORE_STATE.cache[name]);if(!unloaded.length){renderAssetStorePage();return;}ASSET_STORE_STATE.loadingData=true;renderAssetStoreTableOnly();try{const settled=await Promise.allSettled(unloaded.map(async name=>({name,data:await fetchAssetStoreSheetData(name)})));const results=settled.filter(x=>x.status==='fulfilled').map(x=>x.value);const failed=settled.find(x=>x.status==='rejected');if(!results.length&&failed)throw failed.reason;const loadedAt=new Date().toISOString();results.forEach(({name,data})=>{ASSET_STORE_STATE.cache[name]=data;ASSET_STORE_STATE.lastLoadedAt[name]=loadedAt;});}catch(err){ASSET_STORE_STATE.dataError=err.message||"Gagal memuat data sheet";}finally{ASSET_STORE_STATE.loadingData=false;renderAssetStorePage();}}
-async function refreshAssetStore(){const sheet=ASSET_STORE_STATE.selectedSheet;const sheets=sheet?[sheet]:ASSET_STORE_STATE.sheetList.map(s=>s.key);sheets.forEach(name=>delete ASSET_STORE_STATE.cache[name]);await selectAssetStoreSheet(sheet);}
+async function selectAssetStoreSheet(sheetName,{preservePage=false}={}){ASSET_STORE_STATE.selectedSheet=sheetName||"";if(!preservePage)ASSET_STORE_STATE.page=1;ASSET_STORE_STATE.dataError="";const sheets=sheetName?[sheetName]:ASSET_STORE_STATE.sheetList.map(s=>s.key);const unloaded=sheets.filter(name=>!ASSET_STORE_STATE.cache[name]);if(!unloaded.length){renderAssetStorePage();return;}ASSET_STORE_STATE.loadingData=true;renderAssetStoreTableOnly();try{const settled=await Promise.allSettled(unloaded.map(async name=>({name,data:await fetchAssetStoreSheetData(name)})));const results=settled.filter(x=>x.status==='fulfilled').map(x=>x.value);const failed=settled.find(x=>x.status==='rejected');if(!results.length&&failed)throw failed.reason;const loadedAt=new Date().toISOString();results.forEach(({name,data})=>{ASSET_STORE_STATE.cache[name]=data;ASSET_STORE_STATE.lastLoadedAt[name]=loadedAt;});}catch(err){ASSET_STORE_STATE.dataError=err.message||"Gagal memuat data sheet";}finally{ASSET_STORE_STATE.loadingData=false;renderAssetStorePage();}}
+async function refreshAssetStore(){const sheet=ASSET_STORE_STATE.selectedSheet;const sheets=sheet?[sheet]:ASSET_STORE_STATE.sheetList.map(s=>s.key);sheets.forEach(name=>delete ASSET_STORE_STATE.cache[name]);await selectAssetStoreSheet(sheet,{preservePage:true});}
 async function saveAssetStoreRow(method,payload,{refresh=true}={}){
  const headers=await getAuthHeaders();const response=await fetch('/api/asset-store/rows',{method,headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify(payload)});
  const data=await response.json().catch(()=>({}));if(!response.ok||!data.success)throw new Error(data.message||'Hasil penyimpanan belum pasti. Periksa spreadsheet sebelum mengulang.');
