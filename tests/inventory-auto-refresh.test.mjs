@@ -63,8 +63,16 @@ test('dashboard revalidation discards old fulfilled promises before fetching all
 test('direct spreadsheet pages revalidate while visible and defer during editing, offline or hidden',async()=>{
  for(const page of ['balikan-store','asset-store','arsip','barang-reject','movement','cycle-count']){
   let now=100000,refreshes=0,editing=false;const state={page:'',checkedAt:0,inFlight:false};const document={hidden:false},navigator={onLine:true};
-  const context=vm.createContext({user:{id:'alice'},document,navigator,SPREADSHEET_LIVE_STATE:state,inventoryAutoRefreshBlocked:()=>editing,getActivePage:()=>page,Date:{now:()=>now},REFRESH_STATE:{isRefreshing:false},isSyncing:false,authRequestGeneration:1,captureActivePageScroll:()=>({}),restoreActivePageScroll:async()=>{},SOFT_REFRESH_ROUTES:{[page]:async()=>refreshes++},console});
+  const context=vm.createContext({user:{id:'alice'},document,navigator,SPREADSHEET_LIVE_STATE:state,inventoryAutoRefreshBlocked:()=>editing,hasBalikanUnfinishedLocalChange:()=>false,getActivePage:()=>page,Date:{now:()=>now},REFRESH_STATE:{isRefreshing:false},isSyncing:false,authRequestGeneration:1,captureActivePageScroll:()=>({}),restoreActivePageScroll:async()=>{},SOFT_REFRESH_ROUTES:{[page]:async()=>refreshes++},console});
   vm.runInContext(frontend.slice(frontend.indexOf('async function refreshVisibleSpreadsheetPage()'),frontend.indexOf('function startInventoryVersionWatcher()')),context);
   await context.refreshVisibleSpreadsheetPage();assert.equal(refreshes,0);now+=61000;editing=true;await context.refreshVisibleSpreadsheetPage();assert.equal(refreshes,0);editing=false;document.hidden=true;await context.refreshVisibleSpreadsheetPage();assert.equal(refreshes,0);document.hidden=false;navigator.onLine=false;await context.refreshVisibleSpreadsheetPage();assert.equal(refreshes,0);navigator.onLine=true;await context.refreshVisibleSpreadsheetPage();assert.equal(refreshes,1,page);await context.refreshVisibleSpreadsheetPage();assert.equal(refreshes,1,page);
  }
+});
+
+test('Asset Store background revalidation preserves pagination and search filters',async()=>{
+ const state={selectedSheet:'Asset',page:4,search:'MERLYN',sortColumn:'SKU',cache:{Asset:{rows:[]},Other:{rows:[]}}};
+ const context=vm.createContext({ASSET_STORE_STATE:state,renderAssetStorePage(){}});
+ vm.runInContext(frontend.slice(frontend.indexOf('async function selectAssetStoreSheet('),frontend.indexOf('async function refreshAssetStore()')),context);
+ await context.selectAssetStoreSheet('Asset',{preservePage:true});assert.equal(state.page,4);assert.equal(state.search,'MERLYN');assert.equal(state.sortColumn,'SKU');
+ await context.selectAssetStoreSheet('Other');assert.equal(state.page,1);
 });
