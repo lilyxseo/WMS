@@ -1,12 +1,13 @@
 name: Deploy warning WhatsApp lifecycle
 on:
   push:
-    branches: [main, fix/warning-whatsapp-lifecycle]
+    branches: [main, fix/warning-whatsapp-lifecycle, fix/warning-stable-identity]
     paths:
       - 'supabase/functions/warning-whatsapp/**'
       - 'supabase/migrations/20261023000000_warning_notification_lifecycle.sql'
       - 'supabase/migrations/20261026010000_warning_notification_recovery.sql'
       - 'supabase/migrations/20261026020000_warning_resolution_freshness.sql'
+      - 'supabase/migrations/20261027000000_warning_stable_identity.sql'
       - 'scripts/deploy-warning-notifications.mjs'
       - '.github/workflows/deploy-warning-notifications.yml'
   workflow_dispatch:

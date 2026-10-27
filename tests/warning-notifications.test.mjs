@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHandler,fingerprint,formatMessage,contentSignature} from '../supabase/functions/warning-whatsapp/handler.js';
 const row={category:'NEGATIVE_STOCK',source:'Kartu Stok',sourceRecord:4,sku:'0012',namaBarang:'Barang',categoryLabel:'Saldo Negatif',issue:'Saldo negatif',location:'A1'};
-test('identity ignores quantity/evidence but distinguishes SKU and source row',()=>{
+test('identity ignores sheet row shifts and distinguishes SKU and physical location',()=>{
  assert.equal(fingerprint(row),fingerprint({...row,issue:'Saldo -100',evidence:'changed'}));
- assert.notEqual(fingerprint(row),fingerprint({...row,sourceRecord:5}));
+ assert.equal(fingerprint(row),fingerprint({...row,sourceRecord:5}));
+ assert.notEqual(fingerprint(row),fingerprint({...row,location:'A2'}));
  assert.notEqual(fingerprint(row),fingerprint({...row,sku:'12'}));
  assert.equal(fingerprint({...row,category:'OUTBOUND_WITHOUT_INBOUND'}),fingerprint({...row,category:'OUTBOUND_WITHOUT_INBOUND',sourceRecord:200}));
 });
@@ -32,3 +33,5 @@ test('messages distinguish resolved, updated and reopened events and link to the
 test('stale or unverified snapshots never reconcile or deliver queued messages',async()=>{for(const options of [{stale:true},{unverified:true}]){const f=fixture(options);await f.handler(request('run'));assert.deepEqual(f.calls.map(call=>call.url.split('/').at(-1)),['warning_notify_lock','warning_notify_unlock']);}});
 test('resolved messages are delivered with their event type and content signatures are persisted',async()=>{const f=fixture({eventType:'resolved'});await f.handler(request('run'));const send=f.calls.find(call=>call.url.includes('fonnte'));assert.match(send.body.get('message'),/Selesai/);const collect=JSON.parse(f.calls.find(call=>call.url.endsWith('warning_notify_collect')).body);assert.equal(collect.p_findings[0].content_signature,contentSignature(row));});
 test('explicit provider rejection is marked failed for scheduled retry',async()=>{const f=fixture({send:'failed'});await f.handler(request('run'));assert.equal(JSON.parse(f.calls.find(call=>call.url.endsWith('warning_notify_finish')).body).p_status,'failed');});
+
+test('sheet row evidence changes do not generate updated notifications',()=>{assert.equal(contentSignature(row),contentSignature({...row,evidence:'Baris 900 instead of 4',sourceRecord:900}));assert.notEqual(contentSignature(row),contentSignature({...row,issue:'Saldo negatif -20'}));});
