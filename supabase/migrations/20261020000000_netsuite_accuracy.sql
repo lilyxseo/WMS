@@ -28,8 +28,12 @@ create or replace function public.inventory_netsuite_accuracy()
 returns jsonb language sql stable security invoker set search_path=public,pg_temp as $$
  with sources as (
   select source,status,last_success_at,locked_at,source_version from public.inventory_sync_status where source in ('kartu_stok','netsuite')
+ ), proofs as (
+  select 'kartu_stok'::text as source,case when count(*) filter(where source_row_key is null or source_hash is null)>0 then null else encode(sha256(convert_to('['||coalesce(string_agg('['||to_json(source_row_key)::text||','||to_json(source_hash)::text||']',',' order by source_row_number,id),'')||']','UTF8')),'hex') end as version from public.inventory_kartu_stok
+  union all
+  select 'netsuite',case when count(*) filter(where source_row_key is null or source_hash is null)>0 then null else encode(sha256(convert_to('['||coalesce(string_agg('['||to_json(source_row_key)::text||','||to_json(source_hash)::text||']',',' order by source_row_number,id),'')||']','UTF8')),'hex') end from public.netsuite
  ), readiness as (
-  select count(*)=2 and bool_and(status='success' and last_success_at is not null and locked_at is null) as ready from sources
+  select count(*)=2 and coalesce(bool_and(coalesce(last_success_at is not null and source_version is not null and source_version=proofs.version,false)),false) as ready from sources join proofs using(source)
  ), kartu as (
   select upper(btrim(sku)) as key,min(btrim(sku)) as sku,max(nama_barang) as nama,
    case when bool_and(stok_akhir is not null) then sum(stok_akhir) end as stock,

@@ -1,7 +1,7 @@
 name: Deploy NetSuite stock accuracy
 on:
   push:
-    branches: [main, feat/netsuite-accuracy, fix/movement-immediate-draft, fix/quick-sku-active-locations, fix/netsuite-sync-confirmation]
+    branches: [main, feat/netsuite-accuracy, fix/movement-immediate-draft, fix/quick-sku-active-locations, fix/netsuite-sync-confirmation, fix/accuracy-snapshot-readiness]
     paths:
       - 'supabase/migrations/20261020000000_netsuite_accuracy.sql'
       - 'scripts/deploy-netsuite.mjs'
