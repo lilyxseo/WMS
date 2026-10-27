@@ -1,10 +1,12 @@
 import {readWarningSnapshot} from '../../../functions/api/_warning-snapshot.js';
 import {normalizeWarningSku} from '../../../functions/api/_inventory-warnings.js';
+const identityText=value=>normalizeWarningSku(value).replace(/\s+/g,' ');
 export function fingerprint(row){
  const grouped=['NAME_MISMATCH','ACCURACY_MISMATCH','OUTBOUND_WITHOUT_INBOUND'].includes(row.category);
- return JSON.stringify(grouped?[row.category,normalizeWarningSku(row.sku)]:[row.category,row.source,row.sourceRecord??row.sourceRow??row.location,normalizeWarningSku(row.sku)]);
+ // Sheet positions and regenerated database IDs are not business identities.
+ return JSON.stringify(grouped?[row.category,identityText(row.sku)]:[row.category,identityText(row.source),identityText(row.sku),identityText(row.location),...(['MOVEMENT_NOT_REFLECTED','MOVEMENT_NO_EFFECT'].includes(row.category)?[row.eventDate||'']:[]),...(identityText(row.sku)==='-'||!identityText(row.sku)?[identityText(row.namaBarang)]:[])]);
 }
-export function contentSignature(row){return JSON.stringify(['category','severity','confidence','source','sku','namaBarang','location','issue','evidence','recommendation'].map(key=>String(row[key]??'').trim()));}
+export function contentSignature(row){return 'v2:'+JSON.stringify(['category','severity','confidence','sku','namaBarang','location','issue'].map(key=>String(row[key]??'').trim()).concat([JSON.stringify((row.nameVariants||[]).map(item=>[identityText(item.name),item.count]).sort((a,b)=>a[0].localeCompare(b[0])))]));}
 const text=(value,max=280)=>String(value||'').slice(0,max);
 export function formatMessage(events){
  const labels={new:'🆕 Baru',updated:'🔄 Diperbarui',resolved:'✅ Selesai',reopened:'⚠️ Muncul kembali'};

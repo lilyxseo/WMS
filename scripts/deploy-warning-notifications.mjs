@@ -22,17 +22,22 @@ function exitDiagnostic(){process.exit(0);}
 const baseMigration=await readFile(new URL('../supabase/migrations/20261013030000_warning_notifications.sql',import.meta.url),'utf8'),migration=await readFile(new URL('../supabase/migrations/20261023000000_warning_notification_lifecycle.sql',import.meta.url),'utf8');
 const recovery=await readFile(new URL('../supabase/migrations/20261026010000_warning_notification_recovery.sql',import.meta.url),'utf8');
 const freshness=await readFile(new URL('../supabase/migrations/20261026020000_warning_resolution_freshness.sql',import.meta.url),'utf8');
+const stable=await readFile(new URL('../supabase/migrations/20261027000000_warning_stable_identity.sql',import.meta.url),'utf8');
 const tests=`do $$declare owner uuid:=gen_random_uuid();contender uuid:=gen_random_uuid();finding jsonb;answer jsonb;event_id uuid;amount integer;begin
  delete from public.warning_notify_outbox;delete from public.warning_notify_seen;
  update public.warning_notify_state set initialized=false,lifecycle_initialized=false,run=null,lease=null where id;
  if not public.warning_notify_lock(owner) or public.warning_notify_lock(contender) then raise exception 'Lease ownership';end if;
  insert into public.warning_notify_seen(fingerprint,warning,active) values('historic-warning','{"sku":"OLD","issue":"Qty -1"}',true);
- finding:='[{"fingerprint":"test-warning","content_signature":"v1","warning":{"sku":"TEST","issue":"Qty -1"}}]'::jsonb;
+ finding:='[{"fingerprint":"test-warning","content_signature":"v2:one","warning":{"sku":"TEST","issue":"Qty -1"}}]'::jsonb;
  answer:=public.warning_notify_collect(owner,finding,array['620000000000'],false);if answer->>'new'<>'1' or answer->>'resolved'<>'0' then raise exception 'Historic resolution leaked';end if;
  perform public.warning_notify_collect(owner,finding,array['620000000000'],false);
  if (select count(*) from public.warning_notify_outbox)<>1 then raise exception 'Duplicate warning';end if;
- finding:='[{"fingerprint":"test-warning","content_signature":"v2","warning":{"sku":"TEST","issue":"Qty -2"}}]'::jsonb;
+ -- A sheet row/DB id shift must reuse the existing lifecycle silently.
+ answer:=public.warning_notify_collect(owner,jsonb_set(finding,'{0,fingerprint}','"shifted-row"'::jsonb),array['620000000000'],false);
+ if answer->>'new'<>'0' or answer->>'resolved'<>'0' or answer->>'updated'<>'0' then raise exception 'Row shift restarted lifecycle';end if;
+ finding:='[{"fingerprint":"test-warning","content_signature":"v2:two","warning":{"sku":"TEST","issue":"Qty -2"}}]'::jsonb;
  answer:=public.warning_notify_collect(owner,finding,array['620000000000'],false);if answer->>'updated'<>'1' then raise exception 'Updated warning';end if;
+ update public.warning_notify_outbox set status='sent' where fingerprint='test-warning' and event_type='updated';
  answer:=public.warning_notify_collect(owner,'[]',array['620000000000'],false);if answer->>'resolved'<>'1' then raise exception 'Resolved warning';end if;
  perform public.warning_notify_collect(owner,'[]',array['620000000000'],false);
  if (select count(*) from public.warning_notify_outbox)<>3 then raise exception 'Duplicate resolution';end if;
@@ -53,11 +58,16 @@ const tests=`do $$declare owner uuid:=gen_random_uuid();contender uuid:=gen_rand
  insert into public.warning_notify_outbox(fingerprint,recipient,warning,event_type,revision) values('historic-warning','620000000000','{}','resolved',100);
  select count(*) into amount from public.warning_notify_claim(owner);if amount<>0 then raise exception 'Historic queue claimed';end if;
  if exists(select 1 from public.warning_notify_outbox where fingerprint='historic-warning' and status='pending') then raise exception 'Historic queue not cancelled';end if;
+ -- Already solved logical warnings may not be advertised as solved twice.
+ update public.warning_notify_seen set active=false,revision=revision+1,last_seen=now() where fingerprint='test-warning';
+ insert into public.warning_notify_outbox(fingerprint,recipient,warning,event_type,revision)
+ select fingerprint,'620000000000',warning,'resolved',revision from public.warning_notify_seen where fingerprint='test-warning';
+ select count(*) into amount from public.warning_notify_claim(owner);if amount<>0 then raise exception 'Repeated logical resolution claimed';end if;
  perform public.warning_notify_unlock(owner);
 end$$;`;
-if(process.argv.includes('--inspect')){await sql('begin;'+baseMigration+migration+recovery+freshness+tests+'rollback;');await output('Lifecycle, deduplication, retries and leases verified with rollback');}
+if(process.argv.includes('--inspect')){await sql('begin;'+baseMigration+migration+recovery+freshness+stable+tests+'rollback;');await output('Lifecycle, deduplication, retries and leases verified with rollback');}
 else if(process.argv.includes('--configure')){
- await sql('begin;'+baseMigration+migration+recovery+freshness+'commit;');await sql('begin;'+tests+'rollback;');
+ await sql('begin;'+baseMigration+migration+recovery+freshness+stable+'commit;');await sql('begin;'+tests+'rollback;');
  const secrets=await management('/secrets');if(!secrets.some(item=>item.name==='FONNTE_TOKEN'))throw Error('Fonnte token missing');
  const keys=await management('/api-keys?reveal=true'),key=keys.find(item=>item.api_key?.startsWith('sb_secret_'))?.api_key;if(!key)throw Error('Warning data key missing');
  const existing=await sql("select decrypted_secret from vault.decrypted_secrets where name='wms_warning_notify_secret' limit 1"),secret=existing[0]?.decrypted_secret||randomBytes(32).toString('hex');if(!existing.length)await sql(`select vault.create_secret(${literal(secret)},'wms_warning_notify_secret')`);
