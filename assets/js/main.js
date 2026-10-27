@@ -4784,12 +4784,21 @@ async function saveEditableTableChanges(scope,patches,acknowledge){
  logActivitySafe({action:'GRID_EDIT',module:scope,detail:`Menyimpan ${patches.length} perubahan sel`,status:'SUCCESS'});
 }
 function applyMovementDraftChanges(scope,patches){
- if(scope!=='movement-session'||!canCrud()||!MOVEMENT_STATE.sessionActive||MOVEMENT_STATE.submitting)throw Error('Sesi movement tidak tersedia.');
- if(patches.some(({target})=>!MOVEMENT_STATE.sessionItems.includes(target.rowRef)))throw Error('Baris movement berubah. Pilih ulang barang.');
+ const cycle=scope==='cycle-session',kind=cycle?'cycle-count':'movement',state=cycle?CYCLE_STATE:MOVEMENT_STATE;
+ if(!['cycle-session','movement-session'].includes(scope)||!canCrud()||!state.sessionActive||state.submitting)throw Error('Sesi tidak tersedia.');
+ if(patches.some(({target})=>!state.sessionItems.includes(target.rowRef)))throw Error('Baris sesi berubah. Pilih ulang barang.');
  patches.forEach(({target,value})=>target.validate?.(String(value)));
- patches.forEach(({target,value})=>{target.rowRef[target.field]=target.number?(String(value).trim()===''?'':Number(value)):String(value);});
- persistInventoryDraft('movement');
- const button=document.getElementById('mvSubmitBtn');if(button)button.disabled=!canSubmitMovement()||MOVEMENT_STATE.submitting;
+ patches.forEach(({target,value})=>{target.rowRef[target.field]=target.number?(String(value).trim()===''?(cycle?null:''):Number(value)):String(value);});
+ persistInventoryDraft(kind);
+ if(cycle){
+  document.querySelectorAll('#ccSessionBody tr[data-idx]').forEach(tr=>{
+   const row=state.sessionItems[Number(tr.dataset.idx)];if(!row)return;
+   const diff=tr.querySelector("[data-cc-cell='diff']"),status=tr.querySelector("[data-cc-cell='st']");
+   if(diff)diff.textContent=String((Number(row.aktual)-Number(row.stok))||0);
+   if(status)status.innerHTML=cycleDiffBadge(row);
+  });
+ }
+ const button=document.getElementById(cycle?'ccSubmitBtn':'mvSubmitBtn');if(button)button.disabled=!(cycle?canSubmitCycle():canSubmitMovement())||state.submitting;
 }
 function editableTableActionScope(target){
  const detailDelete=target.closest('[data-detail-delete]');if(detailDelete)return 'sku-detail-'+detailDelete.dataset.detailDelete;
@@ -4806,7 +4815,7 @@ function editableTableActionScope(target){
 }
 let editableTablesController,tableFiltersController;
 function setupEditableTableGrid(){
- if(editableTablesController)return;editableTablesController=mountEditableTables({root:document.getElementById('mainContentPages'),describe:describeEditableTableCell,save:saveEditableTableChanges,canEdit:canCrud,notify:toast,confirm:showConfirmModal,owner:inventoryDraftOwner,actionScope:editableTableActionScope,immediateDraft:scope=>scope==='movement-session',applyDraft:applyMovementDraftChanges,autoSave:scope=>scope==='balikan'});
+ if(editableTablesController)return;editableTablesController=mountEditableTables({root:document.getElementById('mainContentPages'),describe:describeEditableTableCell,save:saveEditableTableChanges,canEdit:canCrud,notify:toast,confirm:showConfirmModal,owner:inventoryDraftOwner,actionScope:editableTableActionScope,immediateDraft:scope=>scope==='movement-session'||scope==='cycle-session',applyDraft:applyMovementDraftChanges,autoSave:scope=>scope==='balikan'});
  tableFiltersController=mountTableFilters(document.getElementById('mainContentPages'));
  window.addEventListener('auth:logout',()=>{editableTablesController?.reset();tableFiltersController?.reset();});
 }
