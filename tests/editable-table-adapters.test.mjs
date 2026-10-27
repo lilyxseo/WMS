@@ -47,3 +47,21 @@ test('Movement draft edits apply and persist immediately without a transaction r
 test('Movement retains typed edits when local persistence fails so account saving can recover them',()=>{
  const f=fixture();vm.runInContext(source.slice(source.indexOf('function applyMovementDraftChanges'),source.indexOf('function editableTableActionScope')),f.ctx);f.ctx.MOVEMENT_STATE.sessionActive=true;f.ctx.persistInventoryDraft=()=>false;f.ctx.document={getElementById:()=>null};const target=f.ctx.describeEditableTableCell(f.cell({},[],{dataset:{mvm:'akt',idx:'0'}}));assert.doesNotThrow(()=>f.ctx.applyMovementDraftChanges('movement-session',[{target,value:'400'}]));assert.equal(f.ctx.MOVEMENT_STATE.sessionItems[0].stokAktual,400);assert.equal(f.calls.length,0);
 });
+
+test('Cycle Count edits persist immediately, refresh derived cells and support undo values without transaction writes',()=>{
+ const f=fixture();f.ctx.CYCLE_STATE.sessionActive=true;f.ctx.CYCLE_STATE.sessionItems[0].stok=10;
+ const diff={},status={},button={},persisted=[];
+ f.ctx.document={getElementById:()=>button,querySelectorAll:()=>[{dataset:{idx:'0'},querySelector:q=>q.includes('diff')?diff:status}]};
+ f.ctx.persistInventoryDraft=kind=>persisted.push(kind);f.ctx.canSubmitCycle=()=>f.ctx.CYCLE_STATE.sessionItems[0].aktual!==null;f.ctx.cycleDiffBadge=row=>row.aktual===10?'Sesuai':'Selisih';
+ const target=f.ctx.describeEditableTableCell(f.cell({},[],{dataset:{cc:'aktual',idx:'0'}}));
+ f.ctx.applyMovementDraftChanges('cycle-session',[{target,value:'10'}]);assert.equal(diff.textContent,'0');assert.equal(status.innerHTML,'Sesuai');assert.equal(button.disabled,false);
+ f.ctx.applyMovementDraftChanges('cycle-session',[{target,value:'3'}]);assert.equal(diff.textContent,'-7');assert.equal(status.innerHTML,'Selisih');
+ f.ctx.applyMovementDraftChanges('cycle-session',[{target,value:''}]);assert.equal(f.ctx.CYCLE_STATE.sessionItems[0].aktual,null);assert.equal(button.disabled,true);
+ assert.deepEqual(persisted,['cycle-count','cycle-count','cycle-count']);assert.equal(f.calls.length,0);
+});
+test('Cycle Count immediate edits reject invalid batches, removed rows and edits while sending',()=>{
+ const f=fixture();f.ctx.CYCLE_STATE.sessionActive=true;const target=f.ctx.describeEditableTableCell(f.cell({},[],{dataset:{cc:'aktual',idx:'0'}}));
+ assert.throws(()=>f.ctx.applyMovementDraftChanges('cycle-session',[{target,value:'5'},{target,value:'-1'}]),/nol atau positif/);assert.equal(target.rowRef.aktual,0);
+ f.ctx.CYCLE_STATE.submitting=true;assert.throws(()=>f.ctx.applyMovementDraftChanges('cycle-session',[{target,value:'5'}]),/Sesi tidak tersedia/);
+ f.ctx.CYCLE_STATE.submitting=false;f.ctx.CYCLE_STATE.sessionItems=[];assert.throws(()=>f.ctx.applyMovementDraftChanges('cycle-session',[{target,value:'5'}]),/Baris sesi berubah/);assert.equal(f.calls.length,0);
+});
