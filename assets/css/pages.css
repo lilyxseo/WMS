@@ -2835,12 +2835,12 @@ html[data-accent] .account-card .account-profile-link strong{color:var(--text)}
 /* Compact reject pages: keep instructions available on demand. */
 #page-barang-reject .reject-page-header{margin-bottom:12px}
 #page-barang-reject .reject-page-title-row:has(.reject-title-actions){justify-content:flex-end;margin-bottom:8px}
-#rejectEntryApp .stock-entry-shortcuts{margin:6px 0;color:var(--muted);font-size:10px}
-#rejectEntryApp .stock-entry-shortcuts summary{cursor:pointer;width:fit-content;padding:3px 0}
-#rejectEntryApp .stock-entry-shortcuts .stock-entry-help{margin:6px 0;max-width:1000px}
-#rejectEntryApp .stock-entry-message:empty,#rejectEntryApp .account-draft-status:empty{display:none}
-#rejectEntryApp .account-draft-status:not(:has(button)){padding:0;border:0;background:none;margin:5px 0;font-size:10px}
-#rejectEntryApp .stock-entry-toolbar{margin-bottom:6px}
+:is(#rejectEntryApp,#stockEntryApp) .stock-entry-shortcuts{margin:6px 0;color:var(--muted);font-size:10px}
+:is(#rejectEntryApp,#stockEntryApp) .stock-entry-shortcuts summary{cursor:pointer;width:fit-content;padding:3px 0}
+:is(#rejectEntryApp,#stockEntryApp) .stock-entry-shortcuts .stock-entry-help{margin:6px 0;max-width:1000px}
+:is(#rejectEntryApp,#stockEntryApp) .stock-entry-message:empty,:is(#rejectEntryApp,#stockEntryApp) .account-draft-status:empty{display:none}
+:is(#rejectEntryApp,#stockEntryApp) .account-draft-status:not(:has(button)){padding:0;border:0;background:none;margin:5px 0;font-size:10px}
+:is(#rejectEntryApp,#stockEntryApp) .stock-entry-toolbar{margin-bottom:6px}
 #page-barang-reject #rejectUpdatedAt{font-size:10px}
 @media(max-width:600px){#page-barang-reject .reject-header-actions{width:100%;justify-content:flex-end}#page-barang-reject #rejectUpdatedAt{margin-right:auto}}
 
@@ -2862,3 +2862,5 @@ html[data-accent] .account-card .account-profile-link strong{color:var(--text)}
  #detail .summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
  #detail .detail-hero,#detail .source-body{padding:10px}
 }
+
+.stock-entry-excel-choice{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}.stock-entry-excel-choice select{max-width:100%;min-width:160px}

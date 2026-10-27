@@ -3851,7 +3851,7 @@ async function handleBalikanScanResult(decodedText){if(navigator.vibrate)navigat
 function bindSheetInputForm(){
  const root=document.getElementById('stockEntryApp');if(!root||stockEntryController||!inventoryDraftOwner())return;
  const generation=authRequestGeneration;
- stockEntryController=mountStockEntry(root,{owner:inventoryDraftOwner(),draftFetch:accountDraftFetch(generation),isCurrent:()=>generation===authRequestGeneration,confirm:showConfirmModal,parsePdf:readTransferPdf,onError:message=>toast(message,'error'),onSaved:async data=>{
+ stockEntryController=mountStockEntry(root,{compact:true,owner:inventoryDraftOwner(),draftFetch:accountDraftFetch(generation),isCurrent:()=>generation===authRequestGeneration,confirm:showConfirmModal,parsePdf:readTransferPdf,onError:message=>toast(message,'error'),onSaved:async data=>{
   if(generation!==authRequestGeneration)return;
   invalidateInventoryDerivedCaches();LOADED_DETAIL_PAGES.clear();detailHydrationNeedsRefresh=true;
   logActivitySafe({action:'CREATE',module:'Form Input',detail:`Input ${data.result.count} baris, ${data.result.qty} qty`,status:'SUCCESS',metadata:{requestId:data.id,ledgers:data.result.ledgers}});
