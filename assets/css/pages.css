@@ -2864,3 +2864,5 @@ html[data-accent] .account-card .account-profile-link strong{color:var(--text)}
 }
 
 .stock-entry-excel-choice{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}.stock-entry-excel-choice select{max-width:100%;min-width:160px}
+
+#page-stats .stats-help{font-size:11px;color:var(--muted);margin-bottom:10px}#page-stats .stats-help summary{cursor:pointer;width:fit-content}#page-stats .stats-help p{line-height:1.6;max-width:800px}#page-stats #statsReference{font-size:10px;margin:6px 0 10px}#page-stats #statsReference:empty{display:none}
