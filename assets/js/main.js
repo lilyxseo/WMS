@@ -1400,6 +1400,8 @@ if(page==='barang-masuk')return loadTransactionTablePage('in',{page:TABLE_STATE.
 if(page==='barang-keluar')return loadTransactionTablePage('out',{page:TABLE_STATE.out.page});
 if(page==='balikan-store'){await loadBalikanSheets();return window.BALIKAN_ROWS;}
 if(page==='locations')return renderLocationsPage();
+// Analytics must not trust legacy ledger caches containing only the first 50 rows.
+if(page==='abc-analisis')return hydrateAllDataOnInit({force:true,useCacheFirst:false});
 if(!detailHydrationPromise)detailHydrationPromise=hydrateAllDataOnInit({force:detailHydrationNeedsRefresh,useCacheFirst:!detailHydrationNeedsRefresh}).then(data=>{if(data)detailHydrationNeedsRefresh=false;return data;}).finally(()=>{detailHydrationPromise=null;});
 return detailHydrationPromise;
 }
@@ -4522,13 +4524,13 @@ let cum=0;ranked.forEach(it=>{const pct=total?it.qtyKeluar/total:0;it.abc=cum<0.
 const rows=sortAbcRows(ranked);
 const top10=ranked.slice(0,10);
 const sourceHasData=keluar.length>0;
-const result={version:3,ts:now,key:`${ABC_STATE.periodMonths}|${ABC_STATE.orderType}|${ABC_STATE.selectedTo.join(",")}|${ABC_STATE.sortBy}`,rows,top10,toOptions,sourceHasData,filteredCount:filtered.length};
+const result={version:4,ts:now,key:`${ABC_STATE.periodMonths}|${ABC_STATE.orderType}|${ABC_STATE.selectedTo.join(",")}|${ABC_STATE.sortBy}`,rows,top10,toOptions,sourceHasData,filteredCount:filtered.length};
 try{localStorage.setItem(ABC_ANALYSIS_CACHE_KEY,JSON.stringify(result));}catch{}return result;
 }
 function getAbcRenderSignature(data){
 return JSON.stringify({k:data?.key,rows:(data?.rows||[]).map(r=>[r.sku,r.namaBarang,r.qtyKeluar,r.frekuensi,r.stokSaatIni,r.coverage,r.abc,r.priority,r.rekom]),to:data?.toOptions||[],f:data?.filteredCount||0});
 }
-function readAbcCache(){try{const data=safeJsonParse(localStorage.getItem(ABC_ANALYSIS_CACHE_KEY),null);return data?.version===3&&data.key===`${ABC_STATE.periodMonths}|${ABC_STATE.orderType}|${ABC_STATE.selectedTo.join(",")}|${ABC_STATE.sortBy}`?data:null;}catch{return null;}}
+function readAbcCache(){try{const data=safeJsonParse(localStorage.getItem(ABC_ANALYSIS_CACHE_KEY),null);return data?.version===4&&data.key===`${ABC_STATE.periodMonths}|${ABC_STATE.orderType}|${ABC_STATE.selectedTo.join(",")}|${ABC_STATE.sortBy}`?data:null;}catch{return null;}}
 function scheduleAbcBackgroundCompute(){
 if(ABC_STATE.bgComputing)return;
 ABC_STATE.bgComputing=true;updateAbcLoadingUi(true);
@@ -4544,7 +4546,7 @@ if(!abcAnalisisApp)return;
 const cached=readAbcCache();
 if(cached&&!forceRefresh)syncAbcStateFromData(cached);else{ABC_STATE.generatedAt=0;ABC_STATE.rows=[];ABC_STATE.top10=[];ABC_STATE.toOptions=[];ABC_STATE.filteredCount=0;ABC_STATE.sourceHasData=true;}
 renderAbcShell();
-if(PAGE_DATA_LOADS.get('abc-analisis')?.loading&&!getBarangKeluarRows().length){if(ABC_STATE.rows.length)updateAbcSummaryAndBodyOnly();else renderAbcSkeletonBody();return;}
+if(PAGE_DATA_LOADS.get('abc-analisis')?.loading){if(ABC_STATE.rows.length)updateAbcSummaryAndBodyOnly();else renderAbcSkeletonBody();return;}
 if(ABC_STATE.rows.length)updateAbcSummaryAndBodyOnly();else renderAbcSkeletonBody();
 scheduleAbcBackgroundCompute();
 }

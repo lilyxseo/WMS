@@ -65,6 +65,7 @@ export async function handleBarangMasukRequest({ request, env }) {
     console.info('[BarangMasukAPI] auth-ok');
 
     const url = new URL(request.url);
+    const full = url.searchParams.get('mode') === 'full';
     const page = Math.max(1, Number.parseInt(url.searchParams.get('page') || '1', 10) || 1);
     const limit = Math.min(MAX_LIMIT, Math.max(1, Number.parseInt(url.searchParams.get('limit') || String(DEFAULT_LIMIT), 10) || DEFAULT_LIMIT));
     const filters = [];
@@ -93,7 +94,7 @@ export async function handleBarangMasukRequest({ request, env }) {
     let total = 0;
     console.info('[BarangMasukAPI] query-start');
     const rowsStartedAt = Date.now();
-    const result = await transactionPage(supabaseConfig, TABLE, { columns: COLUMNS, filterQuery, startDate, endDate, page, limit, sort: sort.name, bounded: true, search, searchFields: SEARCH_COLUMNS });
+    const result = await transactionPage(supabaseConfig, TABLE, { columns: COLUMNS, filterQuery, startDate, endDate, page, limit, sort: sort.name, bounded: true, full, search, searchFields: SEARCH_COLUMNS });
     rawRows = result.rows;
     total = result.total;
     const rowsMs = Date.now() - rowsStartedAt;
@@ -128,10 +129,11 @@ export async function handleBarangMasukRequest({ request, env }) {
       values: rows.map(row => BARANG_MASUK_COLUMNS.map(key => row[key] ?? '')),
       total,
       ...(summary ? { summary } : {}),
-      page,
-      limit,
-      pageSize: limit,
-      hasNext: page * limit < total,
+      page: full ? 1 : page,
+      limit: full ? rows.length : limit,
+      pageSize: full ? rows.length : limit,
+      hasNext: !full && page * limit < total,
+      complete: full,
       lastSync: syncStatus?.last_success_at ?? null,
       syncStatus,
       durationMs: Date.now() - startedAt,

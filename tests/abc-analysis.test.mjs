@@ -56,3 +56,9 @@ test('refresh repopulates rows even when recomputed data matches the previous si
 test('blank stock values are unavailable while a recorded numeric zero is retained',()=>{
  const {context,build}=analysis([10,10]);context.DATA['Kartu Stock']=[{sku:'SKU 0','stok akhir':''},{sku:'SKU 1','stok akhir':'0'}];const rows=new Map(build().rows.map(row=>[row.sku,row]));assert.equal(rows.get('SKU 0').stokSaatIni,null);assert.equal(rows.get('SKU 1').stokSaatIni,0);
 });
+
+test('ABC page hydration bypasses legacy caches that can contain only 50 ledger rows',async()=>{
+ let options;const context=vm.createContext({hydrateAllDataOnInit:async value=>{options=value;return {rows:1002};}});
+ vm.runInContext(source.slice(source.indexOf('async function loadDetailPageData'),source.indexOf('async function initAppData')),context);
+ await context.loadDetailPageData('abc-analisis');assert.equal(options.force,true);assert.equal(options.useCacheFirst,false);
+});
