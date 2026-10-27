@@ -141,7 +141,8 @@ async function supabaseGetLogs(env, query) {
 
   if (query.module) params.set("module", `eq.${sanitizeText(query.module, 100)}`);
   if (query.action && /^[A-Z][A-Z0-9_]{1,99}$/.test(query.action)) params.set("action", `eq.${query.action}`);
-  if (query.user_name) params.set("user_name", `ilike.*${sanitizeText(query.user_name, 100)}*`);
+  if(query.user_id) params.set("user_id",`eq.${sanitizeText(query.user_id,150)}`);
+  else if (query.user_name) params.set("user_name", `ilike.*${sanitizeText(query.user_name, 100)}*`);
   if (query.status && ALLOWED_STATUS.has(query.status)) params.set("status", `eq.${query.status}`);
   const validDate=value=>/^\d{4}-\d{2}-\d{2}$/.test(value)&&!Number.isNaN(Date.parse(value))&&new Date(value).toISOString().slice(0,10)===value;
   if((query.from&&!validDate(query.from))||(query.to&&!validDate(query.to))||(query.from&&query.to&&query.from>query.to))throw Error('Rentang tanggal tidak valid.');
