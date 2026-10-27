@@ -154,7 +154,7 @@ test('Supabase failures log diagnostic fields without credentials or request aut
   }
 });
 
-test('mode=full is ignored and cannot bypass bounded pagination', async () => {
+test('mode=full returns every bounded read batch for analytics while ordinary requests stay paginated', async () => {
   const originalFetch = globalThis.fetch;
   const urls = [];
   globalThis.fetch = async url => {
@@ -168,10 +168,14 @@ test('mode=full is ignored and cannot bypass bounded pagination', async () => {
     const response = await handleBarangMasukRequest({ request: request('?mode=full&page=1&limit=25&sort=latest'), env });
     const body = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(body.rows.length, 25);
+    assert.equal(body.rows.length, 1002);
+    assert.equal(body.complete, true);
+    assert.equal(body.rows.at(-1).sku, 'SKU-1001');
     assert.equal(body.total, 1002);
-    assert.equal(body.hasNext, true);
+    assert.equal(body.hasNext, false);
     assert.match(urls[0], /order=source_row_number.desc&offset=0&limit=1000/);
     assert.equal(urls.filter(url => url.includes('inventory_barang_masuk')).length, 2); // two full-set sort batches
+    const paged = await (await handleBarangMasukRequest({ request: request('?page=1&limit=25&sort=latest'), env })).json();
+    assert.equal(paged.rows.length, 25);assert.equal(paged.hasNext, true);assert.equal(paged.complete, false);
   } finally { globalThis.fetch = originalFetch; }
 });
