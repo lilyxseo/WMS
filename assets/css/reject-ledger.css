@@ -1,0 +1,82 @@
+/* Reject transaction ledgers: shared controls and a compact mobile reading view. */
+#page-barang-reject,#barangRejectApp,.reject-ledger{min-width:0;max-width:100%}
+#page-barang-reject .reject-ledger-tools{padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.reject-ledger-search-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center}
+.reject-ledger-actions{display:flex;gap:8px;align-items:center}
+#page-barang-reject .reject-ledger-tools button{display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;min-height:38px}
+#page-barang-reject .reject-ledger-tools button[hidden]{display:none}
+.reject-ledger-tools button svg,.reject-transaction-delete svg{width:15px;height:15px}
+.reject-ledger-filters{display:grid;grid-template-columns:repeat(2,minmax(0,180px)) minmax(150px,1fr) auto;align-items:end;gap:10px;margin-top:10px}
+.reject-ledger-filters label{display:grid;gap:5px;font-size:11px;color:var(--muted);min-width:0}
+#page-barang-reject .reject-ledger-tools input,#page-barang-reject .reject-ledger-tools select{width:100%;max-width:100%;min-width:0;height:38px;margin:0;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--input-bg,var(--panel));color:var(--text);font:inherit;box-sizing:border-box}
+#page-barang-reject .reject-ledger-tools input:focus-visible,#page-barang-reject .reject-ledger-tools select:focus-visible{outline:2px solid var(--primary);outline-offset:1px}
+.reject-ledger-overview{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:12px 2px;font-size:12px;color:var(--muted)}
+.reject-ledger-overview strong{color:var(--text);font-variant-numeric:tabular-nums}
+#page-barang-reject .reject-ledger .reject-card{padding:0;border:1px solid var(--line);border-radius:12px;box-shadow:none}
+#page-barang-reject .reject-ledger .reject-table-wrap{width:100%;max-width:100%;min-width:0;border:0;border-radius:0;max-height:65dvh;overflow:auto;overscroll-behavior-y:auto;scrollbar-gutter:stable}
+#page-barang-reject .reject-ledger .reject-table-wrap:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+#page-barang-reject .reject-ledger table{table-layout:auto;min-width:1900px;width:100%;border-collapse:separate;border-spacing:0}
+#page-barang-reject .reject-ledger table th{white-space:nowrap;letter-spacing:0;text-transform:none;padding:10px 8px;font-size:11px}
+#page-barang-reject .reject-ledger table td{min-width:100px;max-width:260px;white-space:normal;overflow-wrap:anywhere;padding:6px 8px;line-height:1.5;background:var(--panel);border-bottom:1px solid var(--line)}
+#page-barang-reject .reject-ledger table td[data-reject-field=sku]{min-width:130px;white-space:nowrap;overflow-wrap:normal;font-variant-numeric:tabular-nums}
+#page-barang-reject .reject-ledger table td[data-reject-field=namaBarang]{min-width:240px;max-width:320px}
+#page-barang-reject .reject-ledger table td[data-reject-field=qty]{min-width:65px;text-align:right}
+#page-barang-reject .reject-ledger table td:last-child{min-width:56px;text-align:center}
+#page-barang-reject .reject-ledger table td[colspan]{text-align:center}
+#page-barang-reject .reject-ledger table tr:hover td{background:color-mix(in srgb,var(--primary) 5%,var(--panel))}
+#page-barang-reject .reject-ledger .reject-pager{margin:0;padding:12px;border-top:1px solid var(--line);color:var(--muted);font-size:11px}
+.reject-ledger .reject-pager select{margin:0;max-width:100%}
+.reject-view-toggle,.reject-mobile-transactions{display:none}
+@media(max-width:900px){
+ .reject-ledger-filters{grid-template-columns:repeat(2,minmax(0,1fr))}
+ #page-barang-reject .reject-ledger-filters>button{align-self:end}
+}
+@media(max-width:700px){
+ #page-barang-reject .reject-page-header{flex-direction:row;align-items:center;gap:8px;flex-wrap:wrap}
+ #page-barang-reject .reject-ledger-tools{padding:10px}
+ .reject-ledger-search-row{grid-template-columns:minmax(0,1fr)}
+ .reject-ledger-actions{justify-content:flex-end}
+ #page-barang-reject .reject-ledger-tools input,#page-barang-reject .reject-ledger-tools select{font-size:16px;min-height:42px}
+ #page-barang-reject .reject-ledger-tools button{min-height:42px}
+ .reject-ledger-filters{gap:8px;margin-top:8px}
+ .reject-ledger-overview{padding:12px 0}
+ .reject-ledger-total{white-space:nowrap}
+ .reject-view-toggle{display:flex;gap:3px;border:1px solid var(--line);border-radius:8px;padding:3px;background:var(--panel)}
+ .reject-view-toggle button{min-height:36px;padding:6px 10px;border:0;border-radius:5px;background:transparent;color:var(--muted);font:inherit;font-size:11px;cursor:pointer}
+ .reject-view-toggle button[aria-pressed=true]{background:color-mix(in srgb,var(--primary) 15%,var(--panel));color:var(--primary);font-weight:600}
+ .reject-view-toggle button:focus-visible{outline:2px solid var(--primary)}
+ #page-barang-reject .reject-ledger[data-view=compact] .reject-table-wrap{display:none}
+ #page-barang-reject .reject-ledger[data-view=compact] .reject-mobile-transactions{display:grid;gap:10px;padding:10px}
+ #page-barang-reject .reject-ledger[data-view=compact] .sheet-grid-toolbar:has([data-grid-save]:disabled){display:none}
+ /* Restore real table layout after legacy mobile card rules. */
+ #page-barang-reject .reject-ledger[data-view=table] .reject-table-wrap{display:block;max-height:65dvh;overflow:auto;border-radius:0}
+ #page-barang-reject .reject-ledger table{display:table;min-width:1900px;width:100%}
+ #page-barang-reject .reject-ledger table thead{display:table-header-group;width:auto}
+ #page-barang-reject .reject-ledger table tbody{display:table-row-group;width:auto}
+ #page-barang-reject .reject-ledger table tr{display:table-row;width:auto;padding:0;border:0;border-radius:0;background:transparent}
+ #page-barang-reject .reject-ledger table :is(th,td){display:table-cell;width:auto}
+ #page-barang-reject .reject-ledger table td::before{display:none}
+ #page-barang-reject .reject-ledger .reject-pager{align-items:stretch;gap:10px;padding:10px}
+ #page-barang-reject .reject-ledger .reject-pager .row{display:grid;grid-template-columns:minmax(0,1fr) repeat(2,auto);gap:5px;width:100%}
+ #page-barang-reject .reject-ledger .reject-pager :is(button,select){min-width:0;min-height:40px;padding:6px 8px;font-size:11px}
+ .reject-transaction{min-width:0;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);font-size:12px}
+ .reject-transaction-head{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:12px}
+ .reject-transaction-head>div:first-child{min-width:0;display:grid;gap:5px}
+ .reject-transaction-sku{color:var(--primary);font-size:11px;overflow-wrap:anywhere}
+ .reject-transaction-head strong{font-weight:600;line-height:1.6;overflow-wrap:anywhere}
+ .reject-transaction-qty{display:grid;justify-items:end;gap:0;min-width:35px}
+ .reject-transaction-qty strong{font-size:20px;font-variant-numeric:tabular-nums;line-height:1.2}
+ .reject-transaction small{color:var(--muted);font-size:10px}
+ .reject-transaction-meta{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;color:var(--muted);font-size:11px}
+ .reject-transaction .badge{max-width:100%;white-space:normal;overflow-wrap:anywhere}
+ .reject-transaction-route{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:10px;align-items:center;margin-top:10px;padding:9px 0;border-top:1px solid var(--line)}
+ .reject-transaction-route>div{display:grid;gap:4px;min-width:0;overflow-wrap:anywhere}
+ .reject-transaction-route>span{color:var(--primary)}
+ .reject-transaction details{border-top:1px solid var(--line)}
+ .reject-transaction summary{padding:11px 0 0;min-height:32px;box-sizing:border-box;cursor:pointer;color:var(--muted);font-size:11px}
+ .reject-transaction dl{margin:8px 0 0;display:grid;gap:9px}
+ .reject-transaction dl>div{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:12px;align-items:start}
+ .reject-transaction dt{color:var(--muted);font-size:11px;overflow-wrap:anywhere}
+ .reject-transaction dd{margin:0;text-align:right;overflow-wrap:anywhere}
+ #page-barang-reject .reject-transaction-delete{margin-top:12px;display:flex;align-items:center;justify-content:center;gap:6px;min-height:40px;width:100%;color:var(--primary)}
+}

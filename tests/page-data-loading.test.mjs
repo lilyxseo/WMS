@@ -74,7 +74,7 @@ test('Reject loading preserves the transaction toolbar and column headings',()=>
  const root=new Element(),state={activeTab:'masuk',loading:true,lastSync:0,stock:[],masuk:[],keluar:[],filters:{masukSearch:''}};
  const ctx=vm.createContext({getActivePage:()=> 'barang-reject',rejectEntryController:null,filteredRejectRows:()=>[],BARANG_REJECT_STATE:state,REJECT_IN_COLUMNS:[['SKU'],['Qty']],document:{getElementById:id=>id==='barangRejectApp'?root:new Element(),querySelectorAll:()=>[]},window:{},getBarangRejectNavPage:()=>'',canCrud:()=>true,syncActiveSidebarParent(){},ensureBarangRejectLoaded(){},renderRejectToolbar:()=>'<input id="rejectSearch">',orderRejectSheetRows:r=>r,paginateReject:r=>r,thRejectStatic:x=>`<th>${x}</th>`,rejectPager:()=>'',bindBarangRejectEvents(){},esc:x=>x});
  vm.runInContext(between('function renderDataSkeletonRows','function renderPageDataStatus'),ctx);
- vm.runInContext(between('function renderRejectIn','function renderRejectOut'),ctx);
+ ctx.rejectLedgerView='compact';ctx.sumQty=()=>0;vm.runInContext(between('function renderRejectLedger','function renderRejectOut'),ctx);
  vm.runInContext(between('function renderBarangRejectPage','\n',),ctx);
  ctx.renderBarangRejectPage();assert.match(root.innerHTML,/rejectSearch/);assert.match(root.innerHTML,/<th>SKU<\/th>/);assert.match(root.innerHTML,/mv-skeleton-row/);
 });
