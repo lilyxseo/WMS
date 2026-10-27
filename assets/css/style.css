@@ -11,3 +11,5 @@
 @import url("./abc.css?v=__APP_VERSION__");
 
 @import url("./dashboard.css?v=__APP_VERSION__");
+
+@import url("./warning.css?v=__APP_VERSION__");
