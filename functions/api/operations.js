@@ -6,7 +6,8 @@ export async function onRequestGet({request,env}){try{const who=await getNoteIde
  await workStore(env,'wms_operations?'+new URLSearchParams({status:'eq.PENDING',created_at:'lt.'+new Date(Date.now()-180000).toISOString()}),{method:'PATCH',body:JSON.stringify({status:'UNCERTAIN',detail:'Proses belum mengonfirmasi hasil. Periksa data sebelum mencoba lagi.'})});
  const query=new URL(request.url).searchParams,limit=Math.min(100,Math.max(1,Number(query.get('limit'))||25)),offset=Math.max(0,Number(query.get('offset'))||0),params=new URLSearchParams({select:'*',order:'created_at.desc,id.desc',limit:String(Math.trunc(limit)),offset:String(Math.trunc(offset))});
  for(const [key,column] of [['module','module'],['action','action'],['status','status']])if(query.get(key))params.set(column,'eq.'+query.get(key).slice(0,100));
- if(query.get('user_name'))params.set('user_name','ilike.*'+query.get('user_name').replace(/[%_*]/g,'').slice(0,100)+'*');
+ if(query.get('user_id'))params.set('owner','eq.'+query.get('user_id').slice(0,150));
+ else if(query.get('user_name'))params.set('user_name','ilike.*'+query.get('user_name').replace(/[%_*]/g,'').slice(0,100)+'*');
  const from=query.get('from'),to=query.get('to'),valid=value=>/^\d{4}-\d{2}-\d{2}$/.test(value)&&new Date(value).toISOString().slice(0,10)===value;
  if(from&&!valid(from)||to&&!valid(to)||from&&to&&from>to)return json({success:false,message:'Rentang tanggal tidak valid.'},400);
  if(from)params.append('created_at','gte.'+from+'T00:00:00+07:00');if(to)params.append('created_at','lt.'+new Date(Date.parse(to)+86400000).toISOString().slice(0,10)+'T00:00:00+07:00');
