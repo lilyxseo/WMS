@@ -2160,7 +2160,32 @@ html+=`<div class='summary-grid'>${summary.map(([k,v])=>`<div class='summary-car
 html+=`<div class='detail-note'><div class='note-box'><div class='note-title'>Lokasi</div><div class='note-value'>${locationSet.size?[...locationSet].slice(0,12).map(esc).join(", "):"-"}</div></div></div>`;
 html+=`<div id="skuNotesRoot"></div>`;
 for(const sheet of [...INVENTORY_PRELOAD_SHEETS,"Barang Masuk","Barang Keluar"]){const rows=bySheet[sheet];html+=`<details class='source-card' data-detail-source='${sheet==='Barang Masuk'?'in':sheet==='Barang Keluar'?'out':''}' ${rows.length?'open':''}><summary><span><span class='badge ${badgeClass(sheet)}'>${sheet}</span></span><span>${rows.length} baris</span></summary><div class='source-body'>${renderSkuDetailTable(sheet,rows)}</div></details>`;}
-html+="</div>";detail.innerHTML=html;mountSkuNotes(document.getElementById("skuNotesRoot"),{sku,account:inventoryDraftOwner(),confirmDelete:confirmSkuNoteDelete});}
+html+=`<div id="skuRejectHistoryRoot" data-sku="${esc(sku)}">${renderSkuRejectHistoryCards(null)}</div>`;
+html+="</div>";detail.innerHTML=html;void loadSkuRejectHistory(sku);mountSkuNotes(document.getElementById("skuNotesRoot"),{sku,account:inventoryDraftOwner(),confirmDelete:confirmSkuNoteDelete});}
+function renderSkuRejectHistoryCards(data){
+ return [['masuk','Barang Masuk Reject',REJECT_IN_COLUMNS,'b-in'],['keluar','Barang Keluar Reject',REJECT_OUT_COLUMNS,'b-out']].map(([kind,label,columns,badge])=>{
+  const rows=data?.[kind]||[];
+  const presented=rows.map(row=>Object.fromEntries(columns.map(([title,field])=>[title,row[field]??''])));
+  return `<details class="source-card" data-detail-reject="${kind}" ${!data||rows.length?'open':''}><summary><span class="badge ${badge}">${label}</span><span>${data?`${rows.length} baris`:'Memuat…'}</span></summary><div class="source-body">${data?renderTable(presented):'<div class="state" role="status">Memuat riwayat reject…</div>'}</div></details>`;
+ }).join('');
+}
+async function loadSkuRejectHistory(sku,{root=document.getElementById('skuRejectHistoryRoot')}={}){
+ if(!root)return;
+ const generation=authRequestGeneration,requestId=skuDetailRequestId;
+ const current=()=>root.isConnected&&currentSku===sku&&requestId===skuDetailRequestId&&generation===authRequestGeneration;
+ try{
+  const {res,data}=await fetchJsonSafe('/api/barang-reject',{cache:'no-store'});
+  if(!current())return;
+  if(!res.ok||!data?.success)throw Error(data?.message||'Gagal membaca riwayat reject.');
+  const key=value=>String(value??'').trim().toUpperCase();
+  const select=kind=>(Array.isArray(data[kind])?data[kind]:[]).filter(row=>key(row.sku)===key(sku)).sort((a,b)=>(Number(a.rowNumber)||0)-(Number(b.rowNumber)||0));
+  root.innerHTML=(data.warning?`<div class="state" role="status">${esc(data.warning)}</div>`:'')+renderSkuRejectHistoryCards({masuk:select('masuk'),keluar:select('keluar')});
+ }catch(error){
+  if(!current())return;
+  root.innerHTML='<div class="source-card"><div class="state error">Riwayat Barang Masuk/Keluar Reject belum dapat dimuat. <button type="button" class="btn-ghost" data-retry-reject-history>Coba lagi</button></div></div>';
+  root.querySelector('[data-retry-reject-history]')?.addEventListener('click',()=>{if(!current())return;root.innerHTML=renderSkuRejectHistoryCards(null);void loadSkuRejectHistory(sku,{root});});
+ }
+}
 const SKU_DETAIL_LOCATION_FIELDS=new Set(["lokasi","lokasi bulky","lokasi_bulky","lokasiBulky"]);
 function getSkuDetailPresentationCells(row){const source=row&&typeof row==="object"?row:{};const canonical=String(source.lokasi??"").trim();const bulky=String(source.lokasi_bulky??source.lokasiBulky??source["lokasi bulky"]??"").trim();const cells={lokasi:canonical||bulky};for(const [key,value] of Object.entries(source)){if(!SKU_DETAIL_LOCATION_FIELDS.has(key))cells[key]=value;}return cells;}
 const SKU_DETAIL_INTERNAL_COLUMNS=new Set(["rownumber","sourcerownumber","syncedat"]);

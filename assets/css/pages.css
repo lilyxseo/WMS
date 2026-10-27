@@ -2409,7 +2409,7 @@ html[data-accent] .account-card .account-profile-link strong{color:var(--text)}
 #mainContentPages :is(button,select,input,a):focus-visible{outline:2px solid var(--primary);outline-offset:3px}
 #mainContentPages .workspace-table{border-collapse:separate;border-spacing:0;width:100%;font-size:12px;color:var(--text)}
 #mainContentPages .workspace-table thead th{position:sticky;top:0;z-index:3;background:var(--panel-soft);color:var(--muted);font-size:10px;letter-spacing:.025em;line-height:1.5;border-bottom:1px solid var(--line);white-space:nowrap;padding:11px 12px}
-#mainContentPages .workspace-table tbody td{padding:10px 12px;line-height:1.5;border-bottom:1px solid color-mix(in srgb,var(--line) 65%,transparent);vertical-align:middle}
+#mainContentPages .workspace-table tbody td{padding:6px 8px;line-height:1.5;border-bottom:1px solid color-mix(in srgb,var(--line) 65%,transparent);vertical-align:middle}
 #mainContentPages .workspace-table tbody tr:hover>td{background:color-mix(in srgb,var(--primary) 5%,var(--panel))}
 #mainContentPages .workspace-table .ui-col-number{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .workspace-table th.ui-col-number .th-filter-wrap{justify-content:flex-end}
