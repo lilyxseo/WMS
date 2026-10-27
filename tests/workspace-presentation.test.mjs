@@ -21,10 +21,10 @@ test('compact dashboard keeps the remaining insights available in a disclosure',
  const html=context.renderInsightCard({insights:Array.from({length:7},(_,i)=>({text:`Insight ${i}`}))});
  const [visible,extra]=html.split('<details');assert.equal((visible.match(/<li /g)||[]).length,3);assert.equal((extra.match(/<li /g)||[]).length,4);assert.ok(extra.includes('Lihat 4 insight lainnya'));
 });
-test('dashboard recent section renders ten rows and retains navigation to the complete ledger',()=>{
+test('dashboard recent section renders the latest fifty rows and retains navigation to the complete ledger',()=>{
  let received;const context=vm.createContext({esc,renderDashboardSheetTable:rows=>{received=rows;return 'table';}});
  vm.runInContext(between('function renderDashboardTableSection','function renderDashboardSheetTable'),context);
- const html=context.renderDashboardTableSection('Barang Masuk','',Array.from({length:50},(_,i)=>i),'');assert.equal(received.length,10);assert.equal(received[9],9);assert.ok(html.includes('/barang-masuk'));assert.ok(html.includes('Lihat semua'));
+ const html=context.renderDashboardTableSection('Barang Masuk','',Array.from({length:80},(_,i)=>i),'');assert.equal(received.length,50);assert.equal(received[49],49);assert.ok(html.includes('/barang-masuk'));assert.ok(html.includes('Lihat semua'));
 });
 test('SKU navigation opens the full page and keeps browser history',()=>{
  const routes=[],history={pushState:(_state,_title,path)=>routes.push(path)};
@@ -52,4 +52,10 @@ test('dashboard view preference applies to both transaction sections',()=>{
  vm.runInContext(between("let dashboardTransactionView=",'function renderDashboardTableSection'),context);context.window.setDashboardTransactionView('table');
  for(const section of sections){assert.equal(section.dataset.dashboardView,'table');assert.equal(section.buttons[1]['aria-pressed'],'true');}
  context.window.setDashboardTransactionView('invalid');assert.equal(sections[0].dataset.dashboardView,'cards');
+});
+
+test('dashboard fallback picks the latest 50 source rows regardless of hydration ordering',()=>{
+ const rows=Array.from({length:80},(_,i)=>({rowNumber:81-i,sku:'SKU'+i}));
+ const context=vm.createContext({getBarangMasukRows:()=>rows,getBarangKeluarRows:()=>[...rows].reverse(),console});vm.runInContext(between('function getLatestRows','function getDailyStatusSummary'),context);
+ for(const sheet of ['Barang Masuk','Barang Keluar']){const latest=context.getLatestRows(sheet,50);assert.equal(latest.length,50);assert.equal(latest[0].rowNumber,81);assert.equal(latest[49].rowNumber,32);}
 });
