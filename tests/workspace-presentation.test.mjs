@@ -39,3 +39,17 @@ test('shared table decoration preserves the dedicated Balikan table layout',()=>
  const table={matches:selector=>['table','.balikan-table'].includes(selector),querySelectorAll:()=>[],closest:()=>null,classList:{add:()=>{decorated=true;}}};
  context.polishWorkspaceTables(table);assert.equal(decorated,false);
 });
+test('dashboard compact transactions retain SKU, quantity and all nine ledger fields',()=>{
+ const context=vm.createContext({esc,getVal:(row,keys)=>keys.map(key=>row[key]).find(value=>value!==undefined)||''});
+ vm.runInContext(between('function renderDashboardSheetTable','function normMv'),context);
+ const html=context.renderDashboardSheetTable([{tanggal:'2026-10-27',from:'FROM-A',to:'TO-B',sku:'00123',namaBarang:'PRODUCT-X',qty:7,status:'STATUS-X',pic:'PIC-X',keterangan:'NOTE-X'}],'Barang Masuk');
+ const [table,mobile]=html.split('<div class=\'dashboard-mobile-list\'>');
+ for(const value of ['2026-10-27','FROM-A','TO-B','00123','PRODUCT-X','7','STATUS-X','PIC-X','NOTE-X']){assert.ok(table.includes(value));assert.ok(mobile.includes(value));}
+ assert.match(mobile,/<details>/);assert.match(mobile,/navigateToSku/);assert.equal((table.match(/<th>/g)||[]).length,9);
+});
+test('dashboard view preference applies to both transaction sections',()=>{
+ const sections=Array.from({length:2},()=>({dataset:{},buttons:['cards','table'].map(mode=>({dataset:{dashboardMode:mode},setAttribute(name,value){this[name]=value;}})),querySelectorAll(){return this.buttons;}}));const context=vm.createContext({window:{},document:{querySelectorAll:()=>sections}});
+ vm.runInContext(between("let dashboardTransactionView=",'function renderDashboardTableSection'),context);context.window.setDashboardTransactionView('table');
+ for(const section of sections){assert.equal(section.dataset.dashboardView,'table');assert.equal(section.buttons[1]['aria-pressed'],'true');}
+ context.window.setDashboardTransactionView('invalid');assert.equal(sections[0].dataset.dashboardView,'cards');
+});
