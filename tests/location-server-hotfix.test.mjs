@@ -21,7 +21,7 @@ test('Location UI uses independently paginated server APIs and bounded caches', 
   assert.match(section, /LOCATION_CACHE_LIMIT=8/);
   assert.match(section, /\/api\/location-summary/);
   assert.match(section, /\/api\/locations\?/);
-  assert.match(section, /\/api\/locations\/empty\?/);
+  assert.match(section, /Empty racks share the same searchable, paginated explorer/);
   assert.match(section, /\/api\/location-detail\?/);
   assert.match(section, /debounce\([^]*,400\)/);
   assert.doesNotMatch(section, /prefetchLocationPage|requestIdleCallback/);
