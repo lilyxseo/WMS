@@ -771,12 +771,12 @@ showAuthMode("login");
 form.dataset.bound="1";
 }
 function handleSequentialPageShortcut(event){
- if(!event.altKey||event.ctrlKey||event.metaKey||event.shiftKey||event.isComposing||!['ArrowLeft','ArrowRight'].includes(event.key)||(!isUserLoggedIn&&!isPreviewBypassLoginEnabled()))return;
+ if(!event.altKey||event.ctrlKey||event.metaKey||event.shiftKey||event.isComposing||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)||(!isUserLoggedIn&&!isPreviewBypassLoginEnabled()))return;
  event.preventDefault();event.stopImmediatePropagation();if(event.repeat)return;
  if([...document.querySelectorAll('[role="dialog"][aria-modal="true"]')].some(dialog=>dialog.getClientRects().length))return;
  const links=[...document.querySelectorAll('.side-link[data-route][data-page]')].filter(link=>!link.hidden&&!link.disabled&&link.style.display!=='none'&&(link.dataset.page!=='activity-log'||isActivityLogAllowed())&&(link.dataset.page!=='archive-sources'||canManageArchiveSources()));
  const page=getActivePage(),active=page==='detail'?'search':page==='barang-reject'?getBarangRejectNavPage():page,index=links.findIndex(link=>link.dataset.page===active);
- if(index<0)return;const next=links[index+(event.key==='ArrowRight'?1:-1)];if(next){navigateTo(next.dataset.route);closeSidebarMobile();}
+ if(index<0)return;const next=links[index+(['ArrowRight','ArrowDown'].includes(event.key)?1:-1)];if(next){navigateTo(next.dataset.route);closeSidebarMobile();}
 }
 function bindNav(){
  document.addEventListener('keydown',handleSequentialPageShortcut,true);
