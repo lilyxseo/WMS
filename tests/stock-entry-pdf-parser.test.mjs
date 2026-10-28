@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
+import {parseEntryContentRows} from '../assets/js/entry-import-content.js';
 const source=await readFile(new URL('../assets/js/main.js',import.meta.url),'utf8');
 function parser(pages){
  let destroyed=0,cleaned=0;
- const context=vm.createContext({window:{pdfjsLib:{getDocument:()=>({promise:Promise.resolve({numPages:pages.length,getPage:async n=>({getTextContent:async()=>({items:pages[n-1]}),cleanup(){cleaned++;}})}),destroy:async()=>{destroyed++;}})}},clean:s=>String(s).trim().toLowerCase()});
+ const context=vm.createContext({parseEntryContentRows,window:{pdfjsLib:{getDocument:()=>({promise:Promise.resolve({numPages:pages.length,getPage:async n=>({getTextContent:async()=>({items:pages[n-1]}),cleanup(){cleaned++;}})}),destroy:async()=>{destroyed++;}})}},clean:s=>String(s).trim().toLowerCase()});
  vm.runInContext(source.slice(source.indexOf('function getPdfJsLib(){'),source.indexOf('function formatPdfTransferFileSize(')),context);
  return {read:()=>context.readTransferPdf({arrayBuffer:async()=>new ArrayBuffer(0)}),destroyed:()=>destroyed,cleaned:()=>cleaned};
 }
@@ -16,7 +17,11 @@ test('Form Input and Import PDF share multi-page parser without requiring a tran
  assert.equal(out.pageCount,2);assert.equal(out.failedRows.length,0);assert.deepEqual(JSON.parse(JSON.stringify(out.items.map(({sku,namaProduk,qty})=>({sku,namaProduk,qty})))),[{sku:'001',namaProduk:'PDF NAME WHITE',qty:8},{sku:'002',namaProduk:'PDF NAME GOLD',qty:2}]);assert.equal(reader.cleaned(),2);assert.equal(reader.destroyed(),1);
 });
 test('shared PDF reader releases resources when page extraction fails',async()=>{
- let destroyed=false;const context=vm.createContext({window:{pdfjsLib:{getDocument:()=>({promise:Promise.resolve({numPages:1,getPage:async()=>{throw new Error('Invalid PDF page');}}),destroy:async()=>{destroyed=true;}})}}});
+ let destroyed=false;const context=vm.createContext({parseEntryContentRows,window:{pdfjsLib:{getDocument:()=>({promise:Promise.resolve({numPages:1,getPage:async()=>{throw new Error('Invalid PDF page');}}),destroy:async()=>{destroyed=true;}})}}});
  vm.runInContext(source.slice(source.indexOf('function getPdfJsLib(){'),source.indexOf('function isSkuCandidate')),context);
  await assert.rejects(()=>context.readTransferPdf({arrayBuffer:async()=>new ArrayBuffer(0)}),/Invalid PDF page/);assert.equal(destroyed,true);
+});
+test('headerless PDF reads product content even when name precedes SKU and text is split',async()=>{
+ const reader=parser([[item('GOTO BACKPACK PINK',20,700),item('682200000277',240,700),item('12',400,700),item('GT-EMGJ-BL',20,670),item('GOTO',150,670),item('ELECTRIC',200,670),item('FAN',260,670),item('3',400,670)]]);
+ const out=await reader.read();assert.deepEqual(JSON.parse(JSON.stringify(out.items.map(({sku,namaProduk,qty})=>({sku,namaProduk,qty})))),[{sku:'682200000277',namaProduk:'GOTO BACKPACK PINK',qty:12},{sku:'GT-EMGJ-BL',namaProduk:'GOTO ELECTRIC FAN',qty:3}]);
 });

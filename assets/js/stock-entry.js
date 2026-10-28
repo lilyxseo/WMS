@@ -1,3 +1,4 @@
+import {entryImportFileKind} from './entry-import-content.js';
 import {writeDraftValue} from './draft-storage.js?v=__APP_VERSION__';
 import {createAccountDraft,accountDraftMarkup} from './account-drafts.js?v=__APP_VERSION__';
 export const ENTRY_MAX_ROWS=1000;
@@ -213,11 +214,10 @@ export function mountStockEntry(root,{owner,fetchFn=fetch,confirm,parsePdf,onErr
  });
  async function importPdf(file,sheetIndex){
   if(!alive()||busy||pending||!config?.canWrite||!parsePdf)return;
-  const excel=/\.xlsx$/i.test(file.name||'');
-  if(!excel&&!/\.pdf$/i.test(file.name||'')&&file.type!=='application/pdf'){setMessage('Pilih PDF atau Excel (.xlsx).');return;}
   if(file.size>20*1024*1024){setMessage('Ukuran file maksimal 20 MB.');return;}
   busy=true;closeLookup();render();setMessage(`Membaca ${file.name||'PDF'}…`);
   try{
+   const excel=await entryImportFileKind(file)==='excel';
    const parsed=excel?await (await import('./stock-entry-excel.js?v='+encodeURIComponent(new URL(import.meta.url).searchParams.get('v')||'1'))).parseEntryExcel(file,sheetIndex):await parsePdf(file);if(!alive())return;
    if(parsed.sheets){excelFile=file;excelSheets=parsed.sheets;message='Pilih sheet yang akan diimpor.';return;}
    excelFile=null;excelSheets=[];
