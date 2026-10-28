@@ -2870,7 +2870,7 @@ html[data-accent] .account-card .account-profile-link strong{color:var(--text)}
 /* Keep filter summaries above the accuracy table and reserve space for every column. */
 #page-stats #statsChart{min-width:0;width:100%}
 #page-stats .stats-table-shell>.table-filter-summary{flex:none;width:100%;margin:0 0 10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);box-sizing:border-box}
-#page-stats .stats-table-wrap{flex:auto;box-sizing:border-box}
+#page-stats .stats-table-wrap{flex:0 1 auto;min-height:160px;max-height:min(65dvh,720px);box-sizing:border-box}
 #page-stats .stats-table-wrap table{min-width:1240px;table-layout:fixed}
 #page-stats .stats-table-wrap :is(th,td):nth-child(6){width:8%}
 #page-stats .stats-table-wrap :is(th,td):nth-child(7){width:18%;white-space:normal;overflow-wrap:anywhere}
@@ -2879,7 +2879,7 @@ html[data-accent] .account-card .account-profile-link strong{color:var(--text)}
 #page-stats .stats-table-wrap th{white-space:nowrap}
 #page-stats .stats-table-wrap .action-cell button{white-space:nowrap;min-height:32px}
 #page-stats .stats-toolbar{display:grid;grid-template-columns:minmax(0,1fr) 160px 140px 140px;gap:8px}
-#page-stats .stats-toolbar>select{min-width:0;width:100%;max-width:none;margin:0}
+#page-stats .stats-toolbar>select{min-width:0;width:100%;max-width:none;margin:0;border:1px solid var(--line);background:var(--input-bg,var(--panel));color:var(--text)}
 #page-stats #statsFilterState{grid-column:1/-1}
 #page-stats #statsFilterState:empty{display:none}
 @media(max-width:1000px){#page-stats .stats-toolbar{grid-template-columns:repeat(3,minmax(0,1fr))}#page-stats .stats-search-field{grid-column:1/-1}}
