@@ -2887,3 +2887,5 @@ html[data-accent] .account-card .account-profile-link strong{color:var(--text)}
 
 /* Native cell focus follows the active accent across editable and read-only grids. */
 #mainContentPages table :is(td,th):is(:focus,:focus-visible){outline:0!important;border-radius:0;box-shadow:inset 0 0 0 2px var(--primary)!important}
+
+#notificationSettings{min-width:0;grid-column:1/-1}#notificationSettings[hidden]{display:none}#notificationSettings .table-wrap{max-width:100%;overflow:auto}#notificationSettings table{width:100%;min-width:480px}#notificationSettings :is(td,th){padding:8px;text-align:left}#notificationSettings th{color:var(--primary)}#notificationSettings input[type=checkbox]{width:18px;height:18px;accent-color:var(--primary)}

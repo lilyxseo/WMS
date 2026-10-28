@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { handleFonnteWebhook, parseInventoryMessage, formatInventoryReply } from '../supabase/functions/whatsapp-fonnte/handler.js';
+import { handleFonnteWebhook as actualWebhook, parseInventoryMessage, formatInventoryReply } from '../supabase/functions/whatsapp-fonnte/handler.js';
 
+const handleFonnteWebhook=(context,fetchFn)=>actualWebhook(context,(url,options)=>url.endsWith('/rpc/notification_allowed_numbers')?Promise.resolve(Response.json(['6281234567890'])):fetchFn(url,options));
 const env = {
   FONNTE_TOKEN: 'test-token', FONNTE_WEBHOOK_SECRET: 'test-secret',
   WHATSAPP_ALLOWED_NUMBERS: '081234567890',

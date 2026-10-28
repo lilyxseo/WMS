@@ -1,3 +1,4 @@
+import {renderNotificationSettings} from './notification-settings.js';
 import {parseEntryContentRows} from './entry-import-content.js?v=__APP_VERSION__';
 import {normalizeScanValue} from './utils/scan-value.js?v=__APP_VERSION__';
 import {writeDraftValue} from './draft-storage.js?v=__APP_VERSION__';
@@ -168,7 +169,7 @@ return isDeveloperUser()||isPreviewBypassLoginEnabled()||isDeveloperRoleLike()||
 }
 window.currentUser=getCurrentUser();
 const nativeFetch=window.fetch.bind(window);
-const AUTHENTICATED_INVENTORY_PATHS=new Set(['/api/work-drafts','/api/operations','/api/activity-users','/api/files','/api/archive-sources','/api/archive-data','/api/stock-minus-totals','/api/dashboard-summary','/api/dashboard-recent-transactions','/api/dashboard-monthly-insight','/api/movement/summary','/api/inventory-sync-status','/api/inventory-version','/api/dashboard-stock-totals','/api/inventory-accuracy','/api/barang-reject','/api/reject-entry','/api/sync/inventory/netsuite','/api/sync/inventory/all','/api/sync/inventory/kartu-stok','/api/sync/inventory/barang-masuk','/api/sync/inventory/barang-keluar','/api/sync/inventory/rpl','/api/sync/inventory/bulky','/api/kartu-stok','/api/barang-masuk','/api/barang-keluar','/api/rpl','/api/bulky','/api/inventory-sku-detail','/api/sku-notes','/api/barcode-lookup']);
+const AUTHENTICATED_INVENTORY_PATHS=new Set(['/api/work-drafts','/api/operations','/api/activity-users','/api/notification-settings','/api/files','/api/archive-sources','/api/archive-data','/api/stock-minus-totals','/api/dashboard-summary','/api/dashboard-recent-transactions','/api/dashboard-monthly-insight','/api/movement/summary','/api/inventory-sync-status','/api/inventory-version','/api/dashboard-stock-totals','/api/inventory-accuracy','/api/barang-reject','/api/reject-entry','/api/sync/inventory/netsuite','/api/sync/inventory/all','/api/sync/inventory/kartu-stok','/api/sync/inventory/barang-masuk','/api/sync/inventory/barang-keluar','/api/sync/inventory/rpl','/api/sync/inventory/bulky','/api/kartu-stok','/api/barang-masuk','/api/barang-keluar','/api/rpl','/api/bulky','/api/inventory-sku-detail','/api/sku-notes','/api/barcode-lookup']);
 window.fetch=async(input,init={})=>{
   const url=typeof input==='string'?input:String(input?.url||'');
   if(url.startsWith('/api/')){
@@ -721,6 +722,7 @@ void clearCache();
 ++dashboardSummaryRequestId;
 ++inventorySyncStatusRequestId;
 settingsDatabaseController?.dispose();settingsDatabaseController=null;
+const notificationSettingsRoot=document.getElementById('notificationSettings');if(notificationSettingsRoot){notificationSettingsRoot.replaceChildren();notificationSettingsRoot.hidden=true;notificationSettingsRoot.onchange=null;}
 stockEntryController?.dispose();stockEntryController=null;balikanEntryController?.dispose();balikanEntryController=null;
 BALIKAN_STATE.requestId+=1;BALIKAN_STATE.requestController?.abort();window.currentTripSheet='';window.BALIKAN_ROWS=[];BALIKAN_STATE.sheetCache={};BALIKAN_STATE.dynamicColumnCache={};
 user=null;
@@ -2488,6 +2490,7 @@ function updateSettingsDatabaseHealth(state){
  if(settingsSystemDot)settingsSystemDot.className=`status-dot ${state.error?'error':pending||state.loading?'loading':healthy?'ok':'error'}`;
 }
 function renderSettingsPage(){
+ const notificationRoot=document.getElementById("notificationSettings"),owner=authRequestGeneration;if(notificationRoot){notificationRoot.hidden=!canManageArchiveSources();if(!canManageArchiveSources()){notificationRoot.replaceChildren();notificationRoot.onchange=null;}if(canManageArchiveSources())void renderNotificationSettings(notificationRoot,{isCurrent:()=>owner===authRequestGeneration,fetchFn:async(url,options={})=>{const {res,data}=await fetchJsonSafe(url,options);return {ok:res.ok,status:res.status,json:async()=>data};}});}
  updateSettingsDashboard();
  const root=document.getElementById('settingsDatabase');if(!root)return;
  if(!settingsDatabaseController)settingsDatabaseController=mountSettingsDatabase(root,{synchronize:syncSettingsDatabase,canSync:()=>getPermissions().canSync,isBusy:()=>!!(REFRESH_STATE.refreshPromise||REFRESH_STATE.isRefreshing||isSyncing),isActive:()=>getActivePage()==='settings',generation:()=>authRequestGeneration,onChange:updateSettingsDatabaseHealth});
@@ -4496,7 +4499,7 @@ function activityUserOptions(selected='',rows=[]){
 async function loadActivityUserDirectory(){
  const generation=authRequestGeneration;if(activityUserDirectory.generation!==generation)activityUserDirectory={generation,users:[],loadedAt:0,promise:null};
  const state=activityUserDirectory;if(state.promise||Date.now()-state.loadedAt<120000)return state.promise;
- state.promise=(async()=>{try{const headers=await getActivityLogAccessHeaders();const response=await fetch('/api/activity-users',{headers,cache:'no-store'}),data=await response.json();if(generation!==authRequestGeneration)return;if(!response.ok||!data.success)throw Error();state.users=data.users||[];state.loadedAt=Date.now();const select=document.getElementById('alUser');if(select){const selected=select.value;select.innerHTML=activityUserOptions(selected,activityLogPageCache?.rows||[]);}}catch{const select=document.getElementById('alUser');if(generation===authRequestGeneration&&select)select.title='Daftar akun belum dimuat. Muat ulang untuk mencoba lagi.';}finally{state.promise=null;}})();return state.promise;
+ state.promise=(async()=>{try{const headers=await getActivityLogAccessHeaders();const response=await fetch('/api/activity-users','/api/notification-settings',{headers,cache:'no-store'}),data=await response.json();if(generation!==authRequestGeneration)return;if(!response.ok||!data.success)throw Error();state.users=data.users||[];state.loadedAt=Date.now();const select=document.getElementById('alUser');if(select){const selected=select.value;select.innerHTML=activityUserOptions(selected,activityLogPageCache?.rows||[]);}}catch{const select=document.getElementById('alUser');if(generation===authRequestGeneration&&select)select.title='Daftar akun belum dimuat. Muat ulang untuk mencoba lagi.';}finally{state.promise=null;}})();return state.promise;
 }
 let activityLogRequestId=0,activityAutoRefreshTimer;
 let activityLogPageCache=null;

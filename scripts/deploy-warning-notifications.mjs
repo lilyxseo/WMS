@@ -22,6 +22,7 @@ function exitDiagnostic(){process.exit(0);}
 const baseMigration=await readFile(new URL('../supabase/migrations/20261013030000_warning_notifications.sql',import.meta.url),'utf8'),migration=await readFile(new URL('../supabase/migrations/20261023000000_warning_notification_lifecycle.sql',import.meta.url),'utf8');
 const recovery=await readFile(new URL('../supabase/migrations/20261026010000_warning_notification_recovery.sql',import.meta.url),'utf8');
 const freshness=await readFile(new URL('../supabase/migrations/20261026020000_warning_resolution_freshness.sql',import.meta.url),'utf8');
+const notificationAccess=await readFile(new URL('../supabase/migrations/20261028000000_notification_user_settings.sql',import.meta.url),'utf8');
 const stable=await readFile(new URL('../supabase/migrations/20261027000000_warning_stable_identity.sql',import.meta.url),'utf8');
 const tests=`do $$declare owner uuid:=gen_random_uuid();contender uuid:=gen_random_uuid();finding jsonb;answer jsonb;event_id uuid;amount integer;begin
  delete from public.warning_notify_outbox;delete from public.warning_notify_seen;
@@ -65,9 +66,9 @@ const tests=`do $$declare owner uuid:=gen_random_uuid();contender uuid:=gen_rand
  select count(*) into amount from public.warning_notify_claim(owner);if amount<>0 then raise exception 'Repeated logical resolution claimed';end if;
  perform public.warning_notify_unlock(owner);
 end$$;`;
-if(process.argv.includes('--inspect')){await sql('begin;'+baseMigration+migration+recovery+freshness+stable+tests+'rollback;');await output('Lifecycle, deduplication, retries and leases verified with rollback');}
+if(process.argv.includes('--inspect')){await sql('begin;'+baseMigration+migration+recovery+freshness+stable+notificationAccess+tests+'rollback;');await output('Lifecycle, deduplication, retries and leases verified with rollback');}
 else if(process.argv.includes('--configure')){
- await sql('begin;'+baseMigration+migration+recovery+freshness+stable+'commit;');await sql('begin;'+tests+'rollback;');
+ await sql('begin;'+baseMigration+migration+recovery+freshness+stable+notificationAccess+'commit;');await sql('begin;'+tests+'rollback;');
  const secrets=await management('/secrets');if(!secrets.some(item=>item.name==='FONNTE_TOKEN'))throw Error('Fonnte token missing');
  const keys=await management('/api-keys?reveal=true'),key=keys.find(item=>item.api_key?.startsWith('sb_secret_'))?.api_key;if(!key)throw Error('Warning data key missing');
  const existing=await sql("select decrypted_secret from vault.decrypted_secrets where name='wms_warning_notify_secret' limit 1"),secret=existing[0]?.decrypted_secret||randomBytes(32).toString('hex');if(!existing.length)await sql(`select vault.create_secret(${literal(secret)},'wms_warning_notify_secret')`);

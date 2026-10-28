@@ -4,6 +4,8 @@ on:
     branches: [main, fix/warning-whatsapp-lifecycle, fix/warning-stable-identity]
     paths:
       - 'supabase/functions/warning-whatsapp/**'
+      - 'supabase/functions/whatsapp-fonnte/**'
+      - 'supabase/migrations/20261028000000_notification_user_settings.sql'
       - 'supabase/migrations/20261023000000_warning_notification_lifecycle.sql'
       - 'supabase/migrations/20261026010000_warning_notification_recovery.sql'
       - 'supabase/migrations/20261026020000_warning_resolution_freshness.sql'
@@ -69,6 +71,8 @@ jobs:
           version: '2.120.0'
       - if: github.ref == 'refs/heads/main'
         run: supabase functions deploy warning-whatsapp --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
+      - if: github.ref == 'refs/heads/main'
+        run: supabase functions deploy whatsapp-fonnte --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
       - id: publish
         if: github.ref == 'refs/heads/main'
         run: node scripts/deploy-warning-notifications.mjs

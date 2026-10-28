@@ -59,10 +59,11 @@ export function formatInventoryReply(rows) {
 export async function handleFonnteWebhook({ request, env }, fetchFn = fetch) {
   if (request.method !== 'POST') return json({ success: false, message: 'Method not allowed' }, 405);
   const secret = String(env.FONNTE_WEBHOOK_SECRET || '');
-  const allowed = String(env.WHATSAPP_ALLOWED_NUMBERS || '').split(',').map(phone).filter(Boolean);
-  if (!secret || !allowed.length || !env.FONNTE_TOKEN) return json({ success: false, message: 'Bot belum dikonfigurasi' }, 503);
+  let allowed;
+  if (!secret || !env.FONNTE_TOKEN) return json({ success: false, message: 'Bot belum dikonfigurasi' }, 503);
   const received = request.headers.get('X-Webhook-Secret') || new URL(request.url).searchParams.get('secret');
   if (received !== secret) return json({ success: false }, 401);
+  try{const config=getDatabaseConfig(env),response=await fetchFn(`${config.url}/rest/v1/rpc/notification_allowed_numbers`,{method:'POST',headers:{apikey:config.key,Authorization:`Bearer ${config.key}`,'Content-Type':'application/json'},body:JSON.stringify({p_kind:'bot'}),signal:AbortSignal.timeout(10000)});allowed=await response.json();if(!response.ok||!Array.isArray(allowed))throw Error();}catch{return json({success:false,message:'Izin bot belum dapat diperiksa'},503);}
   let payload;
   try {
     if (request.headers.get('Content-Type')?.includes('application/json')) payload = await request.json();

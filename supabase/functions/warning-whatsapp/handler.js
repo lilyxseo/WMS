@@ -22,7 +22,8 @@ export function createHandler(env,{load=readWarningSnapshot,fetchFn=fetch}={}){
  return async request=>{
   if(request.method!=='POST'||!env.WMS_WARNING_NOTIFY_SECRET||request.headers.get('X-WMS-Warning-Secret')!==env.WMS_WARNING_NOTIFY_SECRET)return new Response('Unauthorized',{status:401});
   const body=await request.json().catch(()=>({}));
-  const recipients=[...new Set(String(env.WMS_WARNING_RECIPIENTS||'').split(',').map(v=>v.trim()).filter(v=>/^62\d{8,13}$/.test(v)))];
+  let recipients;try{recipients=await rpc('notification_allowed_numbers',{p_kind:'warning'});if(!Array.isArray(recipients))throw Error();if(body.action!=='check')await rpc('notification_cancel_revoked');}catch{return Response.json({code:'ACCESS_UNAVAILABLE',delivery:'not_sent'},{status:503});}
+  if(!recipients.length)return Response.json({status:'no_recipients',delivery:'not_sent'});
   if(!recipients.length||!env.FONNTE_TOKEN||!env.WMS_WARNING_DATA_KEY)return Response.json({code:'CONFIG_MISSING'},{status:503});
   if(body.action==='check'){
    try{const result=await load(config,{full:true});return Response.json({ready:complete(result),total:result.total,recipients:recipients.length,delivery:'not_sent'});}catch{return Response.json({code:'SNAPSHOT_UNAVAILABLE',delivery:'not_sent'},{status:503});}
@@ -38,6 +39,7 @@ export function createHandler(env,{load=readWarningSnapshot,fetchFn=fetch}={}){
    let accepted=0;
    for(let batch=0;batch<4;batch++){
     const events=await rpc('warning_notify_claim',{p_run:run});if(!events.length)break;
+    const permitted=await rpc('notification_allowed_numbers',{p_kind:'warning'});if(!permitted.includes(events[0].recipient)){await rpc('notification_cancel_revoked');continue;}
     let status='uncertain';
     try{
      const response=await fetchFn('https://api.fonnte.com/send',{method:'POST',headers:{Authorization:env.FONNTE_TOKEN},body:new URLSearchParams({target:events[0].recipient,message:formatMessage(events),countryCode:'62'}),signal:AbortSignal.timeout(10000)});
