@@ -168,7 +168,7 @@ return isDeveloperUser()||isPreviewBypassLoginEnabled()||isDeveloperRoleLike()||
 }
 window.currentUser=getCurrentUser();
 const nativeFetch=window.fetch.bind(window);
-const AUTHENTICATED_INVENTORY_PATHS=new Set(['/api/work-drafts','/api/operations','/api/activity-users','/api/files','/api/archive-sources','/api/archive-data','/api/stock-minus-totals','/api/dashboard-summary','/api/dashboard-recent-transactions','/api/dashboard-monthly-insight','/api/movement/summary','/api/inventory-sync-status','/api/inventory-version','/api/inventory-accuracy','/api/barang-reject','/api/reject-entry','/api/sync/inventory/netsuite','/api/sync/inventory/all','/api/sync/inventory/kartu-stok','/api/sync/inventory/barang-masuk','/api/sync/inventory/barang-keluar','/api/sync/inventory/rpl','/api/sync/inventory/bulky','/api/kartu-stok','/api/barang-masuk','/api/barang-keluar','/api/rpl','/api/bulky','/api/inventory-sku-detail','/api/sku-notes','/api/barcode-lookup']);
+const AUTHENTICATED_INVENTORY_PATHS=new Set(['/api/work-drafts','/api/operations','/api/activity-users','/api/files','/api/archive-sources','/api/archive-data','/api/stock-minus-totals','/api/dashboard-summary','/api/dashboard-recent-transactions','/api/dashboard-monthly-insight','/api/movement/summary','/api/inventory-sync-status','/api/inventory-version','/api/dashboard-stock-totals','/api/inventory-accuracy','/api/barang-reject','/api/reject-entry','/api/sync/inventory/netsuite','/api/sync/inventory/all','/api/sync/inventory/kartu-stok','/api/sync/inventory/barang-masuk','/api/sync/inventory/barang-keluar','/api/sync/inventory/rpl','/api/sync/inventory/bulky','/api/kartu-stok','/api/barang-masuk','/api/barang-keluar','/api/rpl','/api/bulky','/api/inventory-sku-detail','/api/sku-notes','/api/barcode-lookup']);
 window.fetch=async(input,init={})=>{
   const url=typeof input==='string'?input:String(input?.url||'');
   if(url.startsWith('/api/')){
@@ -770,7 +770,16 @@ signupForm?.addEventListener("submit",async(e)=>{e.preventDefault();showSignupEr
 showAuthMode("login");
 form.dataset.bound="1";
 }
+function handleSequentialPageShortcut(event){
+ if(!event.altKey||event.ctrlKey||event.metaKey||event.shiftKey||event.isComposing||!['ArrowLeft','ArrowRight'].includes(event.key)||(!isUserLoggedIn&&!isPreviewBypassLoginEnabled()))return;
+ event.preventDefault();event.stopImmediatePropagation();if(event.repeat)return;
+ if([...document.querySelectorAll('[role="dialog"][aria-modal="true"]')].some(dialog=>dialog.getClientRects().length))return;
+ const links=[...document.querySelectorAll('.side-link[data-route][data-page]')].filter(link=>!link.hidden&&!link.disabled&&link.style.display!=='none'&&(link.dataset.page!=='activity-log'||isActivityLogAllowed())&&(link.dataset.page!=='archive-sources'||canManageArchiveSources()));
+ const page=getActivePage(),active=page==='detail'?'search':page==='barang-reject'?getBarangRejectNavPage():page,index=links.findIndex(link=>link.dataset.page===active);
+ if(index<0)return;const next=links[index+(event.key==='ArrowRight'?1:-1)];if(next){navigateTo(next.dataset.route);closeSidebarMobile();}
+}
 function bindNav(){
+ document.addEventListener('keydown',handleSequentialPageShortcut,true);
  document.addEventListener('keydown',event=>{if(event.key!=='Escape')return;const menu=document.querySelector('[data-account-menu]');if(menu&&!menu.hidden){menu.hidden=true;const toggle=document.querySelector('[data-account-menu-toggle]');toggle?.setAttribute('aria-expanded','false');toggle?.focus();}});
 document.querySelectorAll("[data-open-profile]").forEach(button=>button.addEventListener("click",()=>{const menu=document.querySelector("[data-account-menu]");if(menu)menu.hidden=true;document.querySelector("[data-account-menu-toggle]")?.setAttribute("aria-expanded","false");navigateTo("/profile");closeSidebarMobile();}));
 document.querySelectorAll(".side-link[data-route]").forEach(btn=>btn.addEventListener("click",()=>{if(btn.dataset.route==="/activity-log"&&!isActivityLogAllowed()){navigateTo("/dashboard");closeSidebarMobile();return;}navigateTo(btn.dataset.route);closeSidebarMobile();}));
@@ -1374,7 +1383,16 @@ async function loadDashboardAccuracy(){
  finally{if(owner===authRequestGeneration&&state===dashboardAccuracyState){state.promise=null;const value=dashboardCards?.querySelector('[data-dashboard-accuracy] .v');if(value)value.textContent=dashboardAccuracyCard().value;const card=dashboardCards?.querySelector('[data-dashboard-accuracy]');if(card)card.setAttribute('aria-label','Akurasi Stok: '+dashboardAccuracyCard().value);}}
  })();return state.promise;
 }
+let dashboardStockState={owner:null,data:null,promise:null};
+function dashboardStockCard(name,field){return {name,stockField:field,value:dashboardStockState.owner===authRequestGeneration&&dashboardStockState.data?dashboardStockState.data[field]:'—'};}
+async function loadDashboardStockTotals(){
+ const owner=authRequestGeneration;
+ if(dashboardStockState.owner!==owner)dashboardStockState={owner,data:null,promise:null};
+ const state=dashboardStockState;if(state.promise)return state.promise;
+ state.promise=(async()=>{try{const {res,data}=await fetchJsonSafe('/api/dashboard-stock-totals',{cache:'no-store',signal:AbortSignal.timeout(30000)});if(owner!==authRequestGeneration||state!==dashboardStockState)return;state.data=res.ok&&data?.success&&Number.isFinite(data.activeSku)&&Number.isFinite(data.totalQty)?data:null;}catch{if(owner===authRequestGeneration&&state===dashboardStockState)state.data=null;}finally{if(owner===authRequestGeneration&&state===dashboardStockState){state.promise=null;for(const field of ['activeSku','totalQty']){const card=dashboardCards?.querySelector(`[data-dashboard-stock="${field}"]`),value=state.data?state.data[field].toLocaleString('id-ID'):'—';if(card){card.querySelector('.v').textContent=value;card.setAttribute('aria-label',(field==='activeSku'?'SKU Stok Aktif':'Total Qty Stok')+': '+value);}}}}})();return state.promise;
+}
 async function loadDashboardPayload(){
+void loadDashboardStockTotals();
 void loadDashboardAccuracy();
 const requests=[loadDashboardSummary(),loadDashboardRecentTransactions(),loadDashboardMonthlyInsight()];
 const results=await Promise.allSettled(requests);
@@ -2274,12 +2292,12 @@ return included;
 }
 function dashboardSectionState(section,loadingText,errorText){if(DASHBOARD_LOAD_STATE[section]==='loading')return `<div class='state'>${loadingText}</div>`;if(DASHBOARD_LOAD_STATE[section]==='error')return `<div class='state error'>${errorText} <button data-retry-dashboard-${section} class='link-button'>Coba Lagi</button></div>`;return '';}
 function dashboardMetricsMarkup(cards){
- const routes={'Barang Masuk':'/barang-masuk','Barang Keluar':'/barang-keluar','Total Movement':'/movement','Stok Minus':'/stok-minus','Total SKU':'/search','Baris Kartu Stock':'/search','Baris RPL':'/search','Akurasi Stok':'/accuracy','Lokasi tersisa':'/locations'};
+ const routes={'Barang Masuk':'/barang-masuk','Barang Keluar':'/barang-keluar','Total Movement':'/movement','Stok Minus':'/stok-minus','Total SKU':'/search','Total Qty Stok':'/search','SKU Stok Aktif':'/search','Akurasi Stok':'/accuracy','Lokasi tersisa':'/locations'};
  const priority=['Barang Masuk','Barang Keluar','Total Movement','Stok Minus'];
- return [...cards].sort((a,b)=>(priority.includes(a.name)?priority.indexOf(a.name):10)-(priority.includes(b.name)?priority.indexOf(b.name):10)).map(c=>`<div class='metric' ${c.name==='Akurasi Stok'?'data-dashboard-accuracy':''} ${routes[c.name]?`role="link" tabindex="0" onclick="navigateTo('${routes[c.name]}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" aria-label="${esc(c.name)}: ${esc(c.value)}"`:''}><div class='dashboard-metric-head'><div class='k'>${esc(c.name)}</div><svg aria-hidden='true' width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7'><path d='M7 17 17 7M7 7h10v10'/></svg></div><div class='row' style='justify-content:space-between;align-items:center;gap:8px'><div class='v'>${esc(typeof c.value==='number'?c.value.toLocaleString('id-ID'):c.value)}</div>${c.delta?`<div class='${c.deltaClass||"metric-delta"}'>${esc(c.delta)}</div>`:''}</div></div>`).join('');
+ return [...cards].sort((a,b)=>(priority.includes(a.name)?priority.indexOf(a.name):10)-(priority.includes(b.name)?priority.indexOf(b.name):10)).map(c=>`<div class='metric' ${c.stockField?`data-dashboard-stock="${c.stockField}"`:''} ${c.name==='Akurasi Stok'?'data-dashboard-accuracy':''} ${routes[c.name]?`role="link" tabindex="0" onclick="navigateTo('${routes[c.name]}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" aria-label="${esc(c.name)}: ${esc(c.value)}"`:''}><div class='dashboard-metric-head'><div class='k'>${esc(c.name)}</div><svg aria-hidden='true' width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7'><path d='M7 17 17 7M7 7h10v10'/></svg></div><div class='row' style='justify-content:space-between;align-items:center;gap:8px'><div class='v'>${esc(typeof c.value==='number'?c.value.toLocaleString('id-ID'):c.value)}</div>${c.delta?`<div class='${c.deltaClass||"metric-delta"}'>${esc(c.delta)}</div>`:''}</div></div>`).join('');
 }
-function updateDashboard(){if(!DASHBOARD_SUMMARY){dashboardCards.innerHTML=DASHBOARD_LOAD_STATE.summary==='error'?dashboardSectionState('summary','Memuat ringkasan dashboard…','Gagal memuat data'):renderMetricPlaceholders(['Barang Masuk','Barang Keluar','Total Movement','Stok Minus','Total SKU','Baris Kartu Stock','Baris RPL','Akurasi Stok']);const insightState=dashboardSectionState('insight','Memuat insight bulanan…','Gagal memuat insight.');const recentState=dashboardSectionState('recent','Memuat transaksi terbaru…','Gagal memuat transaksi terbaru.');recentMove.innerHTML=`<div class='card'><h3>Insight Bulanan</h3>${insightState||'<div class="state">Memuat insight bulanan…</div>'}</div><div class='card'><h3>Transaksi Terbaru</h3>${recentState||'<div class="state">Memuat transaksi terbaru…</div>'}</div>`;return;}if(DASHBOARD_SUMMARY&&isSummaryOnlyLoaded){const s=DASHBOARD_SUMMARY;const cards=[
-{name:"Total SKU",value:s.totalSku||0},{name:"Baris Kartu Stock",value:s.kartuStok||0},{name:"Baris RPL",value:s.rpl||0},dashboardAccuracyCard(),
+function updateDashboard(){if(!DASHBOARD_SUMMARY){dashboardCards.innerHTML=DASHBOARD_LOAD_STATE.summary==='error'?dashboardSectionState('summary','Memuat ringkasan dashboard…','Gagal memuat data'):renderMetricPlaceholders(['Barang Masuk','Barang Keluar','Total Movement','Stok Minus','Total SKU','Total Qty Stok','SKU Stok Aktif','Akurasi Stok']);const insightState=dashboardSectionState('insight','Memuat insight bulanan…','Gagal memuat insight.');const recentState=dashboardSectionState('recent','Memuat transaksi terbaru…','Gagal memuat transaksi terbaru.');recentMove.innerHTML=`<div class='card'><h3>Insight Bulanan</h3>${insightState||'<div class="state">Memuat insight bulanan…</div>'}</div><div class='card'><h3>Transaksi Terbaru</h3>${recentState||'<div class="state">Memuat transaksi terbaru…</div>'}</div>`;return;}if(DASHBOARD_SUMMARY&&isSummaryOnlyLoaded){const s=DASHBOARD_SUMMARY;const cards=[
+{name:"Total SKU",value:s.totalSku||0},dashboardStockCard('Total Qty Stok','totalQty'),dashboardStockCard('SKU Stok Aktif','activeSku'),dashboardAccuracyCard(),
 {name:"Barang Masuk",value:s.barangMasuk||0,delta:`+${s.barangMasukHariIni||0} hari ini`,deltaClass:"metric-delta metric-delta--in"},
 {name:"Barang Keluar",value:s.barangKeluar||0,delta:`+${s.barangKeluarHariIni||0} hari ini`,deltaClass:"metric-delta metric-delta--out"},
 {name:"Total Movement",value:s.totalMovement||0,delta:`+${s.totalMovementHariIni||0} hari ini`,deltaClass:"metric-delta metric-delta--neutral"},
@@ -2295,8 +2313,8 @@ console.log("RENDER BARANG KELUAR", getBarangKeluarRows().length);
 const movementSummary=getDailyStatusSummary(getBarangMasukRows(),"movement");
 const cards=[
 {name:"Total SKU",value:skuSet.size},
-{name:"Baris Kartu Stock",value:totals["Kartu Stock"]},
-{name:"Baris RPL",value:totals["RPL"]},
+dashboardStockCard('Total Qty Stok','totalQty'),
+dashboardStockCard('SKU Stok Aktif','activeSku'),
 dashboardAccuracyCard(),
 {name:"Barang Masuk",value:inSummary.totalCount,delta:`+${inSummary.todayCount} hari ini`,deltaClass:"metric-delta metric-delta--in"},
 {name:"Barang Keluar",value:outSummary.totalCount,delta:`+${outSummary.todayCount} hari ini`,deltaClass:"metric-delta metric-delta--out"},
