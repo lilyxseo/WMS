@@ -34,7 +34,7 @@ test('Balikan table derives filters from the complete table schema', () => {
 });
 
 test('column filters combine with AND and search reset preserves column filters and sort', () => {
-  assert.match(source, /getBalikanTableColumns\(\)\.some/);
+  assert.match(source, /activeColumns\.some/);
   const resetStart = source.indexOf('function resetBalikanSearch()');
   const reset = source.slice(resetStart, source.indexOf('function exportBalikanFilteredCsv', resetStart));
   assert.match(reset, /balikanSearchKeyword=''/);

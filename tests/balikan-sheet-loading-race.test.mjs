@@ -13,10 +13,10 @@ test('Balikan Store offers an explicit all-TRIP option without eagerly loading i
   assert.match(source, /reason:'sheet-required'/);
 });
 
-test('all-TRIP loading is bounded, progressive, cached per sheet, and tolerates partial failure', () => {
-  assert.match(source, /BALIKAN_ALL_TRIP_CONCURRENCY=3/);
-  assert.match(source, /fetchBalikanSheetRows\(sheet,\{force,signal\}\)/);
-  assert.match(source, /onProgress\?\.\(completed,sheets\.length,sheet\)/);
+test('all-TRIP loading uses the batch endpoint, retains per-sheet caches and tolerates partial failure', () => {
+  assert.match(source, /fetchJsonSafe\('\/api\/balikan-store\/all/);
+  assert.match(source, /BALIKAN_STATE\.sheetCache\[sheet\]/);
+  assert.match(source, /onProgress\?\.\(loaded\.length,sheets\.length\)/);
   assert.match(source, /result\.failures\?\.length/);
 });
 
