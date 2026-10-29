@@ -9,7 +9,18 @@ export async function handleNotificationSettings({request,env},dependencies={}){
  const actor=await (dependencies.identity||getNoteIdentity)(request,env);if(!actor)return json({success:false},401);if(!archiveDeveloperRole(actor.role))return json({success:false},403);
  if(!['GET','PATCH'].includes(request.method))return json({success:false},405);
  if(request.method==='PATCH'){
-  const body=await request.json();if(!body||typeof body.user_id!=='string'||typeof body.warning_enabled!=='boolean'||typeof body.bot_enabled!=='boolean'||Object.keys(body).some(key=>!['user_id','warning_enabled','bot_enabled'].includes(key)))return json({success:false,message:'Pengaturan tidak valid.'},400);
+  const body=await request.json();
+  if(body&&typeof body.user_id==='string'&&Object.hasOwn(body,'phone')){
+   if(typeof body.phone!=='string'||Object.keys(body).some(key=>!['user_id','phone'].includes(key)))return json({success:false,message:'Data nomor HP tidak valid.'},400);
+   let phone;try{phone=normalizeProfilePhone(body.phone);if(phone&&!/^62\d{8,13}$/.test(phone))throw Error('Gunakan nomor WhatsApp Indonesia, misalnya 6281234567890.');}catch(error){return json({success:false,message:error.message},400);}
+   const {data:users}=await store(env,'users?'+new URLSearchParams({select:'*',id:'eq.'+body.user_id,limit:'1'}));if(!users?.length)return json({success:false},404);
+   const field=fields.find(field=>Object.hasOwn(users[0],field));if(!field)return json({success:false,message:'Kolom nomor HP belum tersedia.'},400);
+   if(phone){const variants=[phone,'+'+phone,'0'+phone.slice(2),phone.slice(2)],{data:matches}=await store(env,'users?'+new URLSearchParams({select:'id',[field]:'in.('+variants.join(',')+')',id:'neq.'+body.user_id,limit:'1'}));if(matches?.length)return json({success:false,message:'Nomor WhatsApp sudah digunakan user lain.'},409);}
+   await store(env,'users?'+new URLSearchParams({id:'eq.'+body.user_id}),{method:'PATCH',body:JSON.stringify({[field]:phone||null})});
+   if(!phone)await store(env,'notification_user_settings?on_conflict=user_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=representation'},body:JSON.stringify({user_id:body.user_id,warning_enabled:false,bot_enabled:false,updated_by:actor.id,updated_at:new Date().toISOString()})});
+   await store(env,'rpc/notification_cancel_revoked',{method:'POST',body:'{}'});return json({success:true,phone});
+  }
+  if(!body||typeof body.user_id!=='string'||typeof body.warning_enabled!=='boolean'||typeof body.bot_enabled!=='boolean'||Object.keys(body).some(key=>!['user_id','warning_enabled','bot_enabled'].includes(key)))return json({success:false,message:'Pengaturan tidak valid.'},400);
   const {data:users}=await store(env,'users?'+new URLSearchParams({select:'*',id:'eq.'+body.user_id,limit:'1'}));if(!users?.length)return json({success:false},404);
   if((body.warning_enabled||body.bot_enabled)&&!notificationPhone(users[0]))return json({success:false,message:'User harus mengisi nomor WhatsApp di profil terlebih dahulu.'},400);
   await store(env,'notification_user_settings?on_conflict=user_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=representation'},body:JSON.stringify({...body,updated_by:actor.id,updated_at:new Date().toISOString()})});
