@@ -1,4 +1,4 @@
-import {renderNotificationSettings} from './notification-settings.js';
+import {renderNotificationSettings} from './notification-settings.js?v=__APP_VERSION__';
 import {parseEntryContentRows} from './entry-import-content.js?v=__APP_VERSION__';
 import {normalizeScanValue} from './utils/scan-value.js?v=__APP_VERSION__';
 import {writeDraftValue} from './draft-storage.js?v=__APP_VERSION__';

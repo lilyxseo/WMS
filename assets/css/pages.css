@@ -2889,3 +2889,18 @@ html[data-accent] .account-card .account-profile-link strong{color:var(--text)}
 #mainContentPages table :is(td,th):is(:focus,:focus-visible){outline:0!important;border-radius:0;box-shadow:inset 0 0 0 2px var(--primary)!important}
 
 #notificationSettings{min-width:0;grid-column:1/-1}#notificationSettings[hidden]{display:none}#notificationSettings .table-wrap{max-width:100%;overflow:auto}#notificationSettings table{width:100%;min-width:480px}#notificationSettings :is(td,th){padding:8px;text-align:left}#notificationSettings th{color:var(--primary)}#notificationSettings input[type=checkbox]{width:18px;height:18px;accent-color:var(--primary)}
+
+/* Explicit switch states remain legible in both themes and every accent. */
+#notificationSettings .notification-toggle{position:relative;display:inline-flex;align-items:center;gap:9px;min-height:40px;min-width:116px;margin:0;cursor:pointer;white-space:nowrap;font-size:12px;color:var(--text)}
+#notificationSettings .notification-toggle input[type=checkbox]{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:0!important;border:0!important;opacity:0;clip-path:inset(50%)}
+#notificationSettings .notification-toggle-track{position:relative;display:inline-block;flex:none;width:38px;height:22px;border:1px solid var(--muted);border-radius:999px;background:var(--panel-soft);transition:background .15s,border-color .15s;box-sizing:border-box}
+#notificationSettings .notification-toggle-track::after{content:'';position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:var(--muted);transition:transform .15s,background .15s}
+#notificationSettings .notification-toggle input:checked+.notification-toggle-track{background:var(--primary);border-color:var(--primary)}
+#notificationSettings .notification-toggle input:checked+.notification-toggle-track::after{transform:translateX(16px);background:#fff}
+#notificationSettings .notification-toggle input:focus-visible+.notification-toggle-track{outline:2px solid var(--primary);outline-offset:3px}
+#notificationSettings .notification-toggle-on{display:none;color:var(--primary);font-weight:600}
+#notificationSettings .notification-toggle input:checked~.notification-toggle-text .notification-toggle-on{display:inline}
+#notificationSettings .notification-toggle input:checked~.notification-toggle-text .notification-toggle-off{display:none}
+#notificationSettings .notification-toggle input:disabled~span{opacity:.5}
+#notificationSettings .notification-toggle:has(input:disabled){cursor:not-allowed}
+#notificationSettings td>small{color:var(--muted)}
