@@ -2905,3 +2905,9 @@ html[data-accent] .account-card .account-profile-link strong{color:var(--text)}
 #notificationSettings .notification-toggle:has(input:disabled){cursor:not-allowed}
 #notificationSettings td>small{color:var(--muted)}
 #notificationSettings .notification-phone-edit{display:inline-flex;align-items:center;gap:8px;min-height:36px;border:0;background:transparent;color:var(--text);padding:4px 0;font:inherit;cursor:pointer;text-align:left}#notificationSettings .notification-phone-edit span{color:var(--primary);font-size:16px}#notificationSettings .notification-phone-edit:hover{color:var(--primary)}#notificationSettings .notification-phone-edit:focus-visible{outline:2px solid var(--primary);outline-offset:3px}#notificationSettings .notification-phone-form{display:grid;gap:6px;min-width:190px;max-width:270px}#notificationSettings .notification-phone-form input{width:100%;min-width:0;height:36px;margin:0;padding:7px 9px;border:1px solid var(--primary);border-radius:7px;background:var(--input-bg,var(--panel));color:var(--text)}#notificationSettings .notification-phone-form>div{display:flex;gap:6px}#notificationSettings .notification-phone-form button{min-height:32px;padding:5px 9px;font-size:11px}@media(max-width:700px){#notificationSettings .notification-phone-form input{font-size:16px}#notificationSettings .notification-phone-form button{min-height:40px}}
+
+/* Accuracy locations must wrap instead of inheriting the generic one-line bin style. */
+#mainContentPages #page-stats .stats-table-wrap td.ui-col-location{white-space:normal;word-break:normal;overflow-wrap:anywhere;vertical-align:top}
+#page-stats .stats-location-text{display:block;max-width:100%;white-space:normal;overflow-wrap:anywhere;word-break:normal;line-height:1.6}
+#mainContentPages #page-stats .stats-table-wrap tbody td{vertical-align:top}
+#mainContentPages #page-stats .stats-table-wrap td.ui-col-sku{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
