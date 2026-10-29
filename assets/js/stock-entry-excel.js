@@ -1,7 +1,7 @@
 import {readXlsxWorkbook} from './xlsx-preview.js';
 import {parseEntryContentRows} from './entry-import-content.js';
 const normal=value=>String(value??'').toLowerCase().replace(/[^a-z0-9]/g,'');
-const aliases={sku:['sku','kodesku','itemcode','kodebarang','productsku'],name:['namabarang','namaproduk','productname','itemname','description','nama','name'],qty:['qty','quantity','jumlah','jumlahbarang','transferqty']};
+const aliases={sku:['sku','kodesku','itemcode','kodebarang','productsku'],name:['product','produk','namabarang','namaproduk','productname','itemname','description','nama','name'],qty:['kuantitas','qty','quantity','jumlah','jumlahbarang','transferqty']};
 export function excelEntryItems(rows){
  let header=-1,columns;
  for(let i=0;i<Math.min(rows.length,50);i++){const values=rows[i].values||[];const found=Object.fromEntries(Object.entries(aliases).map(([field,names])=>[field,values.flatMap((value,col)=>names.includes(normal(value))?[col]:[])]));if(found.sku.length&&found.qty.length){if(Object.values(found).some(list=>list.length>1))throw Error('Kolom SKU/nama/Qty ganda. Gunakan satu kolom untuk setiap data.');header=i;columns=Object.fromEntries(Object.entries(found).map(([k,list])=>[k,list[0]??-1]));break;}}
