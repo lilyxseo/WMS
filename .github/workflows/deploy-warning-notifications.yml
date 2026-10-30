@@ -3,6 +3,7 @@ on:
   push:
     branches: [main, fix/warning-whatsapp-lifecycle, fix/warning-stable-identity]
     paths:
+      - 'supabase/migrations/20261030020000_warning_recipient_recovery.sql'
       - 'supabase/migrations/20261030010000_warning_observations.sql'
       - 'supabase/functions/warning-whatsapp/**'
       - 'supabase/functions/whatsapp-fonnte/**'
@@ -12,6 +13,7 @@ on:
       - 'supabase/migrations/20261026010000_warning_notification_recovery.sql'
       - 'supabase/migrations/20261026020000_warning_resolution_freshness.sql'
       - 'supabase/migrations/20261027000000_warning_stable_identity.sql'
+      - 'tests/warning-recipient-recovery.sql'
       - 'scripts/deploy-warning-notifications.mjs'
       - '.github/workflows/deploy-warning-notifications.yml'
   workflow_dispatch:
@@ -81,3 +83,7 @@ jobs:
       - name: 'Warning delivery: ${{ steps.publish.outputs.result }}'
         if: github.ref == 'refs/heads/main'
         run: echo 'Read-only health and scheduler verified.'
+
+      - name: Verify configured recipients and notification worker
+        if: github.ref == 'refs/heads/main'
+        run: node scripts/deploy-warning-notifications.mjs --diagnose

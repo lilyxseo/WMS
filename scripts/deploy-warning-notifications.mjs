@@ -7,6 +7,7 @@ const sql=query=>management('/database/query',{query}),literal=value=>"'"+String
 const output=async result=>{if(process.env.GITHUB_OUTPUT)await appendFile(process.env.GITHUB_OUTPUT,`result=${result}\n`);console.log(result);};
 if(process.argv.includes('--diagnose')){
  const rows=await sql(`select jsonb_build_object(
+ 'recipients',jsonb_build_object('warning',jsonb_array_length(public.notification_allowed_numbers('warning')),'bot',jsonb_array_length(public.notification_allowed_numbers('bot'))),
  'state',(select jsonb_build_object('initialized',initialized,'lifecycle',lifecycle_initialized,'lease',lease,'activeLease',lease>now()) from public.warning_notify_state where id),
  'tracking',(select jsonb_build_object('active',count(*) filter(where active),'resolved',count(*) filter(where not active),'lastChanged',max(changed_at),'lastSeen',max(last_seen)) from public.warning_notify_seen),
  'queue',(select coalesce(jsonb_agg(x),'[]') from (select event_type,status,count(*) as count,max(created_at) as latest,max(attempts) as attempts from public.warning_notify_outbox group by event_type,status order by event_type,status) x),
@@ -16,6 +17,9 @@ if(process.argv.includes('--diagnose')){
  ) as health`);
  const health=rows[0]?.health||{};
  if(health.snapshot?.verification)health.snapshot.verification=health.snapshot.verification.map(item=>({source:item.source,ready:item.ready,stale:item.stale,readCode:item.readCode,reason:item.reason}));
+ const configured=await management('/secrets');health.configuration={fonnte:configured.some(item=>item.name==='FONNTE_TOKEN'),dataKey:configured.some(item=>item.name==='WMS_WARNING_DATA_KEY'),notifySecret:configured.some(item=>item.name==='WMS_WARNING_NOTIFY_SECRET')};
+ const privateKey=(await sql("select decrypted_secret from vault.decrypted_secrets where name='wms_warning_notify_secret' limit 1"))[0]?.decrypted_secret;
+ if(privateKey){try{const response=await fetch(`https://${project}.supabase.co/functions/v1/warning-whatsapp`,{method:'POST',headers:{'Content-Type':'application/json','X-WMS-Warning-Secret':privateKey},body:'{"action":"check"}',signal:AbortSignal.timeout(30000)}),body=await response.json();health.worker={httpStatus:response.status,code:body.code||body.status||null,ready:body.ready,observable:body.observable,recipients:body.recipients,snapshotStale:body.snapshotStale};}catch{health.worker={code:'CHECK_UNREACHABLE'};}}
  await output(JSON.stringify(health));exitDiagnostic();
 }
 function exitDiagnostic(){process.exit(0);}
@@ -25,7 +29,9 @@ const freshness=await readFile(new URL('../supabase/migrations/20261026020000_wa
 const notificationAccess=await readFile(new URL('../supabase/migrations/20261028000000_notification_user_settings.sql',import.meta.url),'utf8');
 const stable=await readFile(new URL('../supabase/migrations/20261027000000_warning_stable_identity.sql',import.meta.url),'utf8');
 const partial=await readFile(new URL('../supabase/migrations/20261030000000_warning_partial_notifications.sql',import.meta.url),'utf8');
+const recipientRecovery=await readFile(new URL('../supabase/migrations/20261030020000_warning_recipient_recovery.sql',import.meta.url),'utf8');
 const observations=await readFile(new URL('../supabase/migrations/20261030010000_warning_observations.sql',import.meta.url),'utf8');
+const recipientTests=await readFile(new URL('../tests/warning-recipient-recovery.sql',import.meta.url),'utf8');
 const tests=`do $$declare owner uuid:=gen_random_uuid();contender uuid:=gen_random_uuid();finding jsonb;answer jsonb;event_id uuid;amount integer;begin
  delete from public.warning_notify_outbox;delete from public.warning_notify_seen;
  update public.warning_notify_state set initialized=false,lifecycle_initialized=false,run=null,lease=null where id;
@@ -80,9 +86,9 @@ const tests=`do $$declare owner uuid:=gen_random_uuid();contender uuid:=gen_rand
  answer:=public.warning_notify_collect(owner,finding,array['620000000000'],false);if answer->>'new'<>'0' or answer->>'updated'<>'0' or answer->>'resolved'<>'0' then raise exception 'First complete snapshot replayed partial notification';end if;
  perform public.warning_notify_unlock(owner);
 end$$;`;
-if(process.argv.includes('--inspect')){await sql('begin;'+baseMigration+migration+recovery+freshness+stable+notificationAccess+partial+observations+tests+'rollback;');await output('Lifecycle, deduplication, retries and leases verified with rollback');}
+if(process.argv.includes('--inspect')){await sql('begin;'+baseMigration+migration+recovery+freshness+stable+notificationAccess+partial+observations+recipientRecovery+tests+recipientTests+'rollback;');await output('Lifecycle, deduplication, retries and leases verified with rollback');}
 else if(process.argv.includes('--configure')){
- await sql('begin;'+baseMigration+migration+recovery+freshness+stable+notificationAccess+partial+observations+'commit;');await sql('begin;'+tests+'rollback;');
+ await sql('begin;'+baseMigration+migration+recovery+freshness+stable+notificationAccess+partial+observations+recipientRecovery+'commit;');await sql('begin;'+tests+recipientTests+'rollback;');
  const secrets=await management('/secrets');if(!secrets.some(item=>item.name==='FONNTE_TOKEN'))throw Error('Fonnte token missing');
  const keys=await management('/api-keys?reveal=true'),key=keys.find(item=>item.api_key?.startsWith('sb_secret_'))?.api_key;if(!key)throw Error('Warning data key missing');
  const existing=await sql("select decrypted_secret from vault.decrypted_secrets where name='wms_warning_notify_secret' limit 1"),secret=existing[0]?.decrypted_secret||randomBytes(32).toString('hex');if(!existing.length)await sql(`select vault.create_secret(${literal(secret)},'wms_warning_notify_secret')`);

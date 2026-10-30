@@ -41,31 +41,33 @@ export function createHandler(env,{load=readWarningSnapshot,fetchFn=fetch,now=Da
   if(!recipients.length)return Response.json({status:'no_recipients',delivery:'not_sent'});
   if(!recipients.length||!env.FONNTE_TOKEN||!env.WMS_WARNING_DATA_KEY)return Response.json({code:'CONFIG_MISSING'},{status:503});
   if(body.action==='check'){
-   try{const result=await load(config,{full:true,notifications:true});return Response.json({ready:complete(result),total:result.total,recipients:recipients.length,delivery:'not_sent'});}catch{return Response.json({code:'SNAPSHOT_UNAVAILABLE',delivery:'not_sent'},{status:503});}
+   try{const result=await load(config,{full:true,notifications:true}),observable=observableWarnings(result);return Response.json({ready:complete(result),observable:observable.length,total:result.total,recipients:recipients.length,snapshotStale:!!result.snapshotStale,snapshotPublishedAt:result.snapshotPublishedAt||null,verification:(result.verification||[]).map(({source,ready,stale})=>({source,ready,stale})),delivery:'not_sent'});}catch{return Response.json({code:'SNAPSHOT_UNAVAILABLE',delivery:'not_sent'},{status:503});}
   }
-  const run=crypto.randomUUID();let claimed=false,continuation=false;
+  const run=crypto.randomUUID();let claimed=false,continuation=false,stage='lock';
   try{
    claimed=await rpc('warning_notify_lock',{p_run:run});if(!claimed)return Response.json({status:'busy'});
-   const result=await load(config,{full:true,notifications:true});
+   stage='snapshot';const result=await load(config,{full:true,notifications:true});
    const full=complete(result),observed=full?result.rows:observableWarnings(result);
    if(!full&&!observed.length)return Response.json({status:'sources_unavailable',delivery:'not_sent'});
    if(!full&&body.action==='initialize')return Response.json({status:'sources_unavailable',delivery:'not_sent'});
    const findings=[...new Map(observed.map(row=>[fingerprint(row),{fingerprint:fingerprint(row),content_signature:contentSignature(row),warning:row}])).values()];
-   const reconciled=await rpc(full?'warning_notify_collect':'warning_notify_observe',{p_run:run,p_findings:findings,p_recipients:recipients,...(full?{p_initialize:body.action==='initialize'}:{})});
+   stage='collect';const reconciled=await rpc(full?'warning_notify_collect':'warning_notify_observe',{p_run:run,p_findings:findings,p_recipients:recipients,...(full?{p_initialize:body.action==='initialize'}:{})});
    if(body.action==='initialize')return Response.json({status:'initialized',...reconciled,delivery:'not_sent'});
-   let accepted=0,messages=0,empty=false,batches=0;const started=now();
+   stage='recover_recipients';const recovered=await rpc('warning_notify_enqueue_missing',{p_run:run,p_findings:findings,p_recipients:recipients});
+   let accepted=0,messages=0,failed=0,uncertain=0,empty=false,batches=0;const started=now();
    while(batches<maxBatches&&now()-started<budgetMs){
-    const events=await rpc(full?'warning_notify_claim':'warning_notify_claim_observed',{p_run:run,...(full?{}:{p_findings:findings})});if(!events.length){empty=true;break;}batches++;
+    stage='claim';const events=await rpc(full?'warning_notify_claim':'warning_notify_claim_observed',{p_run:run,...(full?{}:{p_findings:findings})});if(!events.length){empty=true;break;}batches++;
     for(const group of splitWarningMessages(events)){
-     const permitted=await rpc('notification_allowed_numbers',{p_kind:'warning'});if(!permitted.includes(group[0].recipient)){await rpc('notification_cancel_revoked');continue;}
-     let status='uncertain';
+     stage='recipient_access';const permitted=await rpc('notification_allowed_numbers',{p_kind:'warning'});if(!permitted.includes(group[0].recipient)){await rpc('notification_cancel_revoked');continue;}
+     stage='provider';let status='uncertain';
      try{const response=await fetchFn('https://api.fonnte.com/send',{method:'POST',headers:{Authorization:env.FONNTE_TOKEN},body:new URLSearchParams({target:group[0].recipient,message:formatMessage(group),countryCode:'62'}),signal:AbortSignal.timeout(10000)}),payload=await response.json();if(response.ok&&payload.status===true){status='sent';accepted+=group.length;messages++;}else if(payload.status===false)status='failed';}catch{}
-     await rpc('warning_notify_finish',{p_run:run,p_ids:group.map(event=>event.id),p_status:status});
+     if(status==='failed')failed+=group.length;else if(status==='uncertain')uncertain+=group.length;
+     stage='finish';await rpc('warning_notify_finish',{p_run:run,p_ids:group.map(event=>event.id),p_status:status});
     }
    }
    continuation=!empty;
-   return Response.json({status:'checked',partial:!full,accepted,messages,continuation,...reconciled});
-  }catch{return Response.json({code:'WARNING_CHECK_FAILED'},{status:503});}
+   return Response.json({status:'checked',partial:!full,accepted,messages,failed,uncertain,recovered:Number.isInteger(recovered)?recovered:0,continuation,...reconciled});
+  }catch{return Response.json({code:'WARNING_CHECK_FAILED',stage},{status:503});}
   finally{if(claimed){let unlocked=false;try{await rpc('warning_notify_unlock',{p_run:run});unlocked=true;}catch{}if(unlocked&&continuation)await rpc('dispatch_warning_notifications').catch(()=>{});}}
  };
 }

@@ -83,3 +83,9 @@ Dialog mempertahankan tanggal, nomor baris, From, To/Tujuan, Qty, sorotan transa
 dan batas kepastian rekonsiliasi. Pada mobile, daftar warning dan transaksi
 berubah menjadi kartu. Filter tambahan bisa dibuka dari tombol Filter; pencarian,
 paginasi, akses Detail SKU, dan filter kolom tetap tersedia.
+
+### Pemulihan penerima notifikasi
+
+Setiap pemeriksaan memulihkan antrean untuk penerima Warning aktif yang belum pernah menerima temuan aktif dan masih terverifikasi. Pemulihan hanya memakai temuan pada snapshot terbaru yang layak dikirim, tidak mengumumkan temuan yang hilang dari snapshot parsial sebagai selesai, dan tidak mengulang pesan berstatus sent atau uncertain. Antrean gagal tetap mengikuti batas retry yang berlaku.
+
+Workflow `Deploy warning WhatsApp lifecycle` menyediakan mode `diagnose` yang hanya membaca jumlah penerima aktif, status antrean, cron, snapshot, konfigurasi secret (tanpa nilainya), dan kesehatan worker. Respons worker membedakan jumlah pesan diterima provider, ditolak, dan belum pasti, serta menyebut tahap kegagalan saat pemeriksaan berhenti. Pemeriksaan diagnostik tidak mengirim WhatsApp.
