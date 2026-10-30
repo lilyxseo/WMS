@@ -115,9 +115,9 @@ export function createInventorySyncService(config) {
       if (requestType === 'rpc') requestMetrics.rpcRequests += 1;
       else if (requestType === 'read') requestMetrics.supabaseReads += 1;
       else requestMetrics.supabaseWrites += 1;
-      const response = await fetchFn(`${url}${path}`, { ...options, headers: { ...headers, ...(options.headers || {}) } });
+      let response;try{response = await fetchFn(`${url}${path}`, { ...options, headers: { ...headers, ...(options.headers || {}) },signal:AbortSignal.timeout(20000) });}catch{throw new SyncError('SUPABASE_CONNECTION_FAILED','Koneksi database sinkronisasi belum berhasil. Snapshot terakhir dipertahankan.');}
       const body = response.status === 204 ? null : await response.json().catch(() => null);
-      if (!response.ok){const error=new Error(body?.message || body?.hint || `Supabase request gagal (${response.status})`);error.rpcMissing=body?.code==='PGRST202';throw error;}
+      if (!response.ok){const error=new SyncError(response.status===429?'SUPABASE_RATE_LIMITED':response.status>=500?'SUPABASE_UNAVAILABLE':'SUPABASE_REQUEST_FAILED',body?.message || body?.hint || `Supabase request gagal (${response.status})`);error.rpcMissing=body?.code==='PGRST202';throw error;}
       return body;
     }
     let fastProof=null;

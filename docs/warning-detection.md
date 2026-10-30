@@ -74,3 +74,12 @@ dan meminta kelanjutan langsung sesudah melepas lease jika batas waktu/jumlah
 batch tercapai. Cron setiap menit menjadi pemeriksaan cadangan. Tidak ada
 pengiriman pesan uji pada workflow deploy. Status sukses, gagal eksplisit, dan
 pengiriman yang belum pasti tetap dibedakan untuk menghindari pesan ganda.
+
+## Tampilan Warning
+
+Daftar utama berisi ringkasan; tombol Lihat bukti membuka dialog terpisah agar
+rincian transaksi tidak memperbesar satu baris atau menyempitkan kolom lain.
+Dialog mempertahankan tanggal, nomor baris, From, To/Tujuan, Qty, sorotan transaksi,
+dan batas kepastian rekonsiliasi. Pada mobile, daftar warning dan transaksi
+berubah menjadi kartu. Filter tambahan bisa dibuka dari tombol Filter; pencarian,
+paginasi, akses Detail SKU, dan filter kolom tetap tersedia.

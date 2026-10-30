@@ -18,3 +18,5 @@ test('Barang Masuk manual endpoint rejects missing or incorrect secrets', async 
     assert.deepEqual(await response.json(), { success: false, reason: 'UNAUTHORIZED' });
   }
 });
+
+test('manual refresh allows a proven checksum fast path and full reconciliation remains explicit',async()=>{for(const [query,expected]of [['',false],['?full=1',true]]){let actual;const response=await handleManualBarangMasukSync({request:new Request('https://example.test/api/sync/inventory/barang-masuk'+query,{method:'POST',headers:{Authorization:'Bearer '+SECRET}}),env:{INVENTORY_SYNC_SECRET:SECRET}},{sync:async(_env,options)=>{actual=options.forceFull;return {success:true};}});assert.equal(response.status,200);assert.equal(actual,expected);}});
