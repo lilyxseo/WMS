@@ -14,8 +14,25 @@ export async function catalogWorkbook(bytes){
  const xml=async path=>{const data=await read(path);const text=data?decoder.decode(data):'';if(/<!DOCTYPE|<!ENTITY/i.test(text))throw Error('XML gambar tidak valid.');return text;};
  const links=async path=>new Map(elements(await xml(relPath(path)),'Relationship').filter(row=>row.attrs.TargetMode!=='External').map(row=>[row.attrs.Id,resolve(path,row.attrs.Target)]));
  const workbook='xl/workbook.xml',sheetLinks=await links(workbook),sheets=elements(await xml(workbook),'sheet'),images=new Map();
- for(const tab of CATALOG_TABS){const sheet=sheets.find(row=>row.attrs.name===tab.title);if(!sheet)continue;const path=sheetLinks.get(sheet.attrs['r:id']);if(!path)continue;const drawingLinks=await links(path);
-  for(const drawing of elements(await xml(path),'drawing')){const drawingPath=drawingLinks.get(drawing.attrs['r:id']);if(!drawingPath)continue;const media=await links(drawingPath),drawingXml=await xml(drawingPath);
+ const validMedia=path=>!!path&&entries.has(path)&&/\.(png|jpe?g|gif|webp)$/i.test(path);
+ // Excel stores true in-cell images in value metadata and rich-data relationships,
+ // independently of drawing anchors. vm indexes are 1-based; rich-value indexes are 0-based.
+ const metadata=await xml('xl/metadata.xml'),types=elements(elements(metadata,'metadataTypes')[0]?.body||'','metadataType'),valueMetadata=elements(elements(metadata,'valueMetadata')[0]?.body||'','bk');
+ const futureMetadata=new Map(elements(metadata,'futureMetadata').map(item=>[item.attrs.name,elements(item.body,'bk')]));
+ const structures=elements(await xml('xl/richData/rdrichvaluestructure.xml'),'s'),richValues=elements(await xml('xl/richData/rdrichvalue.xml'),'rv');
+ const richRels=await links('xl/richData/richValueRel.xml'),richImages=elements(await xml('xl/richData/richValueRel.xml'),'rel').map(item=>richRels.get(item.attrs['r:id']));
+ const number=value=>/^\d+$/.test(String(value))?Number(value):NaN;
+ const richImage=cell=>{const vm=number(cell.attrs.vm);if(!vm)return '';const block=valueMetadata[vm-1];if(!block)return '';
+  for(const record of elements(block.body,'rc')){const type=types[number(record.attrs.t)-1];if(type?.attrs.name!=='XLRICHVALUE')continue;const future=futureMetadata.get(type.attrs.name)?.[number(record.attrs.v)],index=number(elements(future?.body||'','rvb')[0]?.attrs.i),value=richValues[index],structure=structures[number(value?.attrs.s)];if(structure?.attrs.t!=='_localImage')continue;const column=elements(structure.body,'k').findIndex(key=>key.attrs.n==='_rvRel:LocalImageIdentifier');if(column<0)continue;const relation=number(elements(value.body,'v')[column]?.body),image=richImages[relation];if(validMedia(image))return image;
+  }return '';
+ };
+ // Some exporters use DISPIMG plus xl/cellimages.xml instead of rich data.
+ const cellImageLinks=await links('xl/cellimages.xml'),cellImages=new Map();
+ for(const image of elements(await xml('xl/cellimages.xml'),'cellImage')){const name=elements(image.body,'cNvPr')[0]?.attrs.name,media=cellImageLinks.get(elements(image.body,'blip')[0]?.attrs['r:embed']);if(name&&validMedia(media))cellImages.set(name,media);}
+
+ for(const tab of CATALOG_TABS){const sheet=sheets.find(row=>row.attrs.name===tab.title);if(!sheet)continue;const path=sheetLinks.get(sheet.attrs['r:id']);if(!path)continue;const drawingLinks=await links(path),sheetXml=await xml(path);
+  for(const cell of elements(sheetXml,'c')){const address=cell.attrs.r?.match(/^([A-Z]+)([1-9]\d*)$/);if(!address||address[1]!== (tab.key==='supplement'?'C':'B'))continue;const formula=entity(elements(cell.body,'f')[0]?.body||''),id=formula.match(/(?:^|\.)DISPIMG\(\s*"([^"]+)"/i)?.[1],image=richImage(cell)||cellImages.get(id);if(validMedia(image))images.set(tab.key+':'+address[2],image);}
+  for(const drawing of elements(sheetXml,'drawing')){const drawingPath=drawingLinks.get(drawing.attrs['r:id']);if(!drawingPath)continue;const media=await links(drawingPath),drawingXml=await xml(drawingPath);
    for(const kind of ['oneCellAnchor','twoCellAnchor'])for(const anchor of elements(drawingXml,kind)){const from=elements(anchor.body,'from')[0]?.body||'',row=Number(elements(from,'row')[0]?.body),col=Number(elements(from,'col')[0]?.body);if(!Number.isInteger(row)||row<0||col!==(tab.key==='supplement'?2:1))continue;const blip=elements(anchor.body,'blip')[0],image=media.get(blip?.attrs['r:embed']);if(image&&entries.has(image)&&/\.(png|jpe?g|gif|webp)$/i.test(image)&&!images.has(tab.key+':'+(row+1)))images.set(tab.key+':'+(row+1),image);}
   }
  }

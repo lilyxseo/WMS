@@ -18,7 +18,7 @@ export async function handleCatalog({request,env},dependencies={}){
   if(data.valueRanges?.length!==tabs.length||formulaData.valueRanges?.length!==tabs.length)throw Error('Data kedua tab katalog belum lengkap. Coba Refresh.');
   const products=tabs.flatMap((tab,i)=>parseCatalog(data.valueRanges[i].values||[],tab,formulaData.valueRanges[i].values||[]));
   let imageWarning='';
-  if(products.some(item=>!item.imageUrl))try{const workbook=await (dependencies.embedded||loadCatalogEmbedded)(env,{fetchFn,getToken:async()=>token});for(const item of products)if(!item.imageUrl&&workbook.images.has(item.source+':'+item.sourceRow))item.imageUrl='/api/catalog-image?source='+item.source+'&row='+item.sourceRow+'&v='+workbook.version;}catch{imageWarning='Sebagian gambar belum dapat dimuat. Coba Refresh.';}
+  if(products.some(item=>!item.imageUrl))try{const workbook=await (dependencies.embedded||loadCatalogEmbedded)(env,{fetchFn,getToken:async()=>token});for(const item of products)if(!item.imageUrl&&workbook.images.has(item.source+':'+item.sourceRow))item.imageUrl='/api/catalog-image?source='+item.source+'&row='+item.sourceRow+'&v='+workbook.version;if(products.some(item=>item.source==='supplement'&&!item.imageUrl))imageWarning='Sebagian gambar dalam sel belum tersedia dari ekspor spreadsheet.';}catch{imageWarning='Sebagian gambar belum dapat dimuat. Coba Refresh.';}
   return json({success:true,imageWarning,products,sources:tabs.map(({key,label,title})=>({key,label,title})),updatedAt:new Date().toISOString()});
  }catch(error){return json({success:false,message:error.message||'Katalog belum dapat dimuat.'},503);}
 }

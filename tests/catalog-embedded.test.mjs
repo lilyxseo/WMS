@@ -20,3 +20,21 @@ test('embedded image endpoint authenticates before reading and only returns appr
 test('catalog attaches embedded images only to their source and exact row, retaining explicit URLs',async()=>{const response=await handleCatalog({request:new Request('https://wms.test/api/catalog'),env:{}},{identity:async()=>({id:'user'}),getToken:async()=> 'token',embedded:async()=>({images:new Map([['supplement:2','photo.png'],['supplement:3','photo2.png']]),version:10}),fetchFn:async url=>Response.json(url.includes('values:batchGet')?{valueRanges:[{values:[['Item ID','Item Name'],['001','Main']]},{values:[['ITEM NAME','PICTURE'],['Toy',''],['Toy 2','https://img.test/explicit.png']]}]}:{sheets:[{properties:{sheetId:115543455,title:'1. Product Catalog'}},{properties:{sheetId:1552864483,title:'Jika tidak ada di katalog'}}]})});const data=await response.json();assert.equal(response.status,200);assert.equal(data.products[0].imageUrl,'');assert.equal(data.products[1].imageUrl,'/api/catalog-image?source=supplement&row=2&v=10');assert.equal(data.products[2].imageUrl,'https://img.test/explicit.png');});
 
 test('concurrent image loads share one bounded authenticated export and reuse its cache',async()=>{let fetches=0,tokens=0;const stored=new Map(),cache={match:async request=>stored.get(request.url)?.clone(),put:async(request,response)=>{stored.set(request.url,response);}},options={now:900000,getToken:async()=>{tokens++;return 'private';},cache,fetchFn:async(url,init)=>{fetches++;assert.match(url,/^https:\/\/docs.google.com\/spreadsheets\/d\//);assert.equal(init.headers.Authorization,'Bearer private');return new Response(zip(files));}};const [one,two]=await Promise.all([loadCatalogEmbedded({},options),loadCatalogEmbedded({},options)]);assert.equal(fetches,1);assert.equal(tokens,1);assert.equal(one,two);assert.equal(one.images.size,2);assert.equal(stored.size,1);});
+
+test('true in-cell images resolve vm metadata through rich-value structures and image relationships',async()=>{
+ const book=await catalogWorkbook(zip({...files,
+  'xl/worksheets/sheet7.xml':'<worksheet><sheetData><row r="2"><c r="C2" t="e" vm="2"><v>#VALUE!</v></c></row><row r="3"><c r="C3" t="e" vm="1"><v>#VALUE!</v></c></row><row r="4"><c r="D4" t="e" vm="2"><v>#VALUE!</v></c></row></sheetData></worksheet>',
+  'xl/metadata.xml':'<metadata><metadataTypes><metadataType name="OTHER"/><metadataType name="XLRICHVALUE"/></metadataTypes><futureMetadata name="XLRICHVALUE"><bk><extLst><ext><xlrd:rvb i="1"/></ext></extLst></bk></futureMetadata><valueMetadata><bk><rc t="1" v="0"/></bk><bk><rc t="2" v="0"/></bk></valueMetadata></metadata>',
+  'xl/richData/rdrichvaluestructure.xml':'<rvStructures><s t="_localImage"><k n="CalcOrigin"/><k n="_rvRel:LocalImageIdentifier"/></s></rvStructures>',
+  'xl/richData/rdrichvalue.xml':'<rvData><rv s="0"><v>5</v><v>99</v></rv><rv s="0"><v>5</v><v>0</v></rv></rvData>',
+  'xl/richData/richValueRel.xml':'<richValueRels><rel r:id="photo"/></richValueRels>',
+  'xl/richData/_rels/richValueRel.xml.rels':'<Relationships><Relationship Id="photo" Target="../media/photo.png"/></Relationships>'
+ }));assert.deepEqual([...book.images], [['supplement:2','xl/media/photo.png']]);assert.deepEqual([...await book.read(book.images.get('supplement:2'))],[...png]);
+});
+test('DISPIMG in-cell images use exact identifiers and reject external image relationships',async()=>{
+ const book=await catalogWorkbook(zip({...files,
+  'xl/worksheets/sheet7.xml':'<worksheet><sheetData><c r="C2"><f>_xlfn.DISPIMG(&quot;ID_LOCAL&quot;,1)</f></c><c r="C3"><f>DISPIMG("ID_REMOTE",1)</f></c><c r="C4"><f>DISPIMG("ID_UNKNOWN",1)</f></c></sheetData></worksheet>',
+  'xl/cellimages.xml':'<etc:cellImages><etc:cellImage><xdr:pic><xdr:cNvPr name="ID_LOCAL"/><a:blip r:embed="local"/></xdr:pic></etc:cellImage><etc:cellImage><xdr:pic><xdr:cNvPr name="ID_REMOTE"/><a:blip r:embed="remote"/></xdr:pic></etc:cellImage></etc:cellImages>',
+  'xl/_rels/cellimages.xml.rels':'<Relationships><Relationship Id="local" Target="media/photo.png"/><Relationship Id="remote" Target="https://example.test/private" TargetMode="External"/></Relationships>'
+ }));assert.deepEqual([...book.images],[['supplement:2','xl/media/photo.png']]);
+});
