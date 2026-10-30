@@ -111,12 +111,12 @@ export function mountStockEntry(root,{owner,fetchFn=fetch,confirm,parsePdf,onErr
   const view=viewSelection(),order=visibleOrder(),bounds=view?selectionBounds(view):null;
   root.querySelectorAll('[data-entry-cell]').forEach(input=>{const row=order.indexOf(Number(input.dataset.row)),col=Number(input.dataset.col),selected=!!bounds&&row>=bounds.top&&row<=bounds.bottom&&col>=bounds.left&&col<=bounds.right;const td=input.closest('td');td.classList.toggle('stock-entry-selected',selected);td.setAttribute('aria-selected',String(selected));});
  }
- function focus(row,col,extend=false,keep=false){
+ function focus(row,col,extend=false,keep=false,reveal=true){
   const input=root.querySelector(`[data-entry-cell][data-row="${row}"][data-col="${col}"]`);if(!input)return;
   const previous=document.activeElement?.closest?.('[data-entry-cell]');
   if(extend){const anchor=selection?.anchor||{row:Number(previous?.dataset.row??row),col:Number(previous?.dataset.col??col)};selection=selection?.mode==='row'?{mode:'row',anchor:{row:anchor.row,col:0},active:{row,col:fields.length-1}}:selection?.mode==='column'?{mode:'column',anchor:{row:visibleOrder()[0],col:anchor.col},active:{row:visibleOrder().at(-1),col}}:{anchor,active:{row,col}};}
   else if(!keep)selection={anchor:{row,col},active:{row,col}};
-  selectionMoving=true;input.focus();selectionMoving=false;if(input.type==='text')input.select();input.scrollIntoView({block:'nearest',inline:'nearest'});paintSelection();
+  selectionMoving=true;input.focus({preventScroll:true});selectionMoving=false;if(input.type==='text')input.select();if(reveal)input.scrollIntoView({block:'nearest',inline:'nearest'});paintSelection();
  }
  function fillSelection(input,direction){
   if(!config?.canWrite||busy||pending)return;
@@ -141,10 +141,11 @@ export function mountStockEntry(root,{owner,fetchFn=fetch,confirm,parsePdf,onErr
  }
  async function search(input){closeLookup();const query=input.value.trim();if(query.length<2)return;const version=lookupVersion,row=Number(input.dataset.row),col=Number(input.dataset.col);lookupTimer=setTimeout(async()=>{lookupController=new AbortController();try{const response=await fetchFn(endpoint+'?'+new URLSearchParams({q:query}),{signal:lookupController.signal}),data=await response.json();if(!alive()||version!==lookupVersion||document.activeElement!==input||input.value.trim()!==query)return;if(!response.ok||!data.success)throw new Error();const items=data.items||[],field=fields[col],exact=items.filter(item=>String(item[field]).toUpperCase()===query.toUpperCase());if(items.length===1&&exact.length===1){applyItem(row,exact[0]);return;}showLookup(input,items);}catch(error){if(error.name!=='AbortError'&&alive()&&version===lookupVersion)setMessage('Pencarian belum dapat dimuat. Ketik ulang SKU atau nama barang untuk mencoba lagi.');}},250);}
  function applyItem(index,item){const before=capture();const row=rows[index];row.sku=item.sku;row.namaBarang=item.namaBarang;row.used=true;for(const col of [3,4]){const input=root.querySelector(`[data-row="${index}"][data-col="${col}"]`);if(input)input.value=row[fields[col]];}record(before,`${editSession}:${index}:${document.activeElement?.dataset?.col||3}`);persist();updateTotals();closeLookup();}
- function choose(backwards=false){
+ function choose(backwards=false,advance=true){
   if(!lookup)return;const {kind,row,col,index,items}=lookup;
   if(kind==='choice'){
    if(items[index])updateField(row,col,items[index].value);closeLookup();
+   if(!advance){focus(row,col,false,false,false);return;}
    const next=viewDestination(row,col,'Tab',backwards);if(next&&next.row<rows.length)focus(next.row,next.col);else focus(row,col);return;
   }
   if(items[index]){applyItem(row,items[index]);focus(row,5);}
@@ -196,15 +197,16 @@ export function mountStockEntry(root,{owner,fetchFn=fetch,confirm,parsePdf,onErr
   const input=event.target.closest('[data-entry-cell]');if(!input||busy||pending||!config?.canWrite)return;const text=event.clipboardData.getData('text/plain');if(!/[\t\n\r]/.test(text))return;event.preventDefault();const block=text.replace(/\r\n?/g,'\n').replace(/\n$/,'').split('\n').map(line=>line.split('\t')),startRow=Number(input.dataset.row),startCol=Number(input.dataset.col);
   const order=visibleOrder(),start=order.indexOf(startRow);if(start<0)return;if(start+block.length>ENTRY_MAX_ROWS){setMessage('Maksimal 1000 baris per input. Paste dibatalkan.');return;}if(start+block.length>order.length&&order.length!==rows.length){setMessage('Rentang paste melewati baris yang tampil. Hapus filter atau kurangi baris paste.');return;}const before=capture();while(order.length<start+block.length){order.push(rows.length);rows.push(makeEntry(config.pic));}block.forEach((line,i)=>line.slice(0,fields.length-startCol).forEach((value,j)=>updateField(order[start+i],startCol+j,value,true)));persist();render();focus(startRow,startCol);record(before);setMessage(`${block.length} baris ditempel. Periksa SKU, Nama barang, dan Status sebelum menyimpan.`);
  });
+ listen('pointerdown',event=>{if(event.target.closest('[data-entry-option],[data-entry-toggle]'))event.preventDefault();});
  listen('mousedown',event=>{if(event.target.closest('[data-entry-toggle]')){event.preventDefault();return;}if(event.target.closest('[data-entry-option]')){event.preventDefault();return;}const input=event.target.closest('[data-entry-cell]');if(input){const row=Number(input.dataset.row),col=Number(input.dataset.col);if(event.shiftKey&&selection){event.preventDefault();focus(row,col,true);}else{selection={anchor:{row,col},active:{row,col}};paintSelection();}}});
  listen('click',event=>{
   const toggle=event.target.closest('[data-entry-toggle]');
-  if(toggle&&!busy&&!pending&&config?.canWrite){const row=Number(toggle.dataset.row),col=Number(toggle.dataset.col),input=root.querySelector(`[data-entry-cell][data-row="${row}"][data-col="${col}"]`);if(lookup?.kind==='choice'&&lookup.input===input)closeLookup();else{focus(row,col);showChoices(input,true);}return;}
+  if(toggle&&!busy&&!pending&&config?.canWrite){const row=Number(toggle.dataset.row),col=Number(toggle.dataset.col),input=root.querySelector(`[data-entry-cell][data-row="${row}"][data-col="${col}"]`);if(lookup?.kind==='choice'&&lookup.input===input)closeLookup();else{focus(row,col,false,false,false);showChoices(input,true);}return;}
   const choice=event.target.closest('[data-entry-choice]');if(choice&&!event.shiftKey&&!busy&&!pending&&config?.canWrite){showChoices(choice,true);return;}
   if(event.target.closest('[data-entry-pdf]')){root.querySelector('[data-entry-pdf-file]')?.click();return;}
   if(event.target.closest('[data-entry-excel-import]')){if(excelFile)void importPdf(excelFile,Number(root.querySelector('[data-entry-excel-sheet]').value));return;}
   if(event.target.closest('[data-entry-config-retry]'))return void loadConfig();
-  const option=event.target.closest('[data-entry-option]');if(option&&lookup){lookup.index=Number(option.dataset.entryOption);choose();return;}
+  const option=event.target.closest('[data-entry-option]');if(option&&lookup){lookup.index=Number(option.dataset.entryOption);choose(false,false);return;}
   if(event.target.closest('[data-entry-save]'))return review();
   if(event.target.closest('[data-entry-check]'))return void check();
   if(busy||pending||!config?.canWrite)return;
