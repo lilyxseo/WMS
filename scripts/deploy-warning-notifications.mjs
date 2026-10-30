@@ -24,6 +24,8 @@ const recovery=await readFile(new URL('../supabase/migrations/20261026010000_war
 const freshness=await readFile(new URL('../supabase/migrations/20261026020000_warning_resolution_freshness.sql',import.meta.url),'utf8');
 const notificationAccess=await readFile(new URL('../supabase/migrations/20261028000000_notification_user_settings.sql',import.meta.url),'utf8');
 const stable=await readFile(new URL('../supabase/migrations/20261027000000_warning_stable_identity.sql',import.meta.url),'utf8');
+const partial=await readFile(new URL('../supabase/migrations/20261030000000_warning_partial_notifications.sql',import.meta.url),'utf8');
+const observations=await readFile(new URL('../supabase/migrations/20261030010000_warning_observations.sql',import.meta.url),'utf8');
 const tests=`do $$declare owner uuid:=gen_random_uuid();contender uuid:=gen_random_uuid();finding jsonb;answer jsonb;event_id uuid;amount integer;begin
  delete from public.warning_notify_outbox;delete from public.warning_notify_seen;
  update public.warning_notify_state set initialized=false,lifecycle_initialized=false,run=null,lease=null where id;
@@ -64,11 +66,23 @@ const tests=`do $$declare owner uuid:=gen_random_uuid();contender uuid:=gen_rand
  insert into public.warning_notify_outbox(fingerprint,recipient,warning,event_type,revision)
  select fingerprint,'620000000000',warning,'resolved',revision from public.warning_notify_seen where fingerprint='test-warning';
  select count(*) into amount from public.warning_notify_claim(owner);if amount<>0 then raise exception 'Repeated logical resolution claimed';end if;
+ -- Partial snapshots observe positives only, never resolve absent findings.
+ insert into public.warning_notify_seen(fingerprint,warning,active,content_signature) values('unobserved-warning','{"category":"NEGATIVE_STOCK","sku":"OTHER","source":"Kartu Stok","location":"A1"}',true,'v2:other');
+ update public.warning_notify_state set lifecycle_initialized=false where id;
+ finding:='[{"fingerprint":"partial-warning","content_signature":"v2:partial","warning":{"category":"NEGATIVE_STOCK","sku":"PARTIAL","source":"Kartu Stok","location":"A1"}}]'::jsonb;
+ answer:=public.warning_notify_observe(owner,finding,array['620000000000']);if answer->>'new'<>'1' or answer->>'resolved'<>'0' then raise exception 'Partial positive missing';end if;
+ if not (select active from public.warning_notify_seen where fingerprint='unobserved-warning') then raise exception 'Partial resolved absent warning';end if;
+ if (select lifecycle_initialized from public.warning_notify_state where id) then raise exception 'Partial initialized completeness baseline';end if;
+ select count(*) into amount from public.warning_notify_claim_observed(owner,finding);if amount<>1 then raise exception 'Partial did not claim exactly current positives';end if;
+ if exists(select 1 from public.warning_notify_outbox where status='sending' and event_type='resolved') then raise exception 'Partial claimed resolution';end if;
+ update public.warning_notify_outbox set status='sent' where fingerprint='partial-warning';
+ answer:=public.warning_notify_observe(owner,finding,array['620000000000']);if answer->>'new'<>'0' or answer->>'updated'<>'0' then raise exception 'Partial duplicate';end if;
+ answer:=public.warning_notify_collect(owner,finding,array['620000000000'],false);if answer->>'new'<>'0' or answer->>'updated'<>'0' or answer->>'resolved'<>'0' then raise exception 'First complete snapshot replayed partial notification';end if;
  perform public.warning_notify_unlock(owner);
 end$$;`;
-if(process.argv.includes('--inspect')){await sql('begin;'+baseMigration+migration+recovery+freshness+stable+notificationAccess+tests+'rollback;');await output('Lifecycle, deduplication, retries and leases verified with rollback');}
+if(process.argv.includes('--inspect')){await sql('begin;'+baseMigration+migration+recovery+freshness+stable+notificationAccess+partial+observations+tests+'rollback;');await output('Lifecycle, deduplication, retries and leases verified with rollback');}
 else if(process.argv.includes('--configure')){
- await sql('begin;'+baseMigration+migration+recovery+freshness+stable+notificationAccess+'commit;');await sql('begin;'+tests+'rollback;');
+ await sql('begin;'+baseMigration+migration+recovery+freshness+stable+notificationAccess+partial+observations+'commit;');await sql('begin;'+tests+'rollback;');
  const secrets=await management('/secrets');if(!secrets.some(item=>item.name==='FONNTE_TOKEN'))throw Error('Fonnte token missing');
  const keys=await management('/api-keys?reveal=true'),key=keys.find(item=>item.api_key?.startsWith('sb_secret_'))?.api_key;if(!key)throw Error('Warning data key missing');
  const existing=await sql("select decrypted_secret from vault.decrypted_secrets where name='wms_warning_notify_secret' limit 1"),secret=existing[0]?.decrypted_secret||randomBytes(32).toString('hex');if(!existing.length)await sql(`select vault.create_secret(${literal(secret)},'wms_warning_notify_secret')`);
@@ -78,7 +92,7 @@ else if(process.argv.includes('--configure')){
  const secret=(await sql("select decrypted_secret from vault.decrypted_secrets where name='wms_warning_notify_secret' limit 1"))[0]?.decrypted_secret;if(!secret)throw Error('Warning authentication missing');const endpoint=`https://${project}.supabase.co/functions/v1/warning-whatsapp`;
  if((await fetch(endpoint,{method:'POST'})).status!==401)throw Error('Anonymous notification access allowed');
  const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json','X-WMS-Warning-Secret':secret},body:JSON.stringify({action:'check'}),signal:AbortSignal.timeout(30000)}),result=await response.json();if(!response.ok||result.delivery!=='not_sent')throw Error('Read-only notification check failed');
- await sql("do $$declare job bigint;begin select jobid into job from cron.job where jobname='wms-warning-notifications' limit 1;if job is null then perform cron.schedule('wms-warning-notifications','4-59/5 * * * *','select public.dispatch_warning_notifications()');else perform cron.alter_job(job,schedule:='4-59/5 * * * *',active:=true);end if;end$$");
- const jobs=await sql("select schedule,active from cron.job where jobname='wms-warning-notifications'");if(jobs.length!==1||jobs[0].schedule!=='4-59/5 * * * *'||!jobs[0].active)throw Error('Notification schedule not ready');
- await output(`Active every 5 minutes after server detection; snapshot ${result.ready?'ready':'awaiting complete refresh'}; deployment sent no messages`);
+ await sql("do $$declare job bigint;begin select jobid into job from cron.job where jobname='wms-warning-notifications' limit 1;if job is null then perform cron.schedule('wms-warning-notifications','* * * * *','select public.dispatch_warning_notifications()');else perform cron.alter_job(job,schedule:='* * * * *',active:=true);end if;end$$");
+ const jobs=await sql("select schedule,active from cron.job where jobname='wms-warning-notifications'");if(jobs.length!==1||jobs[0].schedule!=='* * * * *'||!jobs[0].active)throw Error('Notification schedule not ready');
+ await output(`Active every minute after server detection; snapshot ${result.ready?'ready':'awaiting complete refresh'}; deployment sent no messages`);
 }

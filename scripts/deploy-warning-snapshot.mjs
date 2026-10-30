@@ -5,7 +5,7 @@ const base=`https://api.supabase.com/v1/projects/${project}`;
 async function manage(path,body){const response=await fetch(base+path,{method:body?'POST':'GET',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(60000)});if(!response.ok)throw Error(`Snapshot management operation failed (${response.status})`);const text=await response.text();return text.trim()?JSON.parse(text):[];}
 const sql=query=>manage('/database/query',{query}),literal=value=>"'"+String(value).replaceAll("'","''")+"'";
 const output=async(name,value)=>{if(process.env.GITHUB_OUTPUT)await appendFile(process.env.GITHUB_OUTPUT,name+'='+JSON.stringify(value)+'\n');};
-const migration=await readFile(new URL('../supabase/migrations/20261021000000_warning_snapshot.sql',import.meta.url),'utf8');
+const migration=(await Promise.all(['20261021000000_warning_snapshot.sql','20261030010000_warning_observations.sql','20261030020000_outbound_from_warning.sql','20261030030000_negative_stock_deduction_trace.sql'].map(file=>readFile(new URL('../supabase/migrations/'+file,import.meta.url),'utf8')))).join('\n');
 const stateTests=`begin;delete from public.inventory_warning_snapshot;insert into public.inventory_warning_snapshot(id) values(true);
 do $$declare owner uuid:=gen_random_uuid();other uuid:=gen_random_uuid();sample jsonb;begin
  if not public.warning_snapshot_claim(owner) or public.warning_snapshot_claim(other) then raise exception 'Concurrent claim';end if;

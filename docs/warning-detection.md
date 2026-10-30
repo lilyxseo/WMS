@@ -43,3 +43,34 @@ Kategori `Movement Belum Berdampak` meninjau komponen pengurangan From (INTERNAL
 Pengaman: kelima sumber harus stabil; snapshot ketiga sumber stok harus lebih baru sekurangnya 2 menit dari movement terakhir yang tercermin di database. Netto transfer balik yang menjadi 0, transaksi lanjutan pada hari yang sama/setelahnya, tanggal/angka tidak valid, periode lama, kolom belum terbaca, dan saldo akhir 0 semata tidak disimpulkan sebagai movement gagal. Komponen yang sudah nonzero tidak dibandingkan dengan total mentah untuk menuduh selisih qty. Deteksi terbatas pada movement dengan jenis mutasi yang diketahui; operasi lain dan input yang belum pernah tercatat membutuhkan bukti berbeda.
 
 RPC privat mengirim konteks movement minimal dan ringkasan aktivitas lokasi, bukan seluruh ledger atau kolom dokumen/profile. JSON tunggal mencegah batas baris PostgREST memotong movement. Kategori baru tersedia otomatis pada filter halaman Warning dan menggunakan antrean WhatsApp yang sama.
+
+## From barang keluar dan rincian stok minus
+
+`INVALID_OUTBOUND_FROM` menandai From kosong atau beberapa lokasi dalam satu
+transaksi, misalnya `C16-2, D12-2`. Qty harus dipisah per lokasi. Lokasi khusus yang
+tidak dikenali ditandai untuk verifikasi; tidak dianggap pasti salah secara
+historis. Kandidat dipilih di PostgreSQL, bukan dengan mengirim seluruh ledger ke
+browser atau Worker.
+
+Warning stok minus menyertakan tanggal, baris, From–To, dan Qty pemotongan yang
+cocok dengan SKU/lokasi. Penelusuran memastikan saldo melewati nol hanya jika
+saldo awal/akhir, total pengeluaran, seluruh riwayat yang diperlukan, dan urutan
+transaksi dapat direkonsiliasi. Penerimaan di tengah periode, tanggal tidak valid,
+lokasi stok ganda, mutasi lain, atau riwayat terpotong membuatnya tetap berstatus
+pemotongan terkait, bukan kepastian penyebab. Respons dibatasi 50 transaksi per
+baris stok; tampilan menyorot pemicu yang terverifikasi dan menampilkan rincian
+transaksi terbaru.
+
+## Notifikasi parsial dan beberapa pesan
+
+Snapshot positif terbaru disimpan terpisah dari baseline pemeriksaan lengkap.
+Bot dapat memberitahukan temuan dari sumber yang sudah segar dan terverifikasi
+walau sumber lain belum siap. Snapshot parsial tidak menyimpulkan warning telah
+selesai; penyelesaian tetap memerlukan pemeriksaan lengkap. Antrean parsial hanya
+mengklaim temuan positif yang benar-benar diamati dalam snapshot tersebut.
+
+Bot mengirim beberapa teks berurutan dalam satu eksekusi, memecah pesan panjang,
+dan meminta kelanjutan langsung sesudah melepas lease jika batas waktu/jumlah
+batch tercapai. Cron setiap menit menjadi pemeriksaan cadangan. Tidak ada
+pengiriman pesan uji pada workflow deploy. Status sukses, gagal eksplisit, dan
+pengiriman yang belum pasti tetap dibedakan untuk menghindari pesan ganda.

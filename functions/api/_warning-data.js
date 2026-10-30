@@ -41,7 +41,7 @@ export async function loadWarningData(env){
    offset+=batch.length;
   }
  }));
- let ledger=[];let ledgerError=false;let movement=null;let movementError=false;
+ let ledger=[];let ledgerError=false;let movement=null;let movementError=false;let outboundFrom=[],outboundFromError=false,negativeContext=[],negativeContextError=false;
  try{
   const response=await fetch(`${config.url}/rest/v1/rpc/inventory_warning_ledger_review`,{method:'POST',headers:{apikey:config.key,Authorization:`Bearer ${config.key}`,'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(20000)});
   const body=await response.json();if(!response.ok||!Array.isArray(body))throw new Error('Ledger review unavailable');ledger=body;
@@ -50,6 +50,8 @@ export async function loadWarningData(env){
   const response=await fetch(`${config.url}/rest/v1/rpc/inventory_warning_movement_context`,{method:'POST',headers:{apikey:config.key,Authorization:`Bearer ${config.key}`,'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(20000)});
   const body=await response.json();if(!response.ok||!Array.isArray(body?.movements)||!Array.isArray(body?.activity))throw new Error('Movement context unavailable');movement=body;
  }catch{movementError=true;}
+ try{const response=await fetch(config.url+'/rest/v1/rpc/inventory_warning_outbound_from_review',{method:'POST',headers:{apikey:config.key,Authorization:`Bearer ${config.key}`,'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(20000)}),body=await response.json();if(!response.ok||!Array.isArray(body))throw Error();outboundFrom=body;}catch{outboundFromError=true;}
+ try{const response=await fetch(config.url+'/rest/v1/rpc/inventory_warning_negative_context',{method:'POST',headers:{apikey:config.key,Authorization:`Bearer ${config.key}`,'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(20000)}),body=await response.json();if(!response.ok||!Array.isArray(body))throw Error();negativeContext=body;}catch{negativeContextError=true;}
  let after=[];try{after=await sync();}catch{}
  const proofAfter=needsProof?await signatures():[];
  const rows={kartuStok:[],rpl:[],bulky:[],barangMasuk:[],barangKeluar:[]},unavailableSources=[],verification=[];
@@ -71,7 +73,10 @@ export async function loadWarningData(env){
  if(!ledgerReady)ledger=[]; // A failed/changed stock source cannot prove absence.
  if(results.every(result=>result.status==='rejected')){const error=new Error('All warning stock sources unavailable');error.failures=sources.map(([,source])=>({source:source.table}));throw error;}
  const staleSources=verification.filter(item=>item.stale).map(item=>item.source);
- return {rows,ledger,staleSources,unavailableSources:[...new Set(unavailableSources)],verification,ledgerReady,movement,movementReady};
+ const outboundFromReady=!outboundFromError&&['kartu_stok','barang_keluar'].every(key=>verification.some(item=>item.source===key&&item.ready));
+ if(!outboundFromReady)unavailableSources.push('outbound_from_review');
+ const negativeContextReady=!negativeContextError&&['kartu_stok','barang_masuk','barang_keluar'].every(key=>verification.some(item=>item.source===key&&item.ready));
+ return {rows,negativeContext:negativeContextReady?negativeContext:[],negativeContextReady,outboundFrom:outboundFromReady?outboundFrom:[],outboundFromReady,ledger,staleSources,unavailableSources:[...new Set(unavailableSources)],verification,ledgerReady,movement,movementReady};
 }
 
 export function atomicWarningSource(sync,signatures,key){
@@ -90,5 +95,8 @@ async function loadAtomicWarningData(config){
  for(const [name,source]of Object.entries(WARNING_SOURCES)){const check=verification.find(item=>item.source===source.key),stock=data.stocks[name];if(!Array.isArray(stock)||check.rowCount!==stock.length){check.ready=false;check.reason='Snapshot stok tidak lengkap.';}if(check.ready)rows[name]=stock;}
  const unavailableSources=verification.filter(item=>!item.ready).map(item=>item.source),ledgerReady=!unavailableSources.length&&data.ledgerAvailable===true,movementReady=ledgerReady&&data.movementAvailable===true&&Array.isArray(data.movement?.movements)&&Array.isArray(data.movement?.activity);
  if(!data.ledgerAvailable)unavailableSources.push('ledger_review');if(!movementReady)unavailableSources.push('movement_impact');
- return {rows,ledger:ledgerReady?data.ledger:[],ledgerReady,movement:movementReady?data.movement:null,movementReady,verification,unavailableSources,staleSources:verification.filter(item=>item.stale&&item.ready).map(item=>item.source)};
+ const outboundFromReady=data.outboundFromAvailable===true&&Array.isArray(data.outboundFrom)&&['kartu_stok','barang_keluar'].every(key=>verification.some(item=>item.source===key&&item.ready));
+ if(!outboundFromReady)unavailableSources.push('outbound_from_review');
+ const negativeContextReady=data.negativeContextAvailable===true&&Array.isArray(data.negativeContext)&&['kartu_stok','barang_masuk','barang_keluar'].every(key=>verification.some(item=>item.source===key&&item.ready));
+ return {rows,negativeContext:negativeContextReady?data.negativeContext:[],negativeContextReady,outboundFrom:outboundFromReady?data.outboundFrom:[],outboundFromReady,ledger:ledgerReady?data.ledger:[],ledgerReady,movement:movementReady?data.movement:null,movementReady,verification,unavailableSources,staleSources:verification.filter(item=>item.stale&&item.ready).map(item=>item.source)};
 }

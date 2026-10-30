@@ -3,8 +3,10 @@ on:
   push:
     branches: [main, fix/warning-whatsapp-lifecycle, fix/warning-stable-identity]
     paths:
+      - 'supabase/migrations/20261030010000_warning_observations.sql'
       - 'supabase/functions/warning-whatsapp/**'
       - 'supabase/functions/whatsapp-fonnte/**'
+      - 'supabase/migrations/20261030000000_warning_partial_notifications.sql'
       - 'supabase/migrations/20261028000000_notification_user_settings.sql'
       - 'supabase/migrations/20261023000000_warning_notification_lifecycle.sql'
       - 'supabase/migrations/20261026010000_warning_notification_recovery.sql'

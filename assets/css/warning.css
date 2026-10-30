@@ -48,3 +48,11 @@
  #page-anomaly [data-warning-cell=proof]{grid-area:proof}#page-anomaly [data-warning-cell=action]{grid-area:action;text-align:right}
  #page-anomaly .warning-proof[open]{width:100%;box-sizing:border-box}#page-anomaly .warning-row:has(.warning-proof[open]){grid-template-areas:'product product' 'priority location' 'issue issue' 'proof proof' 'action action'}
 }
+
+.warning-deduction-highlight{margin-top:8px;padding:8px;border-left:3px solid var(--primary);border-radius:6px;background:color-mix(in srgb,var(--primary) 8%,transparent);display:grid;gap:4px;font-size:11px;overflow-wrap:anywhere}.warning-deduction-highlight strong{color:var(--primary)}.warning-deduction-scroll{max-width:100%;overflow-x:auto;margin:8px 0}.warning-deduction-scroll table{width:100%;min-width:340px;font-size:10px}.warning-deduction-scroll td,.warning-deduction-scroll th{padding:6px!important;text-align:left}.warning-deduction-scroll small{display:block;color:var(--muted)}.warning-deduction-selected{background:color-mix(in srgb,var(--primary) 15%,var(--panel))}.warning-deduction-selected td:first-child{box-shadow:inset 3px 0 var(--primary)}
+/* Keep the embedded ledger table separate from mobile warning-card rules. */
+#page-anomaly .warning-deduction-scroll table{display:table;table-layout:auto;width:100%;min-width:340px}
+#page-anomaly .warning-deduction-scroll table thead{display:table-header-group}
+#page-anomaly .warning-deduction-scroll table tbody{display:table-row-group}
+#page-anomaly .warning-deduction-scroll table tr{display:table-row}
+#page-anomaly .warning-deduction-scroll table :is(th,td){display:table-cell;position:static}
