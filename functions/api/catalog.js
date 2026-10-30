@@ -1,3 +1,4 @@
+import {cellImagesConfigured,loadCatalogCellImages,catalogName} from './_catalog-cell-images.js';
 import {loadCatalogEmbedded} from './_catalog-embedded.js';
 import {getNoteIdentity} from './_note-identity.js';
 import {getGoogleAccessToken} from './_google-auth.js';
@@ -18,7 +19,10 @@ export async function handleCatalog({request,env},dependencies={}){
   if(data.valueRanges?.length!==tabs.length||formulaData.valueRanges?.length!==tabs.length)throw Error('Data kedua tab katalog belum lengkap. Coba Refresh.');
   const products=tabs.flatMap((tab,i)=>parseCatalog(data.valueRanges[i].values||[],tab,formulaData.valueRanges[i].values||[]));
   let imageWarning='';
-  if(products.some(item=>!item.imageUrl))try{const workbook=await (dependencies.embedded||loadCatalogEmbedded)(env,{fetchFn,getToken:async()=>token});for(const item of products)if(!item.imageUrl&&workbook.images.has(item.source+':'+item.sourceRow))item.imageUrl='/api/catalog-image?source='+item.source+'&row='+item.sourceRow+'&v='+workbook.version;if(products.some(item=>item.source==='supplement'&&!item.imageUrl))imageWarning='Sebagian gambar dalam sel belum tersedia dari ekspor spreadsheet.';}catch{imageWarning='Sebagian gambar belum dapat dimuat. Coba Refresh.';}
+  if(cellImagesConfigured(env)){
+   try{const manifest=await (dependencies.cellImages||loadCatalogCellImages)(env,{fetchFn});for(const item of products){const image=manifest.images.get(item.sourceRow);if(item.source==='supplement'&&!item.imageUrl&&image&&catalogName(item.name)===catalogName(image.name))item.imageUrl='/api/catalog-image?source=supplement&row='+item.sourceRow+'&v='+manifest.version;}if(products.some(item=>item.source==='supplement'&&!item.imageUrl))imageWarning='Sebagian produk belum memiliki gambar sel yang dapat dibaca.';}
+   catch(error){imageWarning=error.message||'Gambar sel belum dapat dimuat.';}
+  }else if(products.some(item=>!item.imageUrl))try{const workbook=await (dependencies.embedded||loadCatalogEmbedded)(env,{fetchFn,getToken:async()=>token});for(const item of products)if(!item.imageUrl&&workbook.images.has(item.source+':'+item.sourceRow))item.imageUrl='/api/catalog-image?source='+item.source+'&row='+item.sourceRow+'&v='+workbook.version;if(products.some(item=>item.source==='supplement'&&!item.imageUrl))imageWarning='Sebagian gambar dalam sel belum tersedia dari ekspor spreadsheet.';}catch{imageWarning='Sebagian gambar belum dapat dimuat. Coba Refresh.';}
   return json({success:true,imageWarning,products,sources:tabs.map(({key,label,title})=>({key,label,title})),updatedAt:new Date().toISOString()});
  }catch(error){return json({success:false,message:error.message||'Katalog belum dapat dimuat.'},503);}
 }
