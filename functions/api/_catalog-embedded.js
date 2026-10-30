@@ -1,11 +1,13 @@
-import {CATALOG_ID,CATALOG_TABS} from './_catalog.js';
+// Offline XLSX inspection only. Never download or unpack workbooks in a request handler.
+import {boundedBytes} from './_catalog-image-data.js';
+export {boundedBytes,catalogRaster} from './_catalog-image-data.js';
+import {CATALOG_TABS} from './_catalog.js';
 const LIMIT=32*1024*1024,PART_LIMIT=8*1024*1024,decoder=new TextDecoder();
 const entity=text=>text.replace(/&(?:amp|lt|gt|quot|apos);/g,value=>({'&amp;':'&','&lt;':'<','&gt;':'>','&quot;':'"','&apos;':"'"}[value]));
 const attributes=text=>Object.fromEntries([...text.matchAll(/([\w:.-]+)\s*=\s*["']([^"']*)["']/g)].map(match=>[match[1],entity(match[2])]));
 const elements=(xml,name)=>[...xml.matchAll(new RegExp('<(?:[\\w]+:)?'+name+'\\b([^>]*?)(?:\\/>|>([\\s\\S]*?)<\\/(?:[\\w]+:)?'+name+'>)','g'))].map(match=>({attrs:attributes(match[1]),body:match[2]||''}));
 const resolve=(base,target)=>{if(!target||target.includes('://'))return '';const parts=target.startsWith('/')?[]:base.split('/').slice(0,-1);for(const part of target.split('/')){if(part==='..'){if(!parts.length)return '';parts.pop();}else if(part&&part!=='.')parts.push(part);}return parts.join('/');};
 const relPath=path=>path.replace(/([^/]+)$/,'_rels/$1.rels');
-export async function boundedBytes(response,limit=LIMIT){if(Number(response.headers.get('content-length'))>limit)throw Error('Ekspor katalog terlalu besar.');const reader=response.body.getReader(),parts=[];let size=0;try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>limit)throw Error('Ekspor katalog terlalu besar.');parts.push(value);}}catch(error){await reader.cancel().catch(()=>{});throw error;}const bytes=new Uint8Array(size);let offset=0;for(const part of parts){bytes.set(part,offset);offset+=part.length;}return bytes;}
 export async function catalogWorkbook(bytes){
  if(bytes.length>LIMIT||bytes.length<22)throw Error('Ekspor gambar tidak valid.');const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength),entries=new Map();let end=-1;
  for(let p=bytes.length-22;p>=Math.max(0,bytes.length-65557);p--)if(view.getUint32(p,true)===0x06054b50){end=p;break;}if(end<0)throw Error('Ekspor gambar bukan XLSX.');let cursor=view.getUint32(end+16,true);const count=view.getUint16(end+10,true);if(count>10000||view.getUint16(end+4,true)||view.getUint16(end+6,true))throw Error('Ekspor gambar terlalu besar.');
@@ -38,11 +40,3 @@ export async function catalogWorkbook(bytes){
  }
  return {images,read};
 }
-let memory;
-export async function loadCatalogEmbedded(env,{fetchFn=fetch,getToken,cache=globalThis.caches?.default,now=Date.now()}={}){
- const version=Math.floor(now/300000),cacheKey=new Request('https://wms-catalog-cache.invalid/'+CATALOG_ID+'/'+version+'.xlsx');
- if(memory?.version===version)return memory.promise;
- const promise=(async()=>{let response=await cache?.match(cacheKey);if(!response){const token=await getToken(env);const options={headers:{Authorization:'Bearer '+token},signal:AbortSignal.timeout(30000)};response=await fetchFn('https://docs.google.com/spreadsheets/d/'+CATALOG_ID+'/export?format=xlsx',options);if([401,403,404].includes(response.status))response=await fetchFn('https://www.googleapis.com/drive/v3/files/'+CATALOG_ID+'/export?mimeType=application%2Fvnd.openxmlformats-officedocument.spreadsheetml.sheet',options);if(!response.ok)throw Error('Gambar tertanam belum dapat dibaca dari Google Drive.');const bytes=await boundedBytes(response);response=new Response(bytes,{headers:{'Cache-Control':'public,max-age=300'}});await cache?.put(cacheKey,response.clone());}
- return {...await catalogWorkbook(await boundedBytes(response)),version};})();memory={version,promise};try{return await promise;}catch(error){if(memory?.promise===promise)memory=null;throw error;}
-}
-export function catalogRaster(bytes){if(bytes[0]===137&&bytes[1]===80&&bytes[2]===78&&bytes[3]===71)return 'image/png';if(bytes[0]===255&&bytes[1]===216&&bytes[2]===255)return 'image/jpeg';if(decoder.decode(bytes.subarray(0,6)).match(/^GIF8[79]a$/))return 'image/gif';if(decoder.decode(bytes.subarray(0,4))==='RIFF'&&decoder.decode(bytes.subarray(8,12))==='WEBP')return 'image/webp';return '';}

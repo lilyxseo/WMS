@@ -38,8 +38,9 @@ memungkinkan server WMS mengakses script; laporkan pembatasan tersebut.
 - Secret tetap berada di server dan Script Properties. Browser hanya mengambil
   raster melalui endpoint `/api/catalog-image` yang memerlukan login WMS.
 - URL Google yang sementara tidak disimpan permanen dan tidak dikirim ke browser.
-- Jika konfigurasi script tersedia, katalog tidak mengekspor XLSX. Link Img pada
-  sumber utama tetap dipakai langsung.
+- Katalog tidak mengunduh atau membongkar XLSX pada Worker, termasuk ketika script
+  belum dikonfigurasi. Link Img pada sumber utama tetap dipakai langsung. Gambar
+  sel menampilkan placeholder dan status koneksi bila script belum terpasang.
 - Jika gagal, halaman menampilkan alasan konfigurasi/akses; produk dan teks tetap
   tampil. Jangan menyatakan gambar berhasil sebelum memeriksa sheet asli setelah
   script terpasang.

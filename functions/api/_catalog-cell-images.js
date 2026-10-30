@@ -1,5 +1,5 @@
 import {CATALOG_ID} from './_catalog.js';
-import {boundedBytes,catalogRaster} from './_catalog-embedded.js';
+import {boundedBytes,catalogRasterStream} from './_catalog-image-data.js';
 export const catalogName=value=>String(value??'').normalize('NFKC').toLowerCase().replace(/\s+/g,' ').trim();
 export const cellImagesConfigured=env=>Boolean(env.CATALOG_CELL_IMAGES_URL||env.CATALOG_CELL_IMAGES_SECRET);
 export function catalogGoogleImage(value){try{const url=new URL(value);return url.protocol==='https:'&&url.hostname.endsWith('.googleusercontent.com')&&!url.username&&!url.password&&!url.port&&url.href.length<=8192?url.href:'';}catch{return '';}}
@@ -22,6 +22,6 @@ export async function loadCatalogCellImages(env,{fetchFn=fetch,now=Date.now()}={
 }
 export async function readCatalogCellImage(url,{fetchFn=fetch}={}){
  let target=catalogGoogleImage(url);if(!target)throw Error('Sumber gambar tidak valid.');
- for(let attempt=0;attempt<4;attempt++){const response=await fetchFn(target,{redirect:'manual',signal:AbortSignal.timeout(20000)});if([301,302,303,307,308].includes(response.status)){target=catalogGoogleImage(new URL(response.headers.get('location')||'',target).href);if(!target)throw Error('Sumber gambar tidak valid.');continue;}if(!response.ok)throw Error('Gambar sel belum dapat dimuat.');const bytes=await boundedBytes(response,8*1024*1024),type=catalogRaster(bytes);if(!type)throw Error('Format gambar sel tidak didukung.');return {bytes,type};}
+ for(let attempt=0;attempt<4;attempt++){const response=await fetchFn(target,{redirect:'manual',signal:AbortSignal.timeout(20000)});if([301,302,303,307,308].includes(response.status)){target=catalogGoogleImage(new URL(response.headers.get('location')||'',target).href);if(!target)throw Error('Sumber gambar tidak valid.');continue;}if(!response.ok)throw Error('Gambar sel belum dapat dimuat.');return catalogRasterStream(response);}
  throw Error('Gambar sel belum dapat dimuat.');
 }

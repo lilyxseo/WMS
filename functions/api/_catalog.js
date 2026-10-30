@@ -3,7 +3,8 @@ export const CATALOG_TABS=[{id:115543455,key:'main',title:'1. Product Catalog',l
 const text=value=>String(value??'').trim();
 const key=value=>text(value).toLowerCase().replace(/[^a-z0-9]/g,'');
 export function catalogImage(value){
- let raw=text(value),formula=raw.match(/^=IMAGE\(\s*"((?:[^"]|"")+)"/i);if(formula)raw=formula[1].replaceAll('""','"');
+ let raw=text(value);if(!raw)return '';const formula=raw.match(/^=IMAGE\(\s*"((?:[^"]|"")+)"/i);if(formula)raw=formula[1].replaceAll('""','"');
+ if(!/^https:\/\//i.test(raw))return '';
  try{const url=new URL(raw);if(url.protocol!=='https:'||url.username||url.password)return '';if(url.hostname==='drive.google.com'){const id=url.pathname.match(/\/file\/d\/([\w-]+)/)?.[1]||url.searchParams.get('id');if(id&&/^[\w-]+$/.test(id))return 'https://drive.google.com/thumbnail?id='+encodeURIComponent(id)+'&sz=w800';}return url.href;}catch{return '';}
 }
 export function parseCatalog(rows,tab,formulaRows=[]){
