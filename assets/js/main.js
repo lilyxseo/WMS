@@ -1,4 +1,4 @@
-import { mountCatalog } from './catalog.js?v=__APP_VERSION__';
+import { mountCatalog, mountSkuCatalogPhoto } from './catalog.js?v=__APP_VERSION__';
 import {renderNotificationSettings} from './notification-settings.js?v=__APP_VERSION__';
 import {parseEntryContentRows} from './entry-import-content.js?v=__APP_VERSION__';
 import {normalizeScanValue} from './utils/scan-value.js?v=__APP_VERSION__';
@@ -700,7 +700,7 @@ STATS_STATE.controller?.abort();STATS_STATE._normalizedRows=null;STATS_STATE.loa
 ++authRequestGeneration;
 notificationCenter?.clear();
 allSkuNotesController?.dispose();allSkuNotesController=null;document.getElementById('allSkuNotesApp')?.replaceChildren();
-catalogController?.dispose();catalogController=null;document.getElementById("catalogApp")?.replaceChildren();
+skuCatalogPhotoController?.dispose();skuCatalogPhotoController=null;catalogController?.dispose();catalogController=null;document.getElementById("catalogApp")?.replaceChildren();
 fileManagerController?.dispose();fileManagerController=null;document.getElementById("fileManagerRoot")?.replaceChildren();
 archiveManagerController?.dispose();archiveManagerController=null;archiveSourcesPromise=null;archiveSourcesLoaded=false;archiveSourcesError='';++ARCHIVE_STATE.requestId;ARCHIVE_STATE.loadingList=false;ARCHIVE_STATE.loadingData=false;ARCHIVE_SOURCES.splice(0,ARCHIVE_SOURCES.length,...BUILTIN_ARCHIVE_SOURCES.map(source=>({...source})));ARCHIVE_STATE.selectedSpreadsheetKey='';ARCHIVE_STATE.selectedSheet='';ARCHIVE_STATE.cache={};ARCHIVE_STATE.sheetList=[];
 document.getElementById('assetStoreEditor')?.remove();document.getElementById('profileForm')?.reset();
@@ -862,7 +862,7 @@ if(getActivePage()===page)rerenderCurrentPage({force:true});
 renderPageDataStatus(page);
 });return state.promise;
 }
-function showPage(page){syncBalikanShortcutListeners(page==="balikan-store");if(page==='balikan-store')setupBalikanEntry();if(page!=="search")closeScannerModal();
+function showPage(page){syncBalikanShortcutListeners(page==="balikan-store");if(page!=='detail'){skuCatalogPhotoController?.dispose();skuCatalogPhotoController=null;}if(page==='balikan-store')setupBalikanEntry();if(page!=="search")closeScannerModal();
 document.querySelectorAll(".page").forEach(p=>p.classList.add("hidden"));document.getElementById(`page-${page}`)?.classList.remove("hidden");
 document.querySelectorAll(".side-link[data-page]").forEach(b=>b.classList.toggle("active",b.dataset.page===page||(page==="barang-reject"&&b.dataset.page===getBarangRejectNavPage())));
 syncActiveSidebarParent(page);invalidateInactiveTransactionRequests(page);setMainContentLoading(false);
@@ -2168,9 +2168,10 @@ function renderResults(items,query){if(!items.length){renderQuickResultCard(null
 let allSkuNotesController=null;
 function confirmSkuNoteDelete(options){if(document.getElementById('confirmModalRoot'))showConfirmModal(options);else toast('Dialog konfirmasi belum tersedia. Muat ulang halaman.','error');}
 function renderAllSkuNotesPage({refresh=false}={}){const generation=authRequestGeneration;const previous=allSkuNotesController;allSkuNotesController=mountAllSkuNotes(document.getElementById('allSkuNotesApp'),{account:inventoryDraftOwner()+'|'+authRequestGeneration,draftAccount:inventoryDraftOwner(),isCurrent:()=>generation===authRequestGeneration,fetchFn:accountDraftFetch(generation),confirmDelete:confirmSkuNoteDelete,navigate:navigateToSku});if(refresh&&previous===allSkuNotesController)void allSkuNotesController?.refresh();}
-let skuDetailRequestId=0,skuDetailFilterSku='';
+let skuDetailRequestId=0,skuDetailFilterSku='',skuCatalogPhotoController=null;
 async function showDetail(identifier,{background=false,throwOnError=false}={}){
 const sku=String(identifier||"").trim();
+skuCatalogPhotoController?.dispose();skuCatalogPhotoController=null;
 if(!sku)return renderState("detail","Detail tidak tersedia.");
 if(skuDetailFilterSku!==sku){tableFiltersController?.reset(document.getElementById("page-detail"));skuDetailFilterSku=sku;}
 const requestId=++skuDetailRequestId;
@@ -2205,13 +2206,13 @@ const locationSet=new Set();
 for(const r of (bySheet["Kartu Stock"]||[])){const stokAkhir=parseNumber(getVal(r,["stok akhir","closing stock","ending stock","saldo akhir"]));if(stokAkhir<=0)continue;for(const k of Object.keys(r||{})){const nk=clean(k);if(["lokasi","location","rak","bin","area"].some(x=>nk.includes(x))){const v=r[k];if(v)locationSet.add(String(v).trim());}}}
 const summary=[["Total Stok Akhir",tAvailable],["Stok Retail",tStokRetail],["Stok Bulky",tStokBulky],["Total Qty Masuk",tIn],["Total Qty Keluar",tOut],["Baris Kartu Stock",bySheet["Kartu Stock"].length]];
 const sourceList=Array.isArray(sel.sources)?sel.sources:[...sel.sources||[]];
-let html=`<div class='detail-profile'><div class='detail-hero'><div class='detail-top'><div><div class='detail-name'>${esc(nama)}</div><div class='detail-sku'>SKU: <strong>${esc(sku)}</strong> <button class='btn-ghost copy-mini-btn' data-copy-sku onclick="copySku(decodeURIComponent('${encAttr(sku)}'),this)"><span aria-hidden='true'>⧉</span><span>Copy SKU</span></button></div></div><button class='btn-primary' onclick="goBackToPreviousPage()"><span aria-hidden='true'>←</span><span>Kembali ke hasil pencarian</span></button></div><div class='source-row'>${sourceList.map(s=>`<span class='badge ${badgeClass(s)}'>${esc(s)}</span>`).join(" ")}</div></div>`;
+let html=`<div class='detail-profile'><div class='detail-hero'><div class='detail-top'><div><div class='detail-name'>${esc(nama)}</div><div class='detail-sku'>SKU: <strong>${esc(sku)}</strong> <button class='btn-ghost copy-mini-btn' data-copy-sku onclick="copySku(decodeURIComponent('${encAttr(sku)}'),this)"><span aria-hidden='true'>⧉</span><span>Copy SKU</span></button><span id='skuCatalogPhotoRoot' hidden></span></div></div><button class='btn-primary' onclick="goBackToPreviousPage()"><span aria-hidden='true'>←</span><span>Kembali ke hasil pencarian</span></button></div><div class='source-row'>${sourceList.map(s=>`<span class='badge ${badgeClass(s)}'>${esc(s)}</span>`).join(" ")}</div></div>`;
 html+=`<div class='summary-grid'>${summary.map(([k,v])=>`<div class='summary-card' data-detail-metric='${k==='Total Qty Masuk'?'in':k==='Total Qty Keluar'?'out':''}'><div class='k'>${k}</div><div class='v'>${esc(v)}</div></div>`).join("")}</div>`;
 html+=`<div class='detail-note'><div class='note-box'><div class='note-title'>Lokasi</div><div class='note-value'>${locationSet.size?[...locationSet].slice(0,12).map(esc).join(", "):"-"}</div></div></div>`;
 html+=`<div id="skuNotesRoot"></div>`;
 for(const sheet of [...INVENTORY_PRELOAD_SHEETS,"Barang Masuk","Barang Keluar"]){const rows=bySheet[sheet];html+=`<details class='source-card' data-detail-source='${sheet==='Barang Masuk'?'in':sheet==='Barang Keluar'?'out':''}' ${rows.length?'open':''}><summary><span><span class='badge ${badgeClass(sheet)}'>${sheet}</span></span><span>${rows.length} baris</span></summary><div class='source-body'>${renderSkuDetailTable(sheet,rows)}</div></details>`;}
 html+=`<div id="skuRejectHistoryRoot" data-sku="${esc(sku)}">${renderSkuRejectHistoryCards(null)}</div>`;
-html+="</div>";detail.innerHTML=html;void loadSkuRejectHistory(sku);mountSkuNotes(document.getElementById("skuNotesRoot"),{sku,account:inventoryDraftOwner(),confirmDelete:confirmSkuNoteDelete});}
+html+="</div>";detail.innerHTML=html;skuCatalogPhotoController?.dispose();const photoGeneration=authRequestGeneration;skuCatalogPhotoController=mountSkuCatalogPhoto(document.getElementById('skuCatalogPhotoRoot'),{sku,isCurrent:()=>photoGeneration===authRequestGeneration&&currentSku===sku&&getActivePage()==='detail',fetchFn:async(url,options)=>{const {res,data}=await fetchJsonSafe(url,options);return {ok:res.ok,json:async()=>data};}});void loadSkuRejectHistory(sku);mountSkuNotes(document.getElementById("skuNotesRoot"),{sku,account:inventoryDraftOwner(),confirmDelete:confirmSkuNoteDelete});}
 function renderSkuRejectHistoryCards(data){
  return [['masuk','Barang Masuk Reject',REJECT_IN_COLUMNS,'b-in'],['keluar','Barang Keluar Reject',REJECT_OUT_COLUMNS,'b-out']].map(([kind,label,columns,badge])=>{
   const rows=data?.[kind]||[];

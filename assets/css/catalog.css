@@ -12,3 +12,5 @@
 .catalog-photo{position:relative;aspect-ratio:4/3;overflow:hidden;flex-shrink:0;padding:0}
 .catalog-photo img,.catalog-photo>.catalog-placeholder{position:absolute;inset:0;box-sizing:border-box;width:100%;height:100%;padding:12px;object-fit:contain}
 @media(max-width:600px){.catalog-photo{aspect-ratio:1}.catalog-photo img,.catalog-photo>.catalog-placeholder{padding:8px}}
+
+#skuCatalogPhotoRoot:not([hidden]){display:inline-flex;max-width:100%}#skuCatalogPhotoRoot svg{width:15px;height:15px}#skuCatalogPhotoRoot .catalog-preview [data-sku-photo-image]{min-height:180px;display:flex;align-items:center;justify-content:center}#skuCatalogPhotoRoot .catalog-preview img{max-width:100%}
