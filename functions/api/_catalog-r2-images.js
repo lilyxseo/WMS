@@ -1,0 +1,9 @@
+import {boundedBytes} from './_catalog-image-data.js';
+let cached;
+export async function loadR2CatalogImages(env,{fetchFn=fetch,now=Date.now()}={}){
+ const base=String(env.CATALOG_R2_BASE_URL||'').replace(/\/$/,'');let url;try{url=new URL(base+'/manifest.json');}catch{throw Error('URL katalog R2 tidak valid.');}
+ if(url.protocol!=='https:'||url.username||url.password||url.search||url.hash)throw Error('URL katalog R2 tidak valid.');
+ if(cached?.base===base&&cached.expires>now)return cached.promise;
+ const promise=(async()=>{const response=await fetchFn(url.href,{redirect:'error',signal:AbortSignal.timeout(8000)});if(!response.ok)throw Error('Manifest gambar R2 belum tersedia.');const data=JSON.parse(new TextDecoder().decode(await boundedBytes(response,4*1024*1024)));if(data.version!==1||!Array.isArray(data.images)||data.images.length>20000)throw Error('Manifest gambar R2 tidak valid.');const images=new Map();for(const image of data.images){if(image.source!=='supplement')continue;if(!Number.isInteger(image.row)||image.row<2||image.row>10000000||typeof image.name!=='string'||!image.name.trim()||!/^images\/[a-f0-9]{64}\.(png|jpg|gif|webp)$/.test(image.path)||images.has(image.row))throw Error('Pemetaan gambar R2 tidak valid.');images.set(image.row,{name:image.name,url:base+'/'+image.path});}return {images,version:Math.floor(now/120000),backend:'r2'};})();cached={base,promise,expires:now+120000};try{return await promise;}catch(error){if(cached?.promise===promise)cached=null;throw error;}
+}
+export function allowedR2Image(value,env){try{const base=new URL(String(env.CATALOG_R2_BASE_URL||'').replace(/\/$/,'')+'/'),url=new URL(value);return url.protocol==='https:'&&url.origin===base.origin&&!url.username&&!url.password&&!url.search&&!url.hash&&url.pathname.startsWith(base.pathname)&&/^images\/[a-f0-9]{64}\.(png|jpg|gif|webp)$/.test(url.pathname.slice(base.pathname.length))?url.href:'';}catch{return '';}}

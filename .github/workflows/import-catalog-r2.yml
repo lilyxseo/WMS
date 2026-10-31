@@ -1,0 +1,61 @@
+name: Import catalog XLSX images to R2
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/import-catalog-xlsx.py'
+      - 'scripts/fetch-catalog-workbook.py'
+      - 'scripts/publish-catalog-r2.py'
+      - '.github/workflows/import-catalog-r2.yml'
+  workflow_dispatch:
+    inputs:
+      source_url:
+        description: Public R2 XLSX URL
+        required: true
+        default: 'https://pub-d550f2ac7586491f92f3facc9ed64b1a.r2.dev/KATALOG%20UPDATE.xlsx'
+      bucket:
+        description: Destination R2 bucket
+        required: true
+        default: bydrz
+      publish:
+        description: Publish images and manifest after extraction
+        type: boolean
+        default: true
+permissions:
+  contents: read
+concurrency:
+  group: catalog-r2-import
+  cancel-in-progress: false
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test offline importer
+        run: python -m unittest discover -s tests -p 'test_catalog_xlsx_import.py'
+      - name: Download workbook outside the Worker
+        env:
+          SOURCE_URL: ${{ inputs.source_url || 'https://pub-d550f2ac7586491f92f3facc9ed64b1a.r2.dev/KATALOG%20UPDATE.xlsx' }}
+        run: python scripts/fetch-catalog-workbook.py --url "$SOURCE_URL" --output /tmp/catalog.xlsx
+      - name: Extract and map images
+        run: python scripts/import-catalog-xlsx.py --input /tmp/catalog.xlsx --output /tmp/catalog-extracted
+      - uses: actions/upload-artifact@v4
+        with:
+          name: catalog-extracted-images
+          path: /tmp/catalog-extracted
+          retention-days: 3
+      - name: Install R2 publisher
+        if: github.event_name == 'push' || inputs.publish
+        run: python -m pip install boto3
+      - name: Publish images before manifest
+        if: github.event_name == 'push' || inputs.publish
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          DESTINATION_BUCKET: ${{ inputs.bucket || 'bydrz' }}
+        run: python scripts/publish-catalog-r2.py --directory /tmp/catalog-extracted --bucket "$DESTINATION_BUCKET"

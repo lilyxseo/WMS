@@ -1,10 +1,12 @@
+import {loadR2CatalogImages,allowedR2Image} from './_catalog-r2-images.js';
 import {CATALOG_ID} from './_catalog.js';
 import {boundedBytes,catalogRasterStream} from './_catalog-image-data.js';
 export const catalogName=value=>String(value??'').normalize('NFKC').toLowerCase().replace(/\s+/g,' ').trim();
-export const cellImagesConfigured=env=>Boolean(env.CATALOG_CELL_IMAGES_URL||env.CATALOG_CELL_IMAGES_SECRET);
+export const cellImagesConfigured=env=>Boolean(env.CATALOG_R2_BASE_URL||env.CATALOG_CELL_IMAGES_URL||env.CATALOG_CELL_IMAGES_SECRET);
 export function catalogGoogleImage(value){try{const url=new URL(value);return url.protocol==='https:'&&url.hostname.endsWith('.googleusercontent.com')&&!url.username&&!url.password&&!url.port&&url.href.length<=8192?url.href:'';}catch{return '';}}
 let cached;
 export async function loadCatalogCellImages(env,{fetchFn=fetch,now=Date.now()}={}){
+ if(env.CATALOG_R2_BASE_URL){try{return await loadR2CatalogImages(env,{fetchFn,now});}catch(error){if(!env.CATALOG_CELL_IMAGES_URL)throw error;}}
  const endpoint=String(env.CATALOG_CELL_IMAGES_URL||''),secret=String(env.CATALOG_CELL_IMAGES_SECRET||'');
  let url;try{url=new URL(endpoint);}catch{throw Error('Konfigurasi pembaca gambar sel belum lengkap.');}
  if(url.origin!=='https://script.google.com'||!/^\/macros\/s\/[\w-]+\/exec$/.test(url.pathname)||url.search||url.hash||url.username||url.password||secret.length<32)throw Error('Konfigurasi pembaca gambar sel belum lengkap.');
@@ -20,7 +22,8 @@ export async function loadCatalogCellImages(env,{fetchFn=fetch,now=Date.now()}={
   return {images,version:Math.floor(now/120000)};
  })();cached={endpoint,secret,promise,expires:now+120000};try{return await promise;}catch(error){if(cached?.promise===promise)cached=null;throw error;}
 }
-export async function readCatalogCellImage(url,{fetchFn=fetch}={}){
+export async function readCatalogCellImage(url,{fetchFn=fetch,env={}}={}){
+ const r2=allowedR2Image(url,env);if(r2){const response=await fetchFn(r2,{redirect:'error',signal:AbortSignal.timeout(15000)});if(!response.ok)throw Error('Gambar R2 belum dapat dimuat.');return catalogRasterStream(response);}
  let target=catalogGoogleImage(url);if(!target)throw Error('Sumber gambar tidak valid.');
  for(let attempt=0;attempt<4;attempt++){const response=await fetchFn(target,{redirect:'manual',signal:AbortSignal.timeout(20000)});if([301,302,303,307,308].includes(response.status)){target=catalogGoogleImage(new URL(response.headers.get('location')||'',target).href);if(!target)throw Error('Sumber gambar tidak valid.');continue;}if(!response.ok)throw Error('Gambar sel belum dapat dimuat.');return catalogRasterStream(response);}
  throw Error('Gambar sel belum dapat dimuat.');
