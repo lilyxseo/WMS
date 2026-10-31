@@ -1,3 +1,4 @@
+import {createSearchResponseCache} from './search-response-cache.js?v=__APP_VERSION__';
 import {installClientEvents} from './client-events.js?v=__APP_VERSION__';
 import {createInventoryRefreshCoordinator} from './inventory-refresh.js?v=__APP_VERSION__';
 import { mountCatalog, mountSkuCatalogPhoto } from './catalog.js?v=__APP_VERSION__';
@@ -49,7 +50,7 @@ const scheduleManualRefreshRender=debounce((mode)=>{
 if(mode==='in'||mode==='out')rerenderTableWithScrollRestore(mode,true);
 },180);
 const BARCODE_STATE={barcodeToSku:new Map(),barcodeToName:new Map(),loaded:false,updatedAt:0};
-const SEARCH_STATE={inputValue:"",filterValue:"",page:1,pageSize:50,minChars:2,debounceMs:500,debounceTimer:null,idleTimer:null,abortController:null,runToken:0,lastRenderedHtml:"",completedQuery:null,completedSource:null};
+const SEARCH_STATE={inputValue:"",filterValue:"",page:1,pageSize:50,minChars:2,debounceMs:250,debounceTimer:null,idleTimer:null,abortController:null,runToken:0,lastRenderedHtml:"",completedQuery:null,completedSource:null};
 const SCANNER_STATE={generation:0,instance:null,isScannerRunning:false,isClosing:false,hasScanned:false,targetInputId:"searchInput",resultHandler:null,lastSearchSku:"",lastSearchNavigationAt:0,libraryPromise:null};
 const SEARCH_SCAN_NAVIGATION_LOCK_MS=750;
 const PAGE_REQUEST_TIMEOUT_MS=12000;
@@ -171,6 +172,7 @@ return isDeveloperUser()||isPreviewBypassLoginEnabled()||isDeveloperRoleLike()||
 }
 window.currentUser=getCurrentUser();
 const nativeFetch=window.fetch.bind(window);
+const searchResponseCache=createSearchResponseCache({getOwner:()=>authRequestGeneration});
 const clientEvents=installClientEvents({getOwner:()=>user?authRequestGeneration+':'+currentUserIdentity().user_id:'',send:async(events,owner)=>{const generation=authRequestGeneration,headers=await getAuthHeaders();if(!user||authRequestGeneration+':'+currentUserIdentity().user_id!==owner||generation!==authRequestGeneration)return;const response=await nativeFetch('/api/client-events',{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify({events}),keepalive:true});if(!response.ok)throw Error('Diagnostic storage unavailable');}});
 window.__clientEvents=clientEvents;
 const AUTHENTICATED_INVENTORY_PATHS=new Set(['/api/asset-store','/api/catalog-image','/api/catalog','/api/work-drafts','/api/operations','/api/activity-users','/api/notification-settings','/api/files','/api/archive-sources','/api/archive-data','/api/stock-minus-totals','/api/dashboard-summary','/api/dashboard-recent-transactions','/api/dashboard-monthly-insight','/api/movement/summary','/api/inventory-sync-status','/api/inventory-version','/api/dashboard-stock-totals','/api/inventory-accuracy','/api/balikan-store/all','/api/barang-reject','/api/reject-entry','/api/sync/inventory/netsuite','/api/sync/inventory/all','/api/sync/inventory/kartu-stok','/api/sync/inventory/barang-masuk','/api/sync/inventory/barang-keluar','/api/sync/inventory/rpl','/api/sync/inventory/bulky','/api/kartu-stok','/api/barang-masuk','/api/barang-keluar','/api/rpl','/api/bulky','/api/inventory-sku-detail','/api/sku-notes','/api/barcode-lookup']);
@@ -184,7 +186,7 @@ window.fetch=async(input,init={})=>{
     if(AUTHENTICATED_INVENTORY_PATHS.has(apiPath)&&!headers.has('Authorization')){
       throw new Error(`Sesi autentikasi diperlukan untuk ${apiPath}`);
     }
-    return clientEvents.request(nativeFetch,input,{...init,headers});
+    return clientEvents.request((url,options)=>searchResponseCache.request(nativeFetch,url,options),input,{...init,headers});
   }
   return nativeFetch(input,init);
 };
@@ -1719,7 +1721,7 @@ async function checkInventoryVersion(){
 if(!user||document.hidden||navigator.onLine===false)return;
 if(INVENTORY_VERSION_STATE.inFlight)return INVENTORY_VERSION_STATE.inFlight;
 const controller=new AbortController();INVENTORY_VERSION_STATE.controller=controller;const generation=++INVENTORY_VERSION_STATE.generation;
-INVENTORY_VERSION_STATE.inFlight=(async()=>{try{const {res,data}=await fetchJsonSafe('/api/inventory-version',{signal:controller.signal});if(!res.ok||data?.success===false)throw new Error(data?.message||'Gagal memeriksa versi inventory');if(generation!==INVENTORY_VERSION_STATE.generation)return;const next=comparableInventoryVersions(data),previous=INVENTORY_VERSION_STATE.versions;INVENTORY_VERSION_STATE.versions=next;INVENTORY_VERSION_STATE.lastCheckAt=Date.now();if(data.syncStatus?.last_success_at&&Number.isFinite(Date.parse(data.syncStatus.last_success_at))){window.__inventorySyncStatus=data.syncStatus;inventorySyncStatusState='loaded';renderInventorySyncStatus();}if(previous){const changed=changedInventorySources(previous,next);if(changed.some(key=>key!=='warningVersion')){DASHBOARD_SUMMARY=null;DASHBOARD_MONTHLY_INSIGHT=null;SEARCH_STATE.completedQuery=null;try{localStorage.removeItem(STOK_MINUS_CACHE_KEY);localStorage.removeItem(ABC_ANALYSIS_CACHE_KEY);}catch{}detailHydrationNeedsRefresh=true;STOCK_AGING_STATE.loaded=false;for(const page of ['abc-analisis','stok-minus','movement','cycle-count'])LOADED_DETAIL_PAGES.delete(page);}if(changed.includes('barangMasukVersion'))TRANSACTION_PAGE_CACHE.markSourceStale('barang_masuk');if(changed.includes('barangKeluarVersion'))TRANSACTION_PAGE_CACHE.markSourceStale('barang_keluar');if(changed.some(key=>['kartuStokVersion','rplVersion','bulkyVersion'].includes(key))){LOCATION_STATE.summary=null;LOCATION_STATE.pageCache.clear();LOCATION_STATE.detailCache.clear();STARTUP_PREFETCH.warningSummary=null;}changed.forEach(key=>INVENTORY_VERSION_STATE.pendingSources.add(key));}if(INVENTORY_VERSION_STATE.pendingSources.size&&!inventoryAutoRefreshBlocked()){const pending=[...INVENTORY_VERSION_STATE.pendingSources];const applied=await refreshVisibleInventoryPage(pending,generation);if(applied!==false&&generation===INVENTORY_VERSION_STATE.generation)pending.forEach(key=>INVENTORY_VERSION_STATE.pendingSources.delete(key));}}catch(err){if(err?.name!=='AbortError')console.warn('[InventoryVersion]',err?.message||err);}finally{if(generation===INVENTORY_VERSION_STATE.generation){INVENTORY_VERSION_STATE.inFlight=null;INVENTORY_VERSION_STATE.controller=null;}}})();
+INVENTORY_VERSION_STATE.inFlight=(async()=>{try{const {res,data}=await fetchJsonSafe('/api/inventory-version',{signal:controller.signal});if(!res.ok||data?.success===false)throw new Error(data?.message||'Gagal memeriksa versi inventory');if(generation!==INVENTORY_VERSION_STATE.generation)return;const next=comparableInventoryVersions(data),previous=INVENTORY_VERSION_STATE.versions;INVENTORY_VERSION_STATE.versions=next;INVENTORY_VERSION_STATE.lastCheckAt=Date.now();if(data.syncStatus?.last_success_at&&Number.isFinite(Date.parse(data.syncStatus.last_success_at))){window.__inventorySyncStatus=data.syncStatus;inventorySyncStatusState='loaded';renderInventorySyncStatus();}if(previous){const changed=changedInventorySources(previous,next);if(changed.some(key=>key!=='warningVersion')){DASHBOARD_SUMMARY=null;DASHBOARD_MONTHLY_INSIGHT=null;SEARCH_STATE.completedQuery=null;if(typeof searchResponseCache!=='undefined')searchResponseCache.clear();try{localStorage.removeItem(STOK_MINUS_CACHE_KEY);localStorage.removeItem(ABC_ANALYSIS_CACHE_KEY);}catch{}detailHydrationNeedsRefresh=true;STOCK_AGING_STATE.loaded=false;for(const page of ['abc-analisis','stok-minus','movement','cycle-count'])LOADED_DETAIL_PAGES.delete(page);}if(changed.includes('barangMasukVersion'))TRANSACTION_PAGE_CACHE.markSourceStale('barang_masuk');if(changed.includes('barangKeluarVersion'))TRANSACTION_PAGE_CACHE.markSourceStale('barang_keluar');if(changed.some(key=>['kartuStokVersion','rplVersion','bulkyVersion'].includes(key))){LOCATION_STATE.summary=null;LOCATION_STATE.pageCache.clear();LOCATION_STATE.detailCache.clear();STARTUP_PREFETCH.warningSummary=null;}changed.forEach(key=>INVENTORY_VERSION_STATE.pendingSources.add(key));}if(INVENTORY_VERSION_STATE.pendingSources.size&&!inventoryAutoRefreshBlocked()){const pending=[...INVENTORY_VERSION_STATE.pendingSources];const applied=await refreshVisibleInventoryPage(pending,generation);if(applied!==false&&generation===INVENTORY_VERSION_STATE.generation)pending.forEach(key=>INVENTORY_VERSION_STATE.pendingSources.delete(key));}}catch(err){if(err?.name!=='AbortError')console.warn('[InventoryVersion]',err?.message||err);}finally{if(generation===INVENTORY_VERSION_STATE.generation){INVENTORY_VERSION_STATE.inFlight=null;INVENTORY_VERSION_STATE.controller=null;}}})();
 return INVENTORY_VERSION_STATE.inFlight;
 }
 const SPREADSHEET_LIVE_STATE={page:'',checkedAt:0,inFlight:false};
@@ -1918,7 +1920,7 @@ if(SEARCH_STATE.abortController)SEARCH_STATE.abortController.abort();
 const token=++SEARCH_STATE.runToken;
 SEARCH_STATE.debounceTimer=setTimeout(()=>{
 const run=()=>{if(token!==SEARCH_STATE.runToken)return;SEARCH_STATE.filterValue=SEARCH_STATE.inputValue;runSearch();};
-if(typeof requestIdleCallback==="function"){requestIdleCallback(run,{timeout:250});return;}
+
 if(SEARCH_STATE.idleTimer)clearTimeout(SEARCH_STATE.idleTimer);
 SEARCH_STATE.idleTimer=setTimeout(run,0);
 },SEARCH_STATE.debounceMs);
@@ -2576,7 +2578,7 @@ async function refreshCycleCount(){delete MODULE_CACHE_MEMORY[MODULE_CACHE_KEYS.
 async function refreshMovement(){delete MODULE_CACHE_MEMORY[MODULE_CACHE_KEYS.movement];MOVEMENT_STATE.suggestionCache={key:'',rows:[],count:0};MOVEMENT_HISTORY_REMOTE.loaded=false;const results=await Promise.allSettled([refreshInventoryGroupFull(),ensureMovementHistoryLoaded(),refreshMovementTotal()]);const failure=results.find(result=>result.status==='rejected');if(failure)throw failure.reason;renderMovementPage();}
 async function refreshBalikanStore(){delete MODULE_CACHE_MEMORY[MODULE_CACHE_KEYS.balikanStore];return loadBalikanRows({background:true,force:true,throwOnError:true});}
 async function refreshSkuDetail(sku=currentSku){if(!sku)throw new Error('SKU tidak tersedia');return showDetail(sku,{background:true,throwOnError:true});}
-async function refreshSearch(){if((SEARCH_STATE.inputValue||searchInput?.value||'').trim())await runSearch();}
+async function refreshSearch(){searchResponseCache.clear();if((SEARCH_STATE.inputValue||searchInput?.value||'').trim())await runSearch();}
 async function softRefreshArchive(){await loadArchiveSources({force:true});ARCHIVE_STATE.controller?.abort();ARCHIVE_STATE.requestId++;return refreshArchive();}
 async function softRefreshAsset(){ASSET_STORE_STATE.controller?.abort();ASSET_STORE_STATE.requestId++;return refreshAssetStore();}
 async function refreshBarangReject(){const result=await loadBarangRejectData({force:true,background:true});if(!result)throw new Error('Gagal memuat Barang Reject');}
@@ -2611,6 +2613,7 @@ const generation=authRequestGeneration;return runInventoryRefresh({jobs,fetchJso
 }
 
 async function triggerManualRefresh(){
+searchResponseCache.clear();
 if(REFRESH_STATE.refreshPromise)return REFRESH_STATE.refreshPromise;
 const generation=authRequestGeneration,activePage=getActivePage?.()||'dashboard',scrollState=captureActivePageScroll(activePage);
 const refresh=SOFT_REFRESH_ROUTES[activePage]||(()=>rerenderCurrentPage({fromCache:false}));

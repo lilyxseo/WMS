@@ -12,6 +12,7 @@ on:
       - 'scripts/deploy-sku-notes.mjs'
       - 'scripts/deploy-transaction-search.mjs'
       - 'supabase/migrations/20261019000000_transaction_search.sql'
+      - 'supabase/migrations/20261031000000_inventory_search_fast.sql'
       - 'supabase/migrations/20261019010000_warning_snapshot_signatures.sql'
       - 'scripts/deploy-warning-rules.mjs'
       - 'scripts/audit-inventory-warnings.mjs'

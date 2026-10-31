@@ -46,6 +46,11 @@ export async function onRequestGet({ request, env }) {
   try {
     const dbStartedAt = Date.now();
     const config = getSecretSupabaseConfig(env);
+    if(q.length>200||selected&&!SOURCES.some(([name])=>name===selected))return json({success:false,message:'Filter pencarian tidak valid.'},400);
+    const rpc=await fetch(`${config.url}/rest/v1/rpc/wms_inventory_search`,{method:'POST',headers:{apikey:config.key,Authorization:`Bearer ${config.key}`,'Content-Type':'application/json'},body:JSON.stringify({p_query:q,p_source:selected,p_limit:100}),signal:AbortSignal.timeout(10000)});
+    const result=await rpc.json().catch(()=>null);
+    if(rpc.ok&&Array.isArray(result)){const metrics={authMs,dbMs:Date.now()-dbStartedAt,totalMs:Date.now()-startedAt,returnedRows:result.length};return json({success:true,source:'supabase',mode:'database_rpc',rows:result,total:result.length,metrics});}
+    if(!['PGRST202','42883'].includes(result?.code))throw Error('Database search unavailable');
     const active = SOURCES.filter(([name]) => !selected || name === selected);
     const batches = await Promise.all(active.map(async ([source, table]) => {
       const isStockSource = ['inventory_rpl', 'inventory_bulky', 'inventory_kartu_stok'].includes(table);
@@ -54,7 +59,7 @@ export async function onRequestGet({ request, env }) {
         : ['sku', 'nama_barang', 'from_location', 'to_location'];
       const searchQuery = buildInventorySearchQuery(q, fields);
       const selectedFields = isStockSource ? 'sku,nama_barang,lokasi_bulky,stok_akhir' : 'sku,nama_barang';
-      const response = await fetch(`${config.url}/rest/v1/${table}?select=${selectedFields}${searchQuery}&limit=50`, { headers: { apikey: config.key, Authorization: `Bearer ${config.key}` } });
+      const response = await fetch(`${config.url}/rest/v1/${table}?select=${selectedFields}${searchQuery}&limit=50`, { headers: { apikey: config.key, Authorization: `Bearer ${config.key}` },signal:AbortSignal.timeout(10000) });
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(payload?.message || `Supabase HTTP ${response.status}`);
       return (Array.isArray(payload) ? payload : []).map(row => ({
