@@ -25,3 +25,11 @@ Gunakan akses WMS Developer/PIC Inventory yang sudah diotorisasi: `GET /api/acti
 Middleware transaksi membedakan tahap `identity`, `register`, `snapshot`, dan `checkpoint` melalui respons `AUDIT_PRECHECK_FAILED`. `dataNotSent:true` berarti handler perubahan belum dijalankan. Error sementara (timeout, jaringan, 429/5xx) mendapat satu retry pada pembacaan/pencatatan audit; insert awal memakai UUID yang sama dan `on_conflict=id` dengan `ignore-duplicates`, sehingga respons insert yang hilang tidak membuat log kedua. Snapshot harus tetap tersedia sebelum edit diteruskan. Operasi perubahan barang tidak otomatis diulang. Jika audit tetap gagal, perubahan ditahan dan form tetap bisa diperiksa/dicoba kembali. Error konfigurasi/validasi tidak diulang otomatis.
 
 Filter login/navigasi otomatis memilih feed history. Tab transaksi tetap membaca `wms_operations`; riwayat pengguna membaca `activity_logs`. Nama/ID/role untuk event baru berasal dari server. Endpoint browser menerima LOGIN/AUTO_LOGIN hanya dari sesi yang valid, dan event tetap diberi `verified:false` sebagai laporan client.
+
+## Default Semua aktivitas
+
+Halaman sekarang membuka `view:all` / `GET /api/activity-feed`, yang membaca view privat `wms_activity_feed`: UNION ALL riwayat `activity_logs` dan audit `wms_operations`. Pengurutan waktu, filter, count, dan offset diterapkan sekali pada hasil gabungan di PostgreSQL. Tab khusus transaksi/riwayat tetap tersedia. Audit server mempertahankan `verified:true` beserta rincian before/after; riwayat browser tetap `verified:false`.
+
+Migrasi `20261031010000_unified_activity_feed.sql` membuat tabel riwayat jika belum ada dan view gabungan tanpa menghapus data. Workflow account-work menerapkannya sebelum fitur gabungan tersedia. Jika view belum terdeploy, API menampilkan kegagalan konfigurasi yang eksplisit, tidak menampilkan feed transaksi seolah-olah itu semua aktivitas.
+
+Asset JS/CSS sekarang wajib revalidasi; entry main dan logger memiliki cache-buster tambahan untuk keluar dari cache immutable lama ketika `__APP_VERSION__` belum di-inject oleh build. Perubahan ini tidak membuktikan deploy produksi sudah selesai; periksa status workflow sebelum menyatakan fitur aktif.

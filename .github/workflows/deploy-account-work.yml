@@ -4,6 +4,7 @@ on:
     branches: [main, feat/operation-log-cloud-drafts]
     paths:
       - 'supabase/migrations/20261026000000_operations_and_work_drafts.sql'
+      - 'supabase/migrations/20261031010000_unified_activity_feed.sql'
       - 'scripts/deploy-account-work.mjs'
       - '.github/workflows/deploy-account-work.yml'
   workflow_dispatch:
