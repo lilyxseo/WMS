@@ -35,7 +35,7 @@ function normalize(input) {
   const id = input.id || input.activityId || createActivityId();
   const details = clean({ ...(input.metadata || {}), ...(input.details || {}), ...(input.changes ? { changes: input.changes } : {}) });
   return clean({
-    id, timestamp: input.timestamp || new Date().toISOString(),
+    id, user_id:input.user_id||null, timestamp: input.timestamp || new Date().toISOString(),
     user: input.user || input.user_name || input.user_id || 'Unknown', role: input.role || 'User',
     isDeveloper: Boolean(input.isDeveloper), sessionId: input.sessionId || null,
     action, category: input.category || ({ LOGIN: 'AUTH', AUTO_LOGIN: 'AUTH', LOGIN_FAILED: 'AUTH', PAGE_VIEW: 'NAVIGATION', LOGOUT: 'AUTH' }[action] || 'OPERATION'),
