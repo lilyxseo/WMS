@@ -15,7 +15,8 @@ test('authenticated startup uses bounded priority queues and first-page requests
   assert.match(section, /if\(!isAuthStateReady\|\|!user\)return null/);
   assert.match(section, /if\(!authHeaders\.Authorization\)return null/);
   assert.match(section, /priority1/);
-  assert.match(section, /concurrency:2/);
+  assert.match(section, /concurrency:1/);
+  assert.match(section, /location\.pathname==='\/file-manager'/);
   assert.doesNotMatch(section, /mode=full|hydrateAllDataOnInit|preloadMainData/);
 });
 

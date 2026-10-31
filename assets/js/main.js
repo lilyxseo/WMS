@@ -465,6 +465,7 @@ async function prefetchLocationFirstPage(signal){const params={page:'1',limit:'2
 
 async function startInitialPrefetch(){
 if(!isAuthStateReady||!user)return null;
+if(location.pathname==='/file-manager')return null;
 const authHeaders=await getAuthHeaders().catch(() => ({}));
 if(!authHeaders.Authorization)return null;
 if(STARTUP_PREFETCH.promise)return STARTUP_PREFETCH.promise;
@@ -473,9 +474,9 @@ STARTUP_PREFETCH.promise=(async()=>{
 await checkInventoryVersion().catch(()=>null);
 // Dashboard owns its requests. Startup prefetch must not race the route loader.
 const priority1=[{label:'barangMasukMs',run:s=>prefetchTransactionFirstPage('in',s)},{label:'barangKeluarMs',run:s=>prefetchTransactionFirstPage('out',s)}];
-await runPrefetchQueue(priority1,{concurrency:2,signal:controller.signal,generation});
-if(!isConstrainedConnection())await runPrefetchQueue([{label:'locationsMs',lowPriority:true,run:s=>prefetchLocationFirstPage(s)},{label:'warningMs',lowPriority:true,run:async s=>{const {res,data}=await fetchJsonSafe('/api/inventory-warning-summary',{signal:s});if(!res.ok||!data?.success)throw new Error(data?.message||`HTTP ${res.status}`);STARTUP_PREFETCH.warningSummary={...data,sourceVersion:{...INVENTORY_VERSION_STATE.versions},fetchedAt:Date.now()};window.__inventoryWarningSummary=STARTUP_PREFETCH.warningSummary;}}],{concurrency:2,signal:controller.signal,generation});
-if(!isConstrainedConnection())await runPrefetchQueue([{label:'barangMasukPage2Ms',lowPriority:true,run:s=>prefetchTransactionSecondPage('in',s)},{label:'barangKeluarPage2Ms',lowPriority:true,run:s=>prefetchTransactionSecondPage('out',s)}],{concurrency:2,signal:controller.signal,generation});
+await runPrefetchQueue(priority1,{concurrency:1,signal:controller.signal,generation});
+if(!isConstrainedConnection())await runPrefetchQueue([{label:'locationsMs',lowPriority:true,run:s=>prefetchLocationFirstPage(s)},{label:'warningMs',lowPriority:true,run:async s=>{const {res,data}=await fetchJsonSafe('/api/inventory-warning-summary',{signal:s});if(!res.ok||!data?.success)throw new Error(data?.message||`HTTP ${res.status}`);STARTUP_PREFETCH.warningSummary={...data,sourceVersion:{...INVENTORY_VERSION_STATE.versions},fetchedAt:Date.now()};window.__inventoryWarningSummary=STARTUP_PREFETCH.warningSummary;}}],{concurrency:1,signal:controller.signal,generation});
+if(!isConstrainedConnection())await runPrefetchQueue([{label:'barangMasukPage2Ms',lowPriority:true,run:s=>prefetchTransactionSecondPage('in',s)},{label:'barangKeluarPage2Ms',lowPriority:true,run:s=>prefetchTransactionSecondPage('out',s)}],{concurrency:1,signal:controller.signal,generation});
 startupDebug('totalPrefetchMs',STARTUP_PREFETCH.startedAt);
 })().finally(()=>{if(generation===STARTUP_PREFETCH.generation)STARTUP_PREFETCH.promise=null;});
 return STARTUP_PREFETCH.promise;
@@ -866,7 +867,7 @@ if(getActivePage()===page)rerenderCurrentPage({force:true});
 renderPageDataStatus(page);
 });return state.promise;
 }
-function showPage(page){syncBalikanShortcutListeners(page==="balikan-store");if(page!=='anomaly'){warningEvidenceController?.dispose();warningEvidenceController=null;}if(page!=='detail'){skuCatalogPhotoController?.dispose();skuCatalogPhotoController=null;}if(page==='balikan-store')setupBalikanEntry();if(page!=="search")closeScannerModal();
+function showPage(page){syncBalikanShortcutListeners(page==="balikan-store");if(page==='file-manager')cancelStartupPrefetch();if(page!=='anomaly'){warningEvidenceController?.dispose();warningEvidenceController=null;}if(page!=='detail'){skuCatalogPhotoController?.dispose();skuCatalogPhotoController=null;}if(page==='balikan-store')setupBalikanEntry();if(page!=="search")closeScannerModal();
 document.querySelectorAll(".page").forEach(p=>p.classList.add("hidden"));document.getElementById(`page-${page}`)?.classList.remove("hidden");
 document.querySelectorAll(".side-link[data-page]").forEach(b=>b.classList.toggle("active",b.dataset.page===page||(page==="barang-reject"&&b.dataset.page===getBarangRejectNavPage())));
 syncActiveSidebarParent(page);invalidateInactiveTransactionRequests(page);setMainContentLoading(false);

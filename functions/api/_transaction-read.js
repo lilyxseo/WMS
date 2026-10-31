@@ -136,7 +136,7 @@ export async function transactionPage(config, table, {
   const searchRpc = search.trim() && ['inventory_barang_masuk','inventory_barang_keluar'].includes(table)
     ? 'rpc/wms_search_'+table.replace('inventory_','') : '';
   let useSearchRpc=Boolean(searchRpc);
-  const rows = [];
+  let rows = [],readCount=0;const skuSet=new Set(),facets=new Set();let totalRows=0,totalQty=0,latestDate=null,oldestDate=null,invalidDateCount=0;
   let sourceTotal = null, lastBatchSize=TRANSACTION_READ_BATCH_SIZE;
   for (let offset = 0; ; offset += lastBatchSize) {
     const query=`?select=${columns}${filterQuery}&order=source_row_number.desc&offset=${offset}&limit=${TRANSACTION_READ_BATCH_SIZE}`;
@@ -146,27 +146,20 @@ export async function transactionPage(config, table, {
       // Old deployments remain readable during rollout. Never turn a timeout or
       // permission failure into another full scan.
       if(!useSearchRpc||!['PGRST202','42883'].includes(error.code))throw error;
-      useSearchRpc=false;rows.length=0;sourceTotal=null;offset=0;lastBatchSize=0;continue;
+      useSearchRpc=false;rows=[];readCount=0;skuSet.clear();facets.clear();totalRows=0;totalQty=0;latestDate=null;oldestDate=null;invalidDateCount=0;sourceTotal=null;offset=0;lastBatchSize=0;continue;
     }
     if (offset === 0) sourceTotal = exactTotal(result.response, result.payload.length);
-    rows.push(...result.payload);lastBatchSize=result.payload.length;
-    if (!result.payload.length || rows.length >= sourceTotal) break;
+    readCount+=result.payload.length;lastBatchSize=result.payload.length;
+    const ordered=orderTransactionRows(result.payload,selectedSort);invalidDateCount+=ordered.filter(item=>!item.parsedDate.valid).length;
+    const scoped=ordered.filter(({row,parsedDate})=>transactionRowMatchesSearch(row,search,searchFields)&&(!startDate&&!endDate||parsedDate.valid&&(!startDate||parsedDate.value>=startDate)&&(!endDate||parsedDate.value<=endDate)));
+    const batch=transactionFilterRows(scoped,{columnRules,facet,sortField,sortDir});for(const value of batch.facetValues||[])facets.add(value);
+    for(const item of batch.filtered){totalRows++;totalQty+=Number(item.row.qty)||0;const sku=String(item.row.sku||'').trim().toUpperCase();if(sku)skuSet.add(sku);const date=item.parsedDate.value;if(item.parsedDate.valid){if(!latestDate||date>latestDate)latestDate=date;if(!oldestDate||date<oldestDate)oldestDate=date;}}
+    if(!facet){rows.push(...batch.filtered.map(item=>item.row));if(!full){let top=orderTransactionRows(rows,selectedSort);if(sortField)top=transactionFilterRows(top,{sortField,sortDir}).filtered;rows=top.slice(0,page*limit).map(item=>item.row);}}
+    if(!result.payload.length||readCount>=sourceTotal)break;
   }
-  const ordered = orderTransactionRows(rows, selectedSort);
-  const scoped = ordered.filter(({ row, parsedDate }) => transactionRowMatchesSearch(row, search, searchFields)
-    && (!startDate && !endDate || parsedDate.valid && (!startDate || parsedDate.value >= startDate) && (!endDate || parsedDate.value <= endDate)));
-  const {filtered,facetValues}=transactionFilterRows(scoped,{columnRules,facet,sortField,sortDir});
-  const validDates = filtered.filter(item => item.parsedDate.valid).map(item => item.parsedDate.value);
-  const summary = {
-    totalRows: filtered.length,
-    totalQty: filtered.reduce((sum, item) => sum + (Number(item.row.qty) || 0), 0),
-    totalSku: new Set(filtered.map(item => String(item.row.sku || '').trim().toUpperCase()).filter(Boolean)).size,
-    latestDate: validDates.length ? validDates.reduce((max, date) => date > max ? date : max) : null,
-    oldestDate: validDates.length ? validDates.reduce((min, date) => date < min ? date : min) : null,
-    invalidDateCount: ordered.filter(item => !item.parsedDate.valid).length,
-  };
-  const offset = (page - 1) * limit;
-  return { facetValues,rows: (facet ? [] : full ? filtered : filtered.slice(offset, offset + limit)).map(item => item.row), total: filtered.length, summary };
+  let ordered=orderTransactionRows(rows,selectedSort);if(sortField)ordered=transactionFilterRows(ordered,{sortField,sortDir}).filtered;
+  const summary={totalRows,totalQty,totalSku:skuSet.size,latestDate,oldestDate,invalidDateCount},offset=(page-1)*limit;
+  return {facetValues:facet?[...facets].sort():undefined,rows:(full?ordered:ordered.slice(offset,offset+limit)).map(item=>item.row),total:totalRows,summary};
 }
 
 // Only two scalar columns cross the database/backend boundary for these cards;

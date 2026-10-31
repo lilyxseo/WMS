@@ -2911,3 +2911,25 @@ html[data-accent] .account-card .account-profile-link strong{color:var(--text)}
 #page-stats .stats-location-text{display:block;max-width:100%;white-space:normal;overflow-wrap:anywhere;word-break:normal;line-height:1.6}
 #mainContentPages #page-stats .stats-table-wrap tbody td{vertical-align:top}
 #mainContentPages #page-stats .stats-table-wrap td.ui-col-sku{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* File names and actions remain contained; mobile files use labelled cards. */
+#mainContentPages .file-manager,#mainContentPages .file-directory{min-width:0;max-width:100%}
+#mainContentPages .file-text-pad{padding:16px;border:1px solid var(--line);border-radius:12px;margin-top:16px;min-width:0}
+#mainContentPages .file-text-pad input,#mainContentPages .file-text-pad textarea{max-width:100%;box-sizing:border-box;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px;font:inherit}
+#mainContentPages .file-text-pad .row{flex-wrap:wrap;gap:8px}
+#mainContentPages .file-table td{white-space:normal;overflow-wrap:anywhere;min-width:0}
+@media(max-width:650px){
+ #mainContentPages .file-table{display:block;min-width:0!important;width:100%!important;table-layout:auto}
+ #mainContentPages .file-table thead{display:none}
+ #mainContentPages .file-table tbody{display:grid;gap:10px;padding:10px}
+ #mainContentPages .file-table tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border:1px solid var(--line);border-radius:10px;padding:12px;gap:10px;min-width:0}
+ #mainContentPages .file-table td{display:block!important;width:auto!important;max-width:none!important;padding:0!important;border:0!important;text-align:left!important;min-width:0}
+ #mainContentPages .file-table td:first-child,#mainContentPages .file-table td:last-child,#mainContentPages .file-table td[colspan]{grid-column:1/-1}
+ #mainContentPages .file-table td:nth-child(2)::before{content:'Ukuran';display:block;color:var(--muted);font-size:10px;margin-bottom:4px}
+ #mainContentPages .file-table td:nth-child(3)::before{content:'Pengunggah';display:block;color:var(--muted);font-size:10px;margin-bottom:4px}
+ #mainContentPages .file-table td:nth-child(4)::before{content:'Tanggal';display:block;color:var(--muted);font-size:10px;margin-bottom:4px}
+ #mainContentPages .file-table td:nth-child(4){grid-column:1/-1}
+ #mainContentPages .file-name-cell{align-items:flex-start}
+ #mainContentPages .file-actions{display:flex;flex-wrap:wrap;gap:6px}
+ #mainContentPages .file-text-pad input,#mainContentPages .file-text-pad textarea{font-size:16px}
+ #mainContentPages .file-toolbar label{min-width:0}
+}
