@@ -28,13 +28,14 @@ export async function getNoteIdentity(request, env) {
   const token=auth.slice(7).trim();if(!token)return null;
   const developer=await developerIdentity(token,env);if(developer)return developer;
   const config=getPublishableSupabaseConfig(env);
-  const response=await fetch(`${config.url}/auth/v1/user`,{headers:{apikey:config.key,Authorization:`Bearer ${token}`}});
+  const response=await fetch(`${config.url}/auth/v1/user`,{headers:{apikey:config.key,Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(10000)});
+  if(response.status===429||response.status>=500){const error=Error('Identity lookup unavailable');error.status=response.status;throw error;}
   if(!response.ok)return null;
   const user=await response.json();if(!user?.id)return null;
   const server=getSecretSupabaseConfig(env);
   const params=new URLSearchParams({select:'full_name,username,role',id:`eq.${user.id}`,limit:'1'});
-  const profileResponse=await fetch(`${server.url}/rest/v1/users?${params}`,{headers:{apikey:server.key,Authorization:`Bearer ${server.key}`}});
-  if(!profileResponse.ok)throw new Error('Profile read failed');
+  const profileResponse=await fetch(`${server.url}/rest/v1/users?${params}`,{headers:{apikey:server.key,Authorization:`Bearer ${server.key}`},signal:AbortSignal.timeout(10000)});
+  if(!profileResponse.ok){const error=Error('Profile read failed');error.status=profileResponse.status;throw error;}
   const profiles=await profileResponse.json(),profile=profiles[0]||{};
   return {id:user.id,name:String(profile.full_name||profile.username||user.email||'User'),role:String(profile.role||'User')};
 }

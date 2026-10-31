@@ -18,3 +18,7 @@ Token, cookie, kredensial, query URL dan data file disensor di client dan server
 ## Membaca error untuk diagnosis
 
 Gunakan akses WMS Developer/PIC Inventory yang sudah diotorisasi: `GET /api/activity-log?action=CLIENT_ERROR&limit=25` dengan header Authorization sesi. Endpoint yang sama mendukung `from`, `to`, `module`, `search`, dan `offset`. Atau baca `activity_logs` melalui akses database yang diberikan untuk sesi Codex. Secret tidak boleh ditempel di percakapan/repository. Tersimpannya log tidak otomatis memberikan Codex akses produksi; akses dan jaringan tetap harus tersedia saat diagnosis.
+
+## Edit ditahan sebelum data dikirim
+
+Middleware transaksi membedakan tahap `identity`, `register`, `snapshot`, dan `checkpoint` melalui respons `AUDIT_PRECHECK_FAILED`. `dataNotSent:true` berarti handler perubahan belum dijalankan. Error sementara (timeout, jaringan, 429/5xx) mendapat satu retry pada pembacaan/pencatatan audit; insert awal memakai UUID yang sama dan `on_conflict=id` dengan `ignore-duplicates`, sehingga respons insert yang hilang tidak membuat log kedua. Snapshot harus tetap tersedia sebelum edit diteruskan. Operasi perubahan barang tidak otomatis diulang. Jika audit tetap gagal, perubahan ditahan dan form tetap bisa diperiksa/dicoba kembali. Error konfigurasi/validasi tidak diulang otomatis.
