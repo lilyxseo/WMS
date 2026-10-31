@@ -18,8 +18,8 @@ async function readCatalogRows(env,dependencies,{force=false}={}){
  })();if(!dependencies.fetchFn)snapshotCache={promise,expires:now+60000};try{return await promise;}catch(error){if(snapshotCache?.promise===promise)snapshotCache=null;throw error;}
 }
 const normalized=value=>String(value??'').normalize('NFKC').toLowerCase().replace(/\s+/g,' ').trim();
-export function catalogPageOptions(request){const params=new URL(request.url).searchParams,query=String(params.get('q')||'').trim().slice(0,200),sku=String(params.get('sku')||'').trim().slice(0,100),source=params.get('source')||'all',image=params.get('image')||'all',page=Number(params.get('page')||1),pageSize=Number(params.get('pageSize')||24);if(!['all','main','supplement'].includes(source)||!['all','yes','no'].includes(image)||!Number.isInteger(page)||page<1||!Number.isInteger(pageSize)||pageSize<1||pageSize>48)throw Error('Filter katalog tidak valid.');return {query,sku,source,image,page,pageSize,force:params.get('refresh')==='1'};}
-export async function handleCatalog({request,env},dependencies={}){
+export function catalogPageOptions(request){const params=new URL(request.url).searchParams,query=String(params.get('q')||'').trim().slice(0,200),sku=String(params.get('sku')||'').trim().slice(0,100),source=params.get('source')||'all',image=params.get('image')||'all',page=Number(params.get('page')||1),pageSize=Number(params.get('pageSize')||24);if(!['all','main','supplement'].includes(source)||!['all','yes','no'].includes(image)||!Number.isInteger(page)||page<1||!Number.isInteger(pageSize)||pageSize<1||pageSize>48)throw Error('Filter katalog tidak valid.');return {query,sku,source,image,page,pageSize,force:params.get('refresh')==='1',progressive:params.get('progressive')==='1'};}
+export async function handleCatalog({request,env,waitUntil},dependencies={}){
  try{
   if(!await (dependencies.identity||getNoteIdentity)(request,env))return json({success:false,message:'Silakan login kembali.'},401);
   if(request.method!=='GET')return json({success:false,message:'Metode tidak tersedia.'},405);
@@ -32,10 +32,13 @@ export async function handleCatalog({request,env},dependencies={}){
    try{const manifest=await (dependencies.cellImages||loadCatalogCellImages)(env,{fetchFn:dependencies.fetchFn||fetch});return rows.map(item=>{const image=manifest.images.get(item.sourceRow);return item.source==='supplement'&&!item.imageUrl&&image&&catalogName(item.name)===catalogName(image.name)?{...item,imageUrl:'/api/catalog-image?source=supplement&row='+item.sourceRow+'&v='+manifest.version}:item;});}
    catch(error){imageWarning=error.message||'Gambar sel belum dapat dimuat.';return rows;}
   };
-  if(options.image!=='all'){candidates=(await enrich(candidates)).filter(item=>(options.image==='yes')===!!item.imageUrl);}
+  // Never block a ready main-page image on the remote Apps Script bridge.
+  const linked=candidates.filter(item=>item.source==='main'&&item.imageUrl),deferred=options.progressive&&options.source==='all'&&options.image==='yes'&&candidates.some(item=>item.source==='supplement'&&!item.imageUrl)&&linked.length>=options.page*options.pageSize;
+  if(deferred){candidates=linked;if(waitUntil&&cellImagesConfigured(env))waitUntil((dependencies.cellImages||loadCatalogCellImages)(env,{fetchFn:dependencies.fetchFn||fetch}).catch(()=>{}));}
+  else if(options.image!=='all'){candidates=(await enrich(candidates)).filter(item=>(options.image==='yes')===!!item.imageUrl);}
   const total=candidates.length,page=Math.min(options.page,Math.max(1,Math.ceil(total/options.pageSize))),start=(page-1)*options.pageSize;
   const products=options.image==='all'?await enrich(candidates.slice(start,start+options.pageSize)):candidates.slice(start,start+options.pageSize);
-  return json({success:true,imageWarning,products,total,totalProducts:snapshot.products.length,page,pageSize:options.pageSize,hasNext:start+products.length<total,sources:snapshot.sources,updatedAt:snapshot.updatedAt});
+  return json({success:true,imageWarning,products,total,totalIsExact:!deferred,deferredImages:!!deferred,totalProducts:snapshot.products.length,page,pageSize:options.pageSize,hasNext:start+products.length<total||!!deferred,sources:snapshot.sources,updatedAt:snapshot.updatedAt});
  }catch(error){return json({success:false,message:error.message||'Katalog belum dapat dimuat.'},503);}
 }
 export const onRequest=context=>handleCatalog(context);
