@@ -1,3 +1,4 @@
+import {transactionFilterRows} from './_transaction-filters.js';
 export const TRANSACTION_COLUMNS = 'tanggal,from_location,to_location,sku,nama_barang,qty,status,pic,keterangan,source_row_number';
 export const TRANSACTION_READ_BATCH_SIZE = 1000;
 
@@ -120,9 +121,9 @@ export function transactionSort(sort) {
 export async function transactionPage(config, table, {
   columns = '*', filterQuery = '', startDate = '', endDate = '', page = 1,
   limit = 50, sort = 'latest', direction, full = false, bounded = false, recentOnly = false,
-  search = '', searchFields = [],
+  search = '', searchFields = [], columnRules={},facet='',sortField='',sortDir=1,
 } = {}) {
-  if (recentOnly && !filterQuery && !startDate && !endDate && sort === 'latest' && !full) {
+  if (recentOnly && !filterQuery && !startDate && !endDate && sort === 'latest' && !full && !Object.keys(columnRules).length && !facet && !sortField) {
     const offset = (page - 1) * limit;
     const result = await supabaseRows(config, `${table}?select=${columns}&order=source_row_number.desc&offset=${offset}&limit=${limit}`, { count: true });
     return { rows: result.payload, total: exactTotal(result.response, result.payload.length), summary: null };
@@ -152,8 +153,9 @@ export async function transactionPage(config, table, {
     if (!result.payload.length || rows.length >= sourceTotal) break;
   }
   const ordered = orderTransactionRows(rows, selectedSort);
-  const filtered = ordered.filter(({ row, parsedDate }) => transactionRowMatchesSearch(row, search, searchFields)
+  const scoped = ordered.filter(({ row, parsedDate }) => transactionRowMatchesSearch(row, search, searchFields)
     && (!startDate && !endDate || parsedDate.valid && (!startDate || parsedDate.value >= startDate) && (!endDate || parsedDate.value <= endDate)));
+  const {filtered,facetValues}=transactionFilterRows(scoped,{columnRules,facet,sortField,sortDir});
   const validDates = filtered.filter(item => item.parsedDate.valid).map(item => item.parsedDate.value);
   const summary = {
     totalRows: filtered.length,
@@ -164,7 +166,7 @@ export async function transactionPage(config, table, {
     invalidDateCount: ordered.filter(item => !item.parsedDate.valid).length,
   };
   const offset = (page - 1) * limit;
-  return { rows: (full ? filtered : filtered.slice(offset, offset + limit)).map(item => item.row), total: filtered.length, summary };
+  return { facetValues,rows: (facet ? [] : full ? filtered : filtered.slice(offset, offset + limit)).map(item => item.row), total: filtered.length, summary };
 }
 
 // Only two scalar columns cross the database/backend boundary for these cards;

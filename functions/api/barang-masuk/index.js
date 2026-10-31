@@ -1,3 +1,4 @@
+import {transactionFilterOptions} from '../_transaction-filters.js';
 import { getSecretSupabaseConfig } from '../_supabase-config.js';
 import { escapeLike, supabaseRows, transactionPage, transactionSort, transactionSummary } from '../_transaction-read.js';
 import { normalizeSearchQuery } from '../_inventory-search.js';
@@ -66,6 +67,7 @@ export async function handleBarangMasukRequest({ request, env }) {
 
     const url = new URL(request.url);
     const full = url.searchParams.get('mode') === 'full';
+    const columnOptions=transactionFilterOptions(url.searchParams,BARANG_MASUK_COLUMNS);
     const page = Math.max(1, Number.parseInt(url.searchParams.get('page') || '1', 10) || 1);
     const limit = Math.min(MAX_LIMIT, Math.max(1, Number.parseInt(url.searchParams.get('limit') || String(DEFAULT_LIMIT), 10) || DEFAULT_LIMIT));
     const filters = [];
@@ -94,7 +96,7 @@ export async function handleBarangMasukRequest({ request, env }) {
     let total = 0;
     console.info('[BarangMasukAPI] query-start');
     const rowsStartedAt = Date.now();
-    const result = await transactionPage(supabaseConfig, TABLE, { columns: COLUMNS, filterQuery, startDate, endDate, page, limit, sort: sort.name, bounded: true, full, search, searchFields: SEARCH_COLUMNS });
+    const result = await transactionPage(supabaseConfig, TABLE, { columns: COLUMNS, filterQuery, startDate, endDate, page, limit, sort: sort.name, bounded: true, full, search, searchFields: SEARCH_COLUMNS, ...columnOptions });
     rawRows = result.rows;
     total = result.total;
     const rowsMs = Date.now() - rowsStartedAt;
@@ -128,6 +130,7 @@ export async function handleBarangMasukRequest({ request, env }) {
       rows,
       values: rows.map(row => BARANG_MASUK_COLUMNS.map(key => row[key] ?? '')),
       total,
+      ...(result.facetValues?{facetValues:result.facetValues}:{}),
       ...(summary ? { summary } : {}),
       page: full ? 1 : page,
       limit: full ? rows.length : limit,
@@ -148,6 +151,7 @@ export async function handleBarangMasukRequest({ request, env }) {
       details: error?.details,
       hint: error?.hint,
     });
+    if(error instanceof RangeError)return json({success:false,message:error.message},400);
     return json({ success: false, reason: ERROR_REASON, code: error?.code || 'UPSTREAM_QUERY_FAILED', message: SAFE_ERROR_MESSAGE }, 500);
   } finally {
     console.info('[BarangMasukAPI] totalMs', Date.now() - startedAt);
