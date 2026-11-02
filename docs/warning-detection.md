@@ -89,3 +89,11 @@ paginasi, akses Detail SKU, dan filter kolom tetap tersedia.
 Setiap pemeriksaan memulihkan antrean untuk penerima Warning aktif yang belum pernah menerima temuan aktif dan masih terverifikasi. Pemulihan hanya memakai temuan pada snapshot terbaru yang layak dikirim, tidak mengumumkan temuan yang hilang dari snapshot parsial sebagai selesai, dan tidak mengulang pesan berstatus sent atau uncertain. Antrean gagal tetap mengikuti batas retry yang berlaku.
 
 Workflow `Deploy warning WhatsApp lifecycle` menyediakan mode `diagnose` yang hanya membaca jumlah penerima aktif, status antrean, cron, snapshot, konfigurasi secret (tanpa nilainya), dan kesehatan worker. Respons worker membedakan jumlah pesan diterima provider, ditolak, dan belum pasti, serta menyebut tahap kegagalan saat pemeriksaan berhenti. Pemeriksaan diagnostik tidak mengirim WhatsApp.
+
+### Pemicu dan status operasional WhatsApp
+
+Snapshot worker meminta `dispatch_warning_notifications` setelah hasil pemeriksaan disimpan, termasuk observasi parsial. Cron notifikasi tetap menjadi backup. Dispatch yang gagal tidak membatalkan snapshot yang sudah berhasil disimpan. Positive observations dapat dibaca untuk notifikasi meski baseline lengkap pertama belum tersedia; UI tetap menuntut baseline tersimpan. Pembatasan freshness dan pemeriksaan lengkap sebelum notifikasi resolved tidak dilonggarkan.
+
+Pengaturan → Notifikasi & Akses Bot → Status pengiriman Warning membaca RPC privat `warning_notification_health`. Diagnostik memuat jumlah penerima, jadwal aktif, waktu dispatch, HTTP status worker, kode/tahap kegagalan, serta jumlah accepted/failed/uncertain. Secret, nomor HP dan body mentah pg_net tidak dikembalikan. Request ID dispatch disimpan maksimal 7 hari; detail HTTP bergantung pada retensi pg_net. Accepted berarti diterima provider, bukan bukti terkirim ke perangkat. Panel ini hanya membaca status, tidak mengirim pesan tes atau memutar ulang antrean.
+
+Migrasi `20261102000000_warning_dispatch_health.sql` dipasang workflow notifikasi. Snapshot worker dipasang workflow snapshot terpisah; keduanya harus selesai sebelum memverifikasi alur baru. Status deploy dan provider produksi harus dibuktikan dari Actions/diagnostik; tes lokal tidak membuktikan pesan WhatsApp terkirim.

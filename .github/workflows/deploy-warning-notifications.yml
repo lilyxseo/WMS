@@ -3,6 +3,7 @@ on:
   push:
     branches: [main, fix/warning-whatsapp-lifecycle, fix/warning-stable-identity]
     paths:
+      - 'supabase/migrations/20261102000000_warning_dispatch_health.sql'
       - 'supabase/migrations/20261030020000_warning_recipient_recovery.sql'
       - 'supabase/migrations/20261030010000_warning_observations.sql'
       - 'supabase/functions/warning-whatsapp/**'

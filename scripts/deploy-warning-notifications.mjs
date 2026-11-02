@@ -15,7 +15,7 @@ if(process.argv.includes('--diagnose')){
  'sync',(select jsonb_agg(x) from (select source,status,last_success_at,locked_at from public.inventory_sync_status where source in ('kartu_stok','rpl','bulky','barang_masuk','barang_keluar')) x),
  'cron',(select jsonb_agg(x) from (select j.jobname,j.active,j.schedule,d.status,d.start_time,d.end_time from cron.job j left join lateral (select status,start_time,end_time from cron.job_run_details where jobid=j.jobid order by start_time desc limit 1) d on true where j.jobname in ('wms-warning-snapshot','wms-warning-notifications')) x)
  ) as health`);
- const health=rows[0]?.health||{};
+ const health=rows[0]?.health||{};try{health.delivery=(await sql('select public.warning_notification_health() as health'))[0]?.health;}catch{health.delivery={code:'DIAGNOSTIC_SCHEMA_MISSING'};}
  if(health.snapshot?.verification)health.snapshot.verification=health.snapshot.verification.map(item=>({source:item.source,ready:item.ready,stale:item.stale,readCode:item.readCode,reason:item.reason}));
  const configured=await management('/secrets');health.configuration={fonnte:configured.some(item=>item.name==='FONNTE_TOKEN'),dataKey:configured.some(item=>item.name==='WMS_WARNING_DATA_KEY'),notifySecret:configured.some(item=>item.name==='WMS_WARNING_NOTIFY_SECRET')};
  const privateKey=(await sql("select decrypted_secret from vault.decrypted_secrets where name='wms_warning_notify_secret' limit 1"))[0]?.decrypted_secret;
@@ -29,6 +29,7 @@ const freshness=await readFile(new URL('../supabase/migrations/20261026020000_wa
 const notificationAccess=await readFile(new URL('../supabase/migrations/20261028000000_notification_user_settings.sql',import.meta.url),'utf8');
 const stable=await readFile(new URL('../supabase/migrations/20261027000000_warning_stable_identity.sql',import.meta.url),'utf8');
 const partial=await readFile(new URL('../supabase/migrations/20261030000000_warning_partial_notifications.sql',import.meta.url),'utf8');
+const dispatchHealth=await readFile(new URL('../supabase/migrations/20261102000000_warning_dispatch_health.sql',import.meta.url),'utf8');
 const recipientRecovery=await readFile(new URL('../supabase/migrations/20261030020000_warning_recipient_recovery.sql',import.meta.url),'utf8');
 const observations=await readFile(new URL('../supabase/migrations/20261030010000_warning_observations.sql',import.meta.url),'utf8');
 const recipientTests=await readFile(new URL('../tests/warning-recipient-recovery.sql',import.meta.url),'utf8');
@@ -86,9 +87,9 @@ const tests=`do $$declare owner uuid:=gen_random_uuid();contender uuid:=gen_rand
  answer:=public.warning_notify_collect(owner,finding,array['620000000000'],false);if answer->>'new'<>'0' or answer->>'updated'<>'0' or answer->>'resolved'<>'0' then raise exception 'First complete snapshot replayed partial notification';end if;
  perform public.warning_notify_unlock(owner);
 end$$;`;
-if(process.argv.includes('--inspect')){await sql('begin;'+baseMigration+migration+recovery+freshness+stable+notificationAccess+partial+observations+recipientRecovery+tests+recipientTests+'rollback;');await output('Lifecycle, deduplication, retries and leases verified with rollback');}
+if(process.argv.includes('--inspect')){await sql('begin;'+baseMigration+migration+recovery+freshness+stable+notificationAccess+partial+observations+recipientRecovery+dispatchHealth+tests+recipientTests+'rollback;');await output('Lifecycle, deduplication, retries and leases verified with rollback');}
 else if(process.argv.includes('--configure')){
- await sql('begin;'+baseMigration+migration+recovery+freshness+stable+notificationAccess+partial+observations+recipientRecovery+'commit;');await sql('begin;'+tests+recipientTests+'rollback;');
+ await sql('begin;'+baseMigration+migration+recovery+freshness+stable+notificationAccess+partial+observations+recipientRecovery+dispatchHealth+'commit;');await sql('begin;'+tests+recipientTests+'rollback;');
  const secrets=await management('/secrets');if(!secrets.some(item=>item.name==='FONNTE_TOKEN'))throw Error('Fonnte token missing');
  const keys=await management('/api-keys?reveal=true'),key=keys.find(item=>item.api_key?.startsWith('sb_secret_'))?.api_key;if(!key)throw Error('Warning data key missing');
  const existing=await sql("select decrypted_secret from vault.decrypted_secrets where name='wms_warning_notify_secret' limit 1"),secret=existing[0]?.decrypted_secret||randomBytes(32).toString('hex');if(!existing.length)await sql(`select vault.create_secret(${literal(secret)},'wms_warning_notify_secret')`);

@@ -10,7 +10,8 @@ export function createHandler(env,{load=loadInventoryWarnings,fetchFn=fetch,paus
   try{claimed=await rpc('warning_snapshot_claim',{p_run:run});if(!claimed)return Response.json({success:true,status:'busy'});
    let result;for(let attempt=0;attempt<3;attempt++){result=await load({...env,SUPABASE_SECRET_KEY:key,WMS_WARNING_ATOMIC_READ:'true'},{full:true});if(!result.partial&&!result.unavailableSources?.length&&result.verification?.length===5&&result.verification.every(item=>item.ready))break;if(attempt<2)await pause(8000);}
    const published=await rpc('warning_snapshot_publish',{p_run:run,p_payload:result});
-   return Response.json({success:true,status:published?'published':'retained',total:result.summary?.total,ready:result.verification?.filter(item=>item.ready).length,partial:result.partial});
+   let notificationDispatch='queued';try{await rpc('dispatch_warning_notifications',{});}catch{notificationDispatch='failed';}
+   return Response.json({success:true,notificationDispatch,status:published?'published':'retained',total:result.summary?.total,ready:result.verification?.filter(item=>item.ready).length,partial:result.partial});
   }catch{if(claimed)await rpc('warning_snapshot_fail',{p_run:run}).catch(()=>{});return Response.json({success:false,code:'SNAPSHOT_REFRESH_FAILED'},{status:503});}
  };
 }
