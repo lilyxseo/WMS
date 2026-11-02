@@ -34,7 +34,7 @@ test('Arsip value filters allow multiple selected values including empty', () =>
   assert.equal(matchesArchiveColumnFilter('AOI-3', filter), false);
   assert.equal(matchesArchiveColumnFilter('', filter), true);
   assert.equal(matchesArchiveColumnFilter(0, filter), true);
-  assert.match(source, /type='checkbox' data-archive-filter-value/);
+  assert.match(source, /data-table-filters='archive'/);
   assert.match(source, /updateArchiveValueFilter/);
 });
 
