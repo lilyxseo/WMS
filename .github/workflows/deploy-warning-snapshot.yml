@@ -3,6 +3,7 @@ on:
   push:
     branches: [main, feat/server-warning-snapshot]
     paths:
+      - 'supabase/migrations/20261103000000_outbound_location_inbound_review.sql'
       - 'supabase/migrations/20261030030000_negative_stock_deduction_trace.sql'
       - 'functions/api/_negative-stock-trace.js'
       - 'supabase/migrations/20261030020000_outbound_from_warning.sql'

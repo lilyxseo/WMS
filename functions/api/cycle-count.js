@@ -156,7 +156,8 @@ export async function onRequestGet({ request, env }) {
     const sheetRes = await fetch(sheetUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
     const sheetData = await sheetRes.json().catch(() => ({}));
     if (!sheetRes.ok) return json({ success: false, message: sheetData?.error?.message || 'Gagal membaca history cycle count' }, 502);
-    const allRows = mapCycleCountHistory(sheetData.values || []);
+    const sku=String(url.searchParams.get('sku')||'').trim().toUpperCase();
+    const allRows = mapCycleCountHistory(sheetData.values || []).filter(row=>!sku||String(row.sku).trim().toUpperCase()===sku);
     const start = (page - 1) * limit;
     return json({ rows: allRows.slice(start, start + limit), total: allRows.length, page, limit });
   } catch (err) {

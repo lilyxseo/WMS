@@ -1,5 +1,5 @@
 import { getGoogleAccessToken } from './_google-auth.js';
-import { requirePicRole } from './_authz.js';
+import { getRequestRole, requirePicRole } from './_authz.js';
 const PRIMARY_SHEET_RANGE = "Barang Masuk!A:I";
 const FALLBACK_SHEET_RANGE = "Movement!A:I";
 const MOVEMENT_DATA_RANGE = "Movement!A1:Z";
@@ -137,6 +137,8 @@ export async function onRequestGet({ request, env }) {
   try {
     const url = new URL(request.url);
     const mode = sanitize(url.searchParams.get("mode")).toLowerCase();
+    const sku=sanitize(url.searchParams.get("sku")).toUpperCase();
+    if(sku&&!await getRequestRole(request,env))return json({success:false,message:"Sesi tidak valid"},401);
     const spreadsheetId = sanitize(env.SHEET_ID_INVENTORY) || sanitize(env.SHEET_ID_2026);
     if (!spreadsheetId) return json({ success: false, message: "SHEET_ID_INVENTORY/SHEET_ID_2026 belum diset" }, 500);
 
@@ -145,7 +147,7 @@ export async function onRequestGet({ request, env }) {
       const read = await readSheetValues({ accessToken, sheetId: spreadsheetId, range: MOVEMENT_DATA_RANGE });
       if (!read.res.ok && isPermissionError(read.data)) return json({ success: false, message: "Akun Gmail OAuth belum punya akses Editor ke Spreadsheet Movement" }, 403);
       if (!read.res.ok) return json({ success: false, message: read.data?.error?.message || "Gagal baca sheet Movement" }, read.res.status);
-      const rows = parseRows(read.data?.values || []);
+      const rows = parseRows(read.data?.values || []).filter(row=>!sku||sanitize(row.sku).toUpperCase()===sku);
       const limit = Math.max(1, Number(url.searchParams.get("limit")) || 1000);
       const data = mode === "latest" ? rows.slice(-limit) : rows;
       return json({ success: true, data });

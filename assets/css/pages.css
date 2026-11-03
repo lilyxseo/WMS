@@ -2933,3 +2933,12 @@ html[data-accent] .account-card .account-profile-link strong{color:var(--text)}
  #mainContentPages .file-text-pad input,#mainContentPages .file-text-pad textarea{font-size:16px}
  #mainContentPages .file-toolbar label{min-width:0}
 }
+
+/* Advance Search keeps independent history sections usable on narrow screens. */
+#advanceSearchApp [data-advance-form]{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:16px}
+#advanceSearchApp [data-advance-form] label{flex-basis:100%}
+#advanceSearchApp [data-advance-form] input{flex:1;min-width:180px}
+#advanceSearchApp [data-advance-results]{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+#advanceSearchApp [data-advance-profile] .card{min-width:0;margin-bottom:16px}
+#advanceSearchApp .table-wrap{max-width:100%;overflow:auto}
+#advanceSearchApp .detail-hero{display:flex;flex-wrap:wrap;align-items:center;gap:12px}

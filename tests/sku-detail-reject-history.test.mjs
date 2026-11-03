@@ -1,9 +1,28 @@
-import test from 'node:test';import assert from 'node:assert/strict';import vm from 'node:vm';import {readFileSync} from 'node:fs';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {readAdvanceSection,advanceTable,exactSkuRows} from '../assets/js/advance-search.js';
 const source=readFileSync(new URL('../assets/js/main.js',import.meta.url),'utf8');
-const code=source.slice(source.indexOf('function renderSkuRejectHistoryCards('),source.indexOf('const SKU_DETAIL_LOCATION_FIELDS='));
-function fixture(fetchFn){const tables=[],root={isConnected:true,innerHTML:'',querySelector:()=>null};const context=vm.createContext({authRequestGeneration:1,skuDetailRequestId:1,currentSku:'0012',document:{getElementById:()=>root},REJECT_IN_COLUMNS:[['SKU','sku'],['Nama Barang','namaBarang'],['Qty','qty'],['No iSeller','noIseller']],REJECT_OUT_COLUMNS:[['SKU','sku'],['Qty','qty'],['Status Proses','statusProses']],esc:value=>String(value??'').replaceAll('<','&lt;'),renderTable:rows=>{tables.push(rows);return JSON.stringify(rows);},fetchJsonSafe:fetchFn});vm.runInContext(code,context);return {context,root,tables,load:()=>context.loadSkuRejectHistory('0012')};}
-test('reject history uses exact SKU and preserves sheet order and business columns',async()=>{const f=fixture(async(url)=>{assert.equal(url,'/api/barang-reject');return {res:{ok:true},data:{success:true,masuk:[{sku:'0012',rowNumber:8,namaBarang:'Later',qty:2,noIseller:'#T-008937'},{sku:'12',qty:100},{sku:'0012-X',qty:100},{sku:'0012',rowNumber:2,namaBarang:'First',qty:1}],keluar:[{sku:'0012',qty:3,statusProses:'Selesai'}]}};});await f.load();assert.equal(f.tables[0].length,2);assert.equal(f.tables[0][0]['Nama Barang'],'First');assert.equal(f.tables[0][1]['No iSeller'],'#T-008937');assert.equal(f.tables[1][0]['Status Proses'],'Selesai');assert.equal(Object.hasOwn(f.tables[0][0],'rowNumber'),false);assert.match(f.root.innerHTML,/Barang Masuk Reject/);assert.match(f.root.innerHTML,/Barang Keluar Reject/);});
-test('late reject history cannot overwrite another SKU or a changed account',async()=>{for(const change of [f=>f.context.currentSku='OTHER',f=>f.context.authRequestGeneration=2,f=>f.root.isConnected=false]){let resolve;const f=fixture(()=>new Promise(r=>resolve=r));const pending=f.load();change(f);resolve({res:{ok:true},data:{success:true,masuk:[],keluar:[]}});await pending;assert.equal(f.root.innerHTML,'');}});
-test('read failures show a retry state instead of claiming there are no reject rows',async()=>{const f=fixture(async()=>({res:{ok:false},data:{success:false}}));await f.load();assert.match(f.root.innerHTML,/Coba lagi/);assert.doesNotMatch(f.root.innerHTML,/0 baris/);assert.equal(f.tables.length,0);});
-test('empty sources are shown separately with zero counts and closed sections',async()=>{const f=fixture(async()=>({res:{ok:true},data:{success:true,masuk:[],keluar:[]}}));await f.load();assert.equal((f.root.innerHTML.match(/0 baris/g)||[]).length,2);assert.doesNotMatch(f.root.innerHTML,/ open/);});
-test('reject history is mounted after all ordinary SKU source tables',()=>{const render=source.slice(source.indexOf('function renderSkuDetailPayload'),source.indexOf('function renderSkuRejectHistoryCards'));assert.ok(render.indexOf('skuRejectHistoryRoot')>render.indexOf('for(const sheet of'));assert.match(render,/void loadSkuRejectHistory\(sku\)/);});
+test('Detail SKU no longer mounts or requests Reject history; source API remains available',()=>{
+ const render=source.slice(source.indexOf('function renderSkuDetailPayload'),source.indexOf('const SKU_DETAIL_LOCATION_FIELDS='));
+ assert.doesNotMatch(render,/skuRejectHistoryRoot|loadSkuRejectHistory|Barang Masuk Reject|Barang Keluar Reject/);
+ assert.match(source,/\/api\/barang-reject/);
+});
+test('Advance Search preserves both Reject histories, exact SKU, row order and all business fields',async()=>{
+ const data=await readAdvanceSection('reject','0012',{request:async url=>{assert.equal(url,'/api/barang-reject');return {warning:'Sebagian sumber',masuk:[{sku:'0012',rowNumber:8,qty:2,noIseller:'#T-008937'},{sku:'12',qty:100},{sku:'0012-X',qty:100},{sku:'0012',rowNumber:2,qty:1}],keluar:[{sku:'0012',qty:3,statusProses:'Selesai'}]};}});
+ assert.equal(data.warning,'Sebagian sumber');assert.equal(data.groups[0].name,'Barang Masuk Reject');assert.deepEqual(data.groups[0].rows.map(row=>row.rowNumber),[2,8]);assert.equal(data.groups[0].rows[1].noIseller,'#T-008937');assert.equal(data.groups[1].rows[0].statusProses,'Selesai');
+});
+test('Advance Search keeps all detail source columns including fields unique to later rows and escapes values',async()=>{
+ const data=await readAdvanceSection('detail','A',{request:async()=>({sources:{'Kartu Stock':[{sku:'A',qty:2},{sku:'A',note:'<img src=x onerror=alert(1)>'}],'Barang Masuk':[]}})});
+ assert.equal(data.length,2);const html=advanceTable(data[0].rows);assert.match(html,/<th>note<\/th>/);assert.match(html,/&lt;img/);assert.doesNotMatch(html,/<img/);
+});
+test('Advance Search requests all Movement and paginates Cycle Count after an exact SKU filter',async()=>{
+ const urls=[];const request=async url=>{urls.push(url);return {data:[{sku:'0012'},{sku:'12'}],rows:[{sku:'0012'},{sku:'12'}],total:73,page:2,limit:50};};
+ assert.equal((await readAdvanceSection('movement','0012',{request})).length,1);
+ const cycle=await readAdvanceSection('cycle','0012',{request,page:2});assert.equal(cycle.rows.length,1);assert.equal(cycle.total,73);assert.match(urls[0],/movement\?sku=0012$/);assert.match(urls[1],/sku=0012&page=2&limit=50/);
+});
+test('unavailable accuracy and failed history remain errors rather than empty success',async()=>{
+ await assert.rejects(readAdvanceSection('accuracy','A',{request:async()=>({ready:false,rows:[]})}),/belum siap/);
+ await assert.rejects(readAdvanceSection('reject','A',{request:async()=>{throw Error('unavailable');}}),/unavailable/);
+ assert.deepEqual(exactSkuRows([{sku:'0001'},{sku:'1'},{sku:'0001-X'}],'0001'),[{sku:'0001'}]);
+});

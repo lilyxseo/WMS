@@ -4,7 +4,7 @@ import {normalizeTransactionDate} from './_transaction-read.js';
 import {loadWarningData} from './_warning-data.js';
 import {movementImpactFindings} from './_movement-warning.js';
 export const WARNING_CATEGORIES=Object.freeze({
- INVALID_OUTBOUND_FROM:'Lokasi From Tidak Valid',NEGATIVE_STOCK:'Saldo Negatif',STOCK_BALANCE_MISMATCH:'Rumus Saldo Tidak Sesuai',
+ OUTBOUND_LOCATION_WITHOUT_INBOUND:'SKU + From Tanpa Riwayat Masuk',INVALID_OUTBOUND_FROM:'Lokasi From Tidak Valid',NEGATIVE_STOCK:'Saldo Negatif',STOCK_BALANCE_MISMATCH:'Rumus Saldo Tidak Sesuai',
  EMPTY_SKU:'SKU Kosong',EMPTY_NAME:'Nama Barang Kosong',EMPTY_LOCATION:'Lokasi Stok Kosong',
  NAME_MISMATCH:'Nama Berbeda pada SKU Sama',ACCURACY_MISMATCH:'Selisih Data Referensi',
  OUTBOUND_WITHOUT_INBOUND:'Riwayat Masuk Perlu Verifikasi',
@@ -78,6 +78,17 @@ export function buildInventoryWarnings(input,{allowCrossSource=true}={}){
  return result;
 }
 export function outboundFromWarnings(rows){return (rows||[]).filter(row=>normalizeWarningSku(row.sku)&&warningNumber(row.qty)>0&&['empty','multiple','unknown'].includes(row.reason)).map(row=>{const from=text(row.from_location),multiple=row.reason==='multiple',unknown=row.reason==='unknown',issue=multiple?`From berisi beberapa lokasi: ${from}. Qty ${row.qty} tidak memiliki pembagian lokasi yang jelas.`:unknown?`Lokasi From "${from}" tidak dikenali pada data lokasi saat pemeriksaan.`:'Lokasi From kosong pada transaksi barang keluar.';const finding=warning('INVALID_OUTBOUND_FROM',unknown?'Medium':'High','Barang Keluar',row,issue,`Barang Keluar baris ${row.source_row_number??'-'} • tanggal ${row.tanggal||'-'} • From: ${from||'(kosong)'} • To: ${text(row.to_location)||'-'} • Qty: ${row.qty}.`,multiple?'Pisahkan transaksi per lokasi From dan tulis Qty masing-masing. Jangan gunakan satu Qty untuk gabungan lokasi.':unknown?'Verifikasi lokasi asli dan dokumen transaksi; lokasi khusus dapat berubah. Ketiadaan pada data saat ini tidak membuktikan lokasi historis salah.':'Lengkapi satu lokasi From yang benar sesuai sumber barang.',unknown?'review':'record');finding.eventDate=normalizeTransactionDate(row.tanggal).value||text(row.tanggal);finding.transactionTo=normalizeWarningSku(row.to_location).replace(/\s+/g,' ');finding.fromReason=row.reason;return finding;});}
+export function outboundLocationWarnings(rows){
+ return (rows||[]).filter(row=>row.reason==='missing_inbound'&&normalizeWarningSku(row.sku)&&text(row.from_location)&&warningNumber(row.qty)>0).map(row=>{
+  const finding=warning('OUTBOUND_LOCATION_WITHOUT_INBOUND','Medium','Barang Keluar',row,
+   `Pasangan SKU ${text(row.sku)} + From ${text(row.from_location)} belum ditemukan sebagai SKU + To di Barang Masuk.`,
+   `Tanggal ${text(row.tanggal)||'-'} • baris ${row.source_row_number??'-'} • From: ${text(row.from_location)} • To: ${text(row.to_location)||'-'} • Qty: ${row.qty}.`,
+   'Perlu verifikasi: cocokkan dokumen penerimaan dan saldo awal. Riwayat yang tidak lengkap dapat menjadi penyebab; temuan ini bukan bukti transaksi salah.','review');
+  finding.eventDate=normalizeTransactionDate(row.tanggal).value||text(row.tanggal);
+  finding.transactionTo=normalizeWarningSku(row.to_location).replace(/\s+/g,' ');
+  return finding;
+ });
+}
 export function queryInventoryWarnings(allRows,options={}){
  const severity=text(options.severity),category=text(options.category),source=text(options.source),terms=text(options.search).toLocaleLowerCase('id-ID').split(/\s+/).filter(Boolean);
  let rows=allRows.filter(row=>(!severity||severity==='all'||row.severity===severity)&&(!category||category==='all'||row.category===category)&&(!source||source==='all'||row.source.split(' / ').includes(source))&&terms.every(term=>`${row.sku} ${row.namaBarang} ${row.issue} ${row.location} ${row.evidence}`.toLocaleLowerCase('id-ID').includes(term)));
@@ -92,6 +103,8 @@ export function queryInventoryWarnings(allRows,options={}){
 export async function loadInventoryWarnings(env,options={}){
  const data=await loadWarningData(env),allStockReady=data.verification.filter(item=>['kartu_stok','rpl','bulky'].includes(item.source)).every(item=>item.ready);
  const warnings=attachNegativeStockTraces(buildInventoryWarnings(data.rows,{allowCrossSource:allStockReady}),data.negativeContext,{ready:data.negativeContextReady});if(data.outboundFromReady)warnings.push(...outboundFromWarnings(data.outboundFrom));
+ const outboundLocationReady=!!data.outboundFromReady&&data.verification.some(item=>item.source==='barang_masuk'&&item.ready);
+ if(outboundLocationReady)warnings.push(...outboundLocationWarnings(data.outboundFrom));
  if(data.ledgerReady)for(const row of data.ledger){
   const qty=warningNumber(row.qty);if(!normalizeWarningSku(row.sku)||qty===null||qty<=0)continue;
   warnings.push(warning('OUTBOUND_WITHOUT_INBOUND','Medium','Barang Keluar',row,'Riwayat masuk SKU yang telah keluar belum ditemukan.',`Pengeluaran positif ${qty}; SKU tidak ditemukan di Barang Masuk dan ketiga sumber stok. Baris keluar ${row.source_row_number??'-'}.`,'Verifikasi dokumen penerimaan atau saldo awal. Ketiadaan riwayat bukan bukti barang tidak pernah diterima.','review'));
@@ -105,6 +118,7 @@ export async function loadInventoryWarnings(env,options={}){
  const validReference=referenceRows.filter(row=>{const a=warningNumber(row.stok_akhir),r=warningNumber(row.netsuite),d=warningNumber(row.selisih);return a!==null&&r!==null&&d!==null&&!differs(a-r,d);});
  const checks=[{key:'balance',label:'Rumus saldo Kartu Stok',checked:stock.filter(row=>stockBalance(row)).length,skipped:stock.filter(row=>!stockBalance(row)).length},{key:'accuracy',label:'Referensi accuracy',checked:validReference.length,skipped:referenceRows.length-validReference.length,note:'Diperiksa hanya jika stok, NETSUITE, dan SELISIH lengkap serta saling cocok.'},{key:'ledger',label:'Riwayat masuk/keluar',ready:data.ledgerReady,note:'Tidak membandingkan jumlah transaksi dengan saldo satu lokasi.'}];
  checks.push({key:'movement',label:'Dampak movement',ready:data.movementReady,checked:data.movementReady?movement.checked:undefined,skipped:movement.skipped,note:data.movementReady?'Memeriksa pengurangan From pada kolom mutasi dan penerimaan To pada STOK AWAL. Saldo/kolom tujuan 0 saja bukan bukti movement gagal. Netto yang saling membatalkan, aktivitas lanjutan, dan input yang belum melewati jeda sinkronisasi tidak disimpulkan sebagai gagal.':'Riwayat movement atau snapshot sumber belum terverifikasi.'});
+ checks.push({key:'outbound-location-inbound',label:'Pasangan SKU + From terhadap SKU + To masuk',ready:outboundLocationReady});
  checks.push({key:'outbound-from',label:'Lokasi From barang keluar',ready:!!data.outboundFromReady,checked:data.outboundFromReady?data.outboundFrom.length:undefined});
  const byCategory=Object.fromEntries(Object.keys(WARNING_CATEGORIES).map(key=>[key,warnings.filter(row=>row.category===key).length]));
  return {...queryInventoryWarnings(warnings,options),summary:{total:warnings.length,high:warnings.filter(row=>row.severity==='High').length,medium:warnings.filter(row=>row.severity==='Medium').length,low:warnings.filter(row=>row.severity==='Low').length,affectedSku:new Set(warnings.map(row=>normalizeWarningSku(row.sku)).filter(sku=>sku&&sku!=='-')).size,byCategory},categories:WARNING_CATEGORIES,partial:!!(data.unavailableSources.length||data.staleSources?.length),unavailableSources:data.unavailableSources,verification:data.verification,checks,checkedAt:new Date().toISOString(),businessDate:businessDateKey()};

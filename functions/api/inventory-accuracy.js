@@ -10,7 +10,8 @@ export async function handleInventoryAccuracy({request,env},dependencies={}){
    const compared=data.rows.filter(row=>row.selisih!==null),matched=compared.filter(row=>row.selisih===0).length;
    return json({success:true,ready:data.ready,accuracy:data.ready&&compared.length?matched/compared.length*100:null});
   }
-  return json({success:true,...data});
+  const sku=String(new URL(request.url).searchParams.get('sku')||'').trim().toUpperCase();
+  return json({success:true,...data,rows:sku?data.rows.filter(row=>String(row.sku||'').trim().toUpperCase()===sku):data.rows});
  }catch{return json({success:false,message:'Perbandingan Kartu Stok dan NetSuite belum tersedia. Pastikan kedua sumber berhasil disinkronkan.'},502);}
 }
 export const onRequestGet=context=>handleInventoryAccuracy(context);
