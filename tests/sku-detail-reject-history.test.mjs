@@ -26,3 +26,10 @@ test('unavailable accuracy and failed history remain errors rather than empty su
  await assert.rejects(readAdvanceSection('reject','A',{request:async()=>{throw Error('unavailable');}}),/unavailable/);
  assert.deepEqual(exactSkuRows([{sku:'0001'},{sku:'1'},{sku:'0001-X'}],'0001'),[{sku:'0001'}]);
 });
+
+test('Advance Search routes all four additional sources through exact-SKU authenticated reads',async()=>{
+ for(const source of ['ledger2025','so2025','so2026','trips']){
+  const data=await readAdvanceSection(source,'0012',{request:async url=>{assert.equal(url,`/api/advance-search-sources?source=${source}&sku=0012`);return {groups:[{name:'A',rows:[{sku:'0012'}]}],failures:[{sheet:'B',message:'Unavailable'}]};}});
+  assert.equal(data.groups.length,1);assert.equal(data.failures.length,1);
+ }
+});

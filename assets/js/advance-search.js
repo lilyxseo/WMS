@@ -21,6 +21,7 @@ export async function readAdvanceSection(kind,sku,{request,page=1}={}){
  if(kind==='movement'){const data=await request(`/api/movement?sku=${encoded}`);return exactSkuRows(data.data,sku);}
  if(kind==='cycle'){const data=await request(`/api/cycle-count?sku=${encoded}&page=${page}&limit=50`);return {...data,rows:exactSkuRows(data.rows,sku)};}
  if(kind==='accuracy'){const data=await request(`/api/inventory-accuracy?sku=${encoded}`);if(data.ready!==true)throw Error('Data akurasi stok belum siap.');return exactSkuRows(data.rows,sku);}
+ if(['ledger2025','so2025','so2026','trips'].includes(kind)){const data=await request(`/api/advance-search-sources?source=${kind}&sku=${encoded}`);return {groups:data.groups||[],failures:data.failures||[]};}
  throw Error('Sumber tidak dikenal');
 }
 export function mountAdvanceSearch(root,{fetchFn=(...args)=>fetch(...args),isCurrent=()=>true,account='',confirmDelete}={}){
@@ -35,11 +36,11 @@ export function mountAdvanceSearch(root,{fetchFn=(...args)=>fetch(...args),isCur
   selectedSku=String(sku||'').trim();if(!selectedSku||!alive())return;
   const token=++version;abort?.abort();abort=new AbortController();const signal=abort.signal;
   notes?.dispose();photo?.dispose();
-  el('profile').innerHTML=`<div class="detail-profile"><header class="detail-hero"><h4>SKU: ${esc(selectedSku)}</h4><a href="/sku/${encodeURIComponent(selectedSku)}">Buka Detail SKU</a><span data-advance-photo hidden></span></header>${[['detail','Detail SKU'],['reject','Transaksi Reject'],['movement','History Movement'],['cycle','Cycle Count'],['accuracy','Akurasi Stok']].map(([kind,name])=>`<section class="card" data-advance-section="${kind}"><h4>${name}</h4><div data-advance-body role="status">Memuat…</div></section>`).join('')}<section data-advance-notes></section></div>`;
+  el('profile').innerHTML=`<div class="detail-profile"><header class="detail-hero"><h4>SKU: ${esc(selectedSku)}</h4><a href="/sku/${encodeURIComponent(selectedSku)}">Buka Detail SKU</a><span data-advance-photo hidden></span></header>${[['detail','Detail SKU'],['reject','Transaksi Reject'],['movement','History Movement'],['cycle','Cycle Count'],['accuracy','Akurasi Stok'],['ledger2025','Barang Masuk / Keluar 2025'],['so2025','Stok Opname 2025 · SO JULI 2025'],['so2026','Stok Opname 2026 · COUNT 1'],['trips','Balikan Store · Semua TRIP']].map(([kind,name])=>`<section class="card" data-advance-section="${kind}"><h4>${name}</h4><div data-advance-body role="status">Memuat…</div></section>`).join('')}<section data-advance-notes></section></div>`;
   const current=()=>alive()&&version===token;
   notes=mountSkuNotes(el('notes'),{sku:selectedSku,account,confirmDelete,fetchFn,isCurrent:current});
   photo=mountSkuCatalogPhoto(el('photo'),{sku:selectedSku,fetchFn,fetchImageFn:fetchFn,isCurrent:current});
-  for(const kind of ['detail','reject','movement','cycle','accuracy'])void load(kind,1,token,signal);
+  for(const kind of ['detail','reject','movement','cycle','accuracy','ledger2025','so2025','so2026','trips'])void load(kind,1,token,signal);
  }
  async function load(kind,page,token,signal){
   const body=root.querySelector(`[data-advance-section="${kind}"] [data-advance-body]`);
@@ -47,7 +48,8 @@ export function mountAdvanceSearch(root,{fetchFn=(...args)=>fetch(...args),isCur
   try{
    const data=await readAdvanceSection(kind,selectedSku,{request:url=>request(url,signal),page});
    if(!alive()||token!==version||!body.isConnected)return;
-   body.innerHTML=kind==='detail'?groups(data):kind==='reject'?`${data.warning?`<p class="state">${esc(data.warning)}</p>`:''}${groups(data.groups)}`:advanceTable(kind==='cycle'?data.rows:data);
+   body.innerHTML=['ledger2025','so2025','so2026','trips'].includes(kind)?`${groups(data.groups)}${data.failures.length?`<div class="state error">Sebagian sumber belum terbaca: ${data.failures.map(item=>esc(item.sheet)+': '+esc(item.message)).join('; ')} <button class="btn-ghost" data-advance-partial-retry>Coba lagi</button></div>`:''}`:kind==='detail'?groups(data):kind==='reject'?`${data.warning?`<p class="state">${esc(data.warning)}</p>`:''}${groups(data.groups)}`:advanceTable(kind==='cycle'?data.rows:data);
+   body.querySelector('[data-advance-partial-retry]')?.addEventListener('click',()=>load(kind,page,token,signal));
    if(kind==='cycle'){
     body.insertAdjacentHTML('beforeend',`<div class="mv-pagination"><span>${data.total} baris · Halaman ${page}</span><button class="btn-ghost" data-advance-prev ${page<=1?'disabled':''}>Sebelumnya</button><button class="btn-ghost" data-advance-next ${page*50>=data.total?'disabled':''}>Berikutnya</button></div>`);
     body.querySelector('[data-advance-prev]').onclick=()=>load(kind,page-1,token,signal);
