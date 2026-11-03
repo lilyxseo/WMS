@@ -17,8 +17,8 @@ Advance Search also provides independent, read-only sections for:
 - Both Barang Masuk and Barang Keluar tabs in the configured Kartu Stok 2025 archive.
 - `SO JULI 2025` in the configured Inventory spreadsheet.
 - Both tables in `COUNT 1` in the registered archive named `SO 2026`. `SO_2026_SPREADSHEET_ID` can select this spreadsheet explicitly; the client cannot provide arbitrary spreadsheet IDs.
-- Every TRIP tab discovered from Inventory, using the existing Balikan Store parser and preserving extra source columns.
+- Every TRIP tab discovered from Inventory, combined into one dataset with a **Sumber Sheet** column. Extra source columns are preserved and the table displays their union across all TRIPs.
 
-`/api/advance-search-sources?source=ledger2025|so2025|so2026|trips&sku=...` requires a session and returns only exact-SKU matches. Historical tables retain source sheet, table number, original row and business columns. Header positions are discovered rather than fixed to the first table. COUNT 1 fails explicitly if fewer than two header blocks are recognized. Partial sheet parsing failures remain visible and retryable. No source data is edited.
+`/api/advance-search-sources?source=ledger2025|so2025|so2026|trips&sku=...` requires a session and returns only exact-SKU matches. Historical tables retain source sheet, table number, original row and business columns. Header positions are discovered rather than fixed to the first table. COUNT 1 supports separate horizontal/vertical tables, decorated or multirow headers, and multiple data blocks sharing one header; it does not require two duplicate header definitions. Unrecognized headers remain an explicit error. Partial sheet parsing failures remain visible and retryable. No source data is edited.
 
 The local machine has no Supabase/Google runtime credentials. Historical-layout tests use representative fixtures; the actual COUNT 1 headers/ranges and SO 2026 registration must still be checked against the real spreadsheet before claiming live-source validation.

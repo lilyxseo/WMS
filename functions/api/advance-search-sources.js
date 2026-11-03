@@ -39,15 +39,16 @@ export async function handleAdvanceSources({request,env},dependencies={}){
     if(kind==='trips'){
      const parsed=parseBalikanSheet(values),headerInfo=buildHeaderInfo(values),labels=Object.fromEntries(parsed.dynamicColumns.map(column=>[column.key,column.header]));
      for(const row of parsed.rows){const raw=values[row.rowNumber-1]||[];for(const [field,column] of Object.entries(headerInfo.columnMap))row[field]=['checked'].includes(field)?raw[column]??'':String(raw[column]??'').trim();for(const key of Object.keys(labels)){const column=Number(key.replace('extra_',''));row[key]=raw[column]??'';}}
-     const rows=parsed.rows.filter(row=>sheetSku(row.sku)===sheetSku(sku)).map(row=>Object.fromEntries(Object.entries({sheet:sheet.title,...row}).map(([key,value])=>[labels[key]?`${labels[key]} (${key})`:key,value])));
+     const rows=parsed.rows.filter(row=>sheetSku(row.sku)===sheetSku(sku)).map(row=>{const result={'Sumber Sheet':sheet.title};for(const [key,value] of Object.entries(row)){const label=labels[key]||key;result[Object.hasOwn(result,label)?`${label} (${key})`:label]=value;}return result;});
      groups.push({name:`Balikan Store · ${sheet.title}`,rows});
-    }else groups.push(...readSkuTables(values,sku,{sheetName:sheet.title,sourceName:kind==='ledger2025'?'Kartu Stok 2025':kind==='so2025'?'Stok Opname 2025':'Stok Opname 2026',minimumTables:kind==='so2026'?2:1}));
+    }else groups.push(...readSkuTables(values,sku,{sheetName:sheet.title,sourceName:kind==='ledger2025'?'Kartu Stok 2025':kind==='so2025'?'Stok Opname 2025':'Stok Opname 2026'}));
    }catch(error){failures.push({sheet:sheet.title,message:error.message});}});
   }}
   await Promise.all([worker(),worker()]);
   if(!groups.length)throw Error(failures[0]?.message||'Sumber belum dapat dibaca.');
   groups.sort((a,b)=>a.name.localeCompare(b.name,'id',{numeric:true}));
-  return json({success:true,groups,failures,partial:failures.length>0});
+  const resultGroups=kind==='trips'?[{name:'Balikan Store · Semua TRIP',rows:groups.flatMap(group=>group.rows)}]:groups;
+  return json({success:true,groups:resultGroups,failures,partial:failures.length>0});
  }catch(error){return json({success:false,message:error.message||'Sumber tambahan belum dapat dimuat.'},503);}
 }
 export const onRequestGet=context=>handleAdvanceSources(context);
