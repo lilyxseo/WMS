@@ -1,4 +1,4 @@
-const PUBLIC_HOST='gotoliving.id';
+const PUBLIC_HOST='gotoliving.app';
 
 // Login is the only indexable page. This is a crawler directive; API/session
 // authorization continues to protect inventory data independently.
