@@ -7,29 +7,31 @@ import {execFileSync} from 'node:child_process';
 import {onRequest} from '../functions/_middleware.js';
 const read=path=>readFile(new URL('../'+path,import.meta.url),'utf8');
 test('only the canonical public login is indexable; private routes, queries and previews are noindex',async()=>{
- for(const [url,indexable] of [['https://gotoliving.app/',true],['https://gotoliving.id/',false],['https://gotoliving.app/advance-search',false],['https://gotoliving.app/arsip',false],['https://gotoliving.app/sku/secret',false],['https://gotoliving.app/sheet-input',false],['https://gotoliving.app/?code=oauth',false],['https://preview.wms.pages.dev/',false],['https://wms-duj.pages.dev/',false],['https://gotoliving.app/api/stock-entry',false]]){
+ for(const [url,indexable] of [['https://www.gotoliving.app/',true],['https://gotoliving.app/',false],['https://gotoliving.id/',false],['https://gotoliving.app/advance-search',false],['https://gotoliving.app/arsip',false],['https://gotoliving.app/sku/secret',false],['https://gotoliving.app/sheet-input',false],['https://gotoliving.app/?code=oauth',false],['https://preview.wms.pages.dev/',false],['https://wms-duj.pages.dev/',false],['https://gotoliving.app/api/stock-entry',false]]){
   const response=await onRequest({request:new Request(url),next:async()=>new Response('unchanged',{headers:{'Content-Type':'text/html','Cache-Control':'private, no-store','Set-Cookie':'session=retained; HttpOnly'}})});
   assert.equal(response.headers.get('X-Robots-Tag'),indexable?'index, follow':'noindex, nofollow, noarchive');assert.equal(response.headers.get('Cache-Control'),'private, no-store');assert.match(response.headers.get('Set-Cookie'),/session=retained/);assert.equal(await response.text(),'unchanged');
  }
- const failed=await onRequest({request:new Request('https://gotoliving.app/'),next:async()=>new Response('error',{status:503,headers:{'Content-Type':'text/html'}})});assert.equal(failed.status,503);assert.match(failed.headers.get('X-Robots-Tag'),/noindex/);
+ const failed=await onRequest({request:new Request('https://www.gotoliving.app/'),next:async()=>new Response('error',{status:503,headers:{'Content-Type':'text/html'}})});assert.equal(failed.status,503);assert.match(failed.headers.get('X-Robots-Tag'),/noindex/);
 });
-test('www permanently redirects to the canonical domain without a noindex response',async()=>{
- for(const path of ['/', '/sku/0012', '/?code=oauth&state=abc', '/advance-search?sku=0012']){
+test('middleware never redirects between apex and www, preventing a loop with Cloudflare domain rules',async()=>{
+ for(const host of ['gotoliving.app','www.gotoliving.app'])for(const path of ['/', '/sku/0012', '/?code=oauth&state=abc', '/advance-search?sku=0012']){
   let nextCalls=0;
-  const response=await onRequest({request:new Request('https://www.gotoliving.app'+path),next:async()=>{nextCalls++;return new Response('unused');}});
-  assert.equal(response.status,308);assert.equal(response.headers.get('Location'),'https://gotoliving.app'+path);assert.equal(response.headers.get('X-Robots-Tag'),null);assert.equal(nextCalls,0);
+  const response=await onRequest({request:new Request('https://'+host+path),next:async()=>{nextCalls++;return new Response('Page',{headers:{'Content-Type':'text/html'}});}});
+  assert.equal(response.status,200);assert.equal(response.headers.get('Location'),null);assert.equal(nextCalls,1);
+  assert.equal(response.headers.get('X-Robots-Tag'),host==='www.gotoliving.app'&&path==='/'?'index, follow':'noindex, nofollow, noarchive');
  }
- const redirect=await onRequest({request:new Request('https://www.gotoliving.app/'),next:async()=>{throw Error('Must redirect first');}});
- const canonical=await onRequest({request:new Request(redirect.headers.get('Location')),next:async()=>new Response('Login',{headers:{'Content-Type':'text/html; charset=utf-8'}})});
- assert.equal(canonical.status,200);assert.equal(canonical.headers.get('X-Robots-Tag'),'index, follow');
+ // Model an existing Cloudflare apex -> www redirect. The app must end the chain.
+ const edgeRedirect=Response.redirect('https://www.gotoliving.app/',301);
+ const page=await onRequest({request:new Request(edgeRedirect.headers.get('Location')),next:async()=>new Response('Login',{headers:{'Content-Type':'text/html'}})});
+ assert.equal(page.status,200);assert.equal(page.headers.get('Location'),null);assert.equal(page.headers.get('X-Robots-Tag'),'index, follow');
 });
 test('sitemap exposes only the login; robots permits reading private-page noindex headers',async()=>{
  const sitemap=await read('sitemap.xml'),robots=await read('robots.txt'),routes=JSON.parse(await read('_routes.json'));
- assert.deepEqual([...sitemap.matchAll(/<loc>(.*?)<\/loc>/g)].map(match=>match[1]),['https://gotoliving.app/']);assert.match(robots,/Sitemap: https:\/\/gotoliving.app\/sitemap.xml/);assert.match(robots,/Disallow: \/api\//);assert.doesNotMatch(robots,/Disallow: \/\s*$/m);assert.deepEqual(routes.include,['/*']);assert.ok(!routes.exclude.includes('/api/*'));
+ assert.deepEqual([...sitemap.matchAll(/<loc>(.*?)<\/loc>/g)].map(match=>match[1]),['https://www.gotoliving.app/']);assert.match(robots,/Sitemap: https:\/\/www.gotoliving.app\/sitemap.xml/);assert.match(robots,/Disallow: \/api\//);assert.doesNotMatch(robots,/Disallow: \/\s*$/m);assert.deepEqual(routes.include,['/*']);assert.ok(!routes.exclude.includes('/api/*'));
 });
 test('public metadata and schema describe login without inventory content or fabricated ratings',async()=>{
- const html=await read('index.html');assert.match(html,/<html lang="id"[^>]*data-theme="dark"/);assert.match(html,/<title>WMS Goto Living \| Warehouse Management System<\/title>/);assert.match(html,/<meta name="description" content=".{80,180}"/);assert.match(html,/<link rel="canonical" href="https:\/\/gotoliving.app\/"/);assert.match(html,/<meta property="og:image:alt"/);assert.match(html,/<meta name="twitter:card"/);
- const schema=JSON.parse(html.match(/<script type="application\/ld\+json">(.*?)<\/script>/s)[1]);assert.equal(schema['@type'],'WebSite');assert.equal(schema.url,'https://gotoliving.app/');assert.equal(schema.aggregateRating,undefined);assert.match(html,/<noscript>/);assert.doesNotMatch(html,/<script[^>]*src="[^"]*html5-qrcode/);assert.match(html,/<script defer src="[^"]*lucide/);
+ const html=await read('index.html');assert.match(html,/<html lang="id"[^>]*data-theme="dark"/);assert.match(html,/<title>WMS Goto Living \| Warehouse Management System<\/title>/);assert.match(html,/<meta name="description" content=".{80,180}"/);assert.match(html,/<link rel="canonical" href="https:\/\/www.gotoliving.app\/"/);assert.match(html,/<meta property="og:image:alt"/);assert.match(html,/<meta name="twitter:card"/);
+ const schema=JSON.parse(html.match(/<script type="application\/ld\+json">(.*?)<\/script>/s)[1]);assert.equal(schema['@type'],'WebSite');assert.equal(schema.url,'https://www.gotoliving.app/');assert.equal(schema.aggregateRating,undefined);assert.match(html,/<noscript>/);assert.doesNotMatch(html,/<script[^>]*src="[^"]*html5-qrcode/);assert.match(html,/<script defer src="[^"]*lucide/);
 });
 test('build flattens CSS imports in original order and retains safe version checks',async()=>{
  const temp=await mkdtemp(join(tmpdir(),'wms-seo-build-'));

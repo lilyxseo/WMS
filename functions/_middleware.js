@@ -1,14 +1,10 @@
-const PUBLIC_HOST='gotoliving.app';
+const PUBLIC_HOST='www.gotoliving.app';
 
 // Login is the only indexable page. This is a crawler directive; API/session
 // authorization continues to protect inventory data independently.
 export async function onRequest(context){
  const url=new URL(context.request.url);
- // Consolidate the public www alias before applying page indexing rules.
- if(url.hostname===`www.${PUBLIC_HOST}`){
-  url.hostname=PUBLIC_HOST;url.protocol='https:';url.port='';
-  return Response.redirect(url.href,308);
- }
+ // Domain redirects are managed by Cloudflare; do not introduce an opposing hop.
  const response=await context.next();
  const publicLogin=url.hostname===PUBLIC_HOST&&url.pathname==='/'&&!url.search&&response.status===200&&response.headers.get('Content-Type')?.includes('text/html');
  const headers=new Headers(response.headers);
