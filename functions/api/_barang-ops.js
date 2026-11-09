@@ -1,3 +1,4 @@
+import { normalizeText, normalizeSku, normalizeLocation, normalizeNumber, normalizeDate } from './sync/inventory/_normalization.js';
 import { getGoogleAccessToken } from './_google-auth.js';
 export const SHEET_BARANG_MASUK='Barang Masuk';
 export const SHEET_BARANG_KELUAR='Barang KeIuar';
@@ -38,9 +39,20 @@ export async function verifyTransactionRow({env,sheetName,rowNumber,expected,acc
  let data;
  for(let attempt=0;attempt<2;attempt++){try{const response=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${env.SHEET_ID_2026}/values/${encodeURIComponent(range)}`,{headers:{Authorization:`Bearer ${access}`},signal:AbortSignal.timeout(30000)});if(!response.ok){if(response.status===429||response.status>=500){if(attempt===0)continue;}throw Error('Transaksi belum dapat diperiksa di Google Sheets. Tidak ada perubahan disimpan.');}data=await response.json();break;}catch(error){if(attempt===0&&(error.name==='TimeoutError'||error.name==='AbortError'||error instanceof TypeError))continue;if(error.name==='TimeoutError'||error.name==='AbortError'||error instanceof TypeError)throw Error('Koneksi pemeriksaan Google Sheets terputus. Tidak ada perubahan disimpan. Draf tetap tersedia untuk dicoba kembali.');throw error;}}
  const row=data.values?.[0]||[];
- if(String(row[3]??'').trim()!==expected.sku.trim())throw Error('SKU pada baris sumber berubah. Muat ulang detail sebelum mengedit.');
- const canonicalDate=value=>{const text=String(value??'').trim(),match=/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text);return match?`${match[3]}-${match[1].padStart(2,'0')}-${match[2].padStart(2,'0')}`:text;};
- for(const [field,value]of Object.entries(expected.cells)){if(!map[field])throw Error('Kolom snapshot tidak valid.');const current=row[map[field].charCodeAt(0)-65]??'',same=field==='tanggal'?canonicalDate(current)===canonicalDate(value):field==='qty'?Number(String(current).replaceAll(',',''))===Number(String(value).replaceAll(',','')):String(current).trim()===String(value??'').trim();if(!same)throw Error('Data transaksi berubah. Muat ulang detail sebelum mengedit.');}
+ if(normalizeSku(row[3])!==normalizeSku(expected.sku))throw Error('SKU pada baris sumber berubah. Muat ulang detail sebelum mengedit.');
+ // Compare using the same semantics that produced the database snapshot.
+ // Formatting-only differences must not disable edits; actual changes still fail.
+ for(const [field,value]of Object.entries(expected.cells)){
+  if(!map[field])throw Error('Kolom snapshot tidak valid.');
+  const current=row[map[field].charCodeAt(0)-65]??'';
+  let same;
+  if(field==='tanggal'){const a=normalizeDate(current),b=normalizeDate(value);same=a.valid&&b.valid&&a.value===b.value;}
+  else if(field==='qty'){const a=normalizeNumber(current),b=normalizeNumber(value);same=a.valid&&b.valid&&(a.value??0)===(b.value??0);}
+  else if(field==='from'||field==='to')same=normalizeLocation(current)===normalizeLocation(value);
+  else if(field==='sku')same=normalizeSku(current)===normalizeSku(value);
+  else same=normalizeText(current)===normalizeText(value);
+  if(!same)throw Error('Data transaksi berubah. Muat ulang detail sebelum mengedit.');
+ }
 }
 
 export async function updateTransactionRows({env,sheetName,rowNumbers,updates,expectedRows}){
