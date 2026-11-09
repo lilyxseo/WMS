@@ -7,11 +7,21 @@ import {execFileSync} from 'node:child_process';
 import {onRequest} from '../functions/_middleware.js';
 const read=path=>readFile(new URL('../'+path,import.meta.url),'utf8');
 test('only the canonical public login is indexable; private routes, queries and previews are noindex',async()=>{
- for(const [url,indexable] of [['https://gotoliving.app/',true],['https://gotoliving.id/',false],['https://www.gotoliving.app/',false],['https://gotoliving.app/advance-search',false],['https://gotoliving.app/arsip',false],['https://gotoliving.app/sku/secret',false],['https://gotoliving.app/sheet-input',false],['https://gotoliving.app/?code=oauth',false],['https://preview.wms.pages.dev/',false],['https://wms-duj.pages.dev/',false],['https://gotoliving.app/api/stock-entry',false]]){
+ for(const [url,indexable] of [['https://gotoliving.app/',true],['https://gotoliving.id/',false],['https://gotoliving.app/advance-search',false],['https://gotoliving.app/arsip',false],['https://gotoliving.app/sku/secret',false],['https://gotoliving.app/sheet-input',false],['https://gotoliving.app/?code=oauth',false],['https://preview.wms.pages.dev/',false],['https://wms-duj.pages.dev/',false],['https://gotoliving.app/api/stock-entry',false]]){
   const response=await onRequest({request:new Request(url),next:async()=>new Response('unchanged',{headers:{'Content-Type':'text/html','Cache-Control':'private, no-store','Set-Cookie':'session=retained; HttpOnly'}})});
   assert.equal(response.headers.get('X-Robots-Tag'),indexable?'index, follow':'noindex, nofollow, noarchive');assert.equal(response.headers.get('Cache-Control'),'private, no-store');assert.match(response.headers.get('Set-Cookie'),/session=retained/);assert.equal(await response.text(),'unchanged');
  }
  const failed=await onRequest({request:new Request('https://gotoliving.app/'),next:async()=>new Response('error',{status:503,headers:{'Content-Type':'text/html'}})});assert.equal(failed.status,503);assert.match(failed.headers.get('X-Robots-Tag'),/noindex/);
+});
+test('www permanently redirects to the canonical domain without a noindex response',async()=>{
+ for(const path of ['/', '/sku/0012', '/?code=oauth&state=abc', '/advance-search?sku=0012']){
+  let nextCalls=0;
+  const response=await onRequest({request:new Request('https://www.gotoliving.app'+path),next:async()=>{nextCalls++;return new Response('unused');}});
+  assert.equal(response.status,308);assert.equal(response.headers.get('Location'),'https://gotoliving.app'+path);assert.equal(response.headers.get('X-Robots-Tag'),null);assert.equal(nextCalls,0);
+ }
+ const redirect=await onRequest({request:new Request('https://www.gotoliving.app/'),next:async()=>{throw Error('Must redirect first');}});
+ const canonical=await onRequest({request:new Request(redirect.headers.get('Location')),next:async()=>new Response('Login',{headers:{'Content-Type':'text/html; charset=utf-8'}})});
+ assert.equal(canonical.status,200);assert.equal(canonical.headers.get('X-Robots-Tag'),'index, follow');
 });
 test('sitemap exposes only the login; robots permits reading private-page noindex headers',async()=>{
  const sitemap=await read('sitemap.xml'),robots=await read('robots.txt'),routes=JSON.parse(await read('_routes.json'));
