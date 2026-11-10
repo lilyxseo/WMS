@@ -24,7 +24,7 @@ test('most important insight renders the formatting supplied by the monthly insi
   const renderer = main.slice(main.indexOf('function renderInsightCard'), main.indexOf('function normalizeStatus'));
   assert.match(renderer, /<\/strong> <span>\$\{insight\.important\.text\|\|''\}<\/span>/);
   assert.doesNotMatch(renderer, /<span>\$\{esc\(insight\.important\.text\|\|''\)\}<\/span>/);
-  assert.match(monthly, /SKU terlaris: <strong>\$\{safe\(topOutSku\)\}<\/strong>/);
+  assert.match(monthly, /buildMonthlyInsight\(\{inbound,outbound,now\}\)/);
 });
 
 test('most important insight keeps its heading and content in one flowing line', () => {

@@ -1,3 +1,4 @@
+import {renderMonthlyInsight} from './monthly-insight-view.js';
 import { mountAdvanceSearch } from './advance-search.js';
 import {archiveSpreadsheetRule,archiveFilterValues} from './archive-filters.js?v=__APP_VERSION__';
 import {createSearchResponseCache} from './search-response-cache.js?v=__APP_VERSION__';
@@ -2266,6 +2267,7 @@ function renderPresentationValue(key,value){return key==="dokumen"?renderDocumen
 function renderTable(rows,presentRow=null){if(!rows.length) return `<div class='empty-card'><strong>Data kosong</strong><div>Tidak ada baris untuk sumber ini.</div></div>`;const presented=presentRow?rows.map(presentRow):rows;const headers=Object.keys(presented[0]);let h=`<div class='table-wrap'><table><thead><tr>${headers.map(x=>`<th>${esc(String(x).toUpperCase())}</th>`).join("")}</tr></thead><tbody>`;presented.forEach(r=>h+=`<tr>${headers.map(k=>`<td class='${k==="dokumen"||k==="stockout"?"presentation-cell":""}'>${renderPresentationValue(k,r[k])}</td>`).join("")}</tr>`);h+=`</tbody></table></div><div class='mv-pagination'><span>Menampilkan ${rows.length} dari ${rows.length} data</span></div>`;return h;}
 
 function renderInsightCard(insight){
+if(insight?.version===2)return renderMonthlyInsight(insight);
 if(!insight||insight.empty)return `<div class='insight-card insight-card--empty'><div class='state'>Belum ada data untuk dianalisis</div></div>`;
 if(Array.isArray(insight.insights)){
 const insightRows=insight.insights.slice(0,10).map(it=>`<li class='auto-insight-list-item tone-${esc(it.tone||'info')}'><span class='auto-insight-list-icon'>${it.icon||'•'}</span><span class='auto-insight-list-text'>${it.text||''}</span></li>`).join('');
