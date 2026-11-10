@@ -2958,3 +2958,5 @@ html[data-theme="light"] .monthly-metric.inbound .monthly-metric-value,html[data
 @media(max-width:560px){.monthly-insight{padding:16px!important;border-radius:15px}.monthly-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.monthly-metric:nth-child(3){border-left:0}.monthly-metric:nth-child(n+3){border-top:1px solid var(--line)}.monthly-period{font-size:10px}.monthly-period>span{display:none}.monthly-findings{grid-template-columns:minmax(0,1fr)}.monthly-footer{flex-direction:column;gap:5px}.monthly-bars{gap:2px}.monthly-bar-pair{gap:1px}}
 
 .monthly-link-icon{width:11px;height:11px;vertical-align:middle;margin-left:3px}.monthly-chart-scale{height:164px;bottom:auto}
+
+.detail-workflow-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 16px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}.detail-workflow-actions>span{font-size:11px;color:var(--muted);line-height:1.6}.detail-workflow-actions button{min-height:38px}@media(max-width:560px){.detail-workflow-actions button{flex:1}.detail-workflow-actions>span{flex-basis:100%}}

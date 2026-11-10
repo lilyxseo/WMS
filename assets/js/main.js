@@ -2202,6 +2202,39 @@ if(!background)detail.innerHTML=`<div class="state error">Gagal memuat detail SK
 if(throwOnError)throw err;
 }
 }
+let skuDetailWorkflowPending=false;
+function renderSkuWorkflowActions(){
+ if(!getPermissions().canCreate)return '';
+ return `<div class="detail-workflow-actions" aria-label="Buat transaksi untuk SKU ini"><button type="button" class="btn-primary" data-sku-workflow="movement">Buat Movement</button><button type="button" class="btn-ghost" data-sku-workflow="cycle-count">Buat Cycle Count</button><span>Pilih lokasi dan lengkapi data di halaman input.</span></div>`;
+}
+async function openSkuWorkflow(kind,button){
+ if(!['movement','cycle-count'].includes(kind)||skuDetailWorkflowPending)return;
+ if(!getPermissions().canCreate){toast('Hanya PIC atau Developer yang bisa membuat transaksi.','error');return;}
+ const sku=String(currentSku||'').trim(),generation=authRequestGeneration;
+ if(!sku||SKU_DETAIL_EDIT_STATE.sku!==sku||getActivePage()!=='detail')return;
+ skuDetailWorkflowPending=true;if(button)button.disabled=true;
+ try{
+  restoreInventoryDraft(kind);
+  const cloud=accountInventoryDraft(kind);await cloud?.ready;
+  if(generation!==authRequestGeneration||currentSku!==sku||getActivePage()!=='detail'||!getPermissions().canCreate)return;
+  const state=inventoryDraftState(kind);
+  if(state.submitting||['sending','uncertain'].includes(state.delivery)){
+   navigateTo('/'+kind);toast('Periksa status dan History sesi yang sedang berjalan sebelum membuat transaksi baru.','warning');return;
+  }
+  if(cloud&&['loading','conflict','error'].includes(cloud.state.status)){
+   navigateTo('/'+kind);toast(cloud.state.message||'Selesaikan pemuatan atau konflik draft terlebih dahulu.','warning');return;
+  }
+  if(!state.sessionActive){
+   if(!prepareInventorySession(kind))return;
+   state.sessionActive=true;state.sessionItems=[];
+   if(kind==='cycle-count')state.tanggal=formatInputDate(new Date());
+  }
+  clearTimeout(state.searchTimer);state.searchInput=sku;state.search=sku;
+  persistInventoryDraft(kind);navigateTo('/'+kind);
+ }catch(error){if(generation===authRequestGeneration)toast(error.message||'Halaman input belum dapat dibuka. Coba lagi.','error');}
+ finally{skuDetailWorkflowPending=false;if(button)button.disabled=false;}
+}
+document.addEventListener('click',event=>{const button=event.target.closest('[data-sku-workflow]');if(button)void openSkuWorkflow(button.dataset.skuWorkflow,button);});
 const SKU_DETAIL_EDIT_STATE={sku:'',rows:{in:[],out:[]},payload:null};
 function renderSkuDetailPayload(payload){
 const sku=String(payload.sku||"").trim();
@@ -2221,6 +2254,7 @@ for(const r of (bySheet["Kartu Stock"]||[])){const stokAkhir=parseNumber(getVal(
 const summary=[["Total Stok Akhir",tAvailable],["Stok Retail",tStokRetail],["Stok Bulky",tStokBulky],["Total Qty Masuk",tIn],["Total Qty Keluar",tOut],["Baris Kartu Stock",bySheet["Kartu Stock"].length]];
 const sourceList=Array.isArray(sel.sources)?sel.sources:[...sel.sources||[]];
 let html=`<div class='detail-profile'><div class='detail-hero'><div class='detail-top'><div><div class='detail-name'>${esc(nama)}</div><div class='detail-sku'>SKU: <strong>${esc(sku)}</strong> <button class='btn-ghost copy-mini-btn' data-copy-sku onclick="copySku(decodeURIComponent('${encAttr(sku)}'),this)"><span aria-hidden='true'>⧉</span><span>Copy SKU</span></button><span id='skuCatalogPhotoRoot' hidden></span></div></div><button class='btn-primary' onclick="goBackToPreviousPage()"><span aria-hidden='true'>←</span><span>Kembali ke hasil pencarian</span></button></div><div class='source-row'>${sourceList.map(s=>`<span class='badge ${badgeClass(s)}'>${esc(s)}</span>`).join(" ")}</div></div>`;
+html+=renderSkuWorkflowActions();
 html+=`<div class='summary-grid'>${summary.map(([k,v])=>`<div class='summary-card' data-detail-metric='${k==='Total Qty Masuk'?'in':k==='Total Qty Keluar'?'out':''}'><div class='k'>${k}</div><div class='v'>${esc(v)}</div></div>`).join("")}</div>`;
 html+=`<div class='detail-note'><div class='note-box'><div class='note-title'>Lokasi</div><div class='note-value'>${locationSet.size?[...locationSet].slice(0,12).map(esc).join(", "):"-"}</div></div></div>`;
 html+=`<div id="skuNotesRoot"></div>`;
@@ -4871,8 +4905,15 @@ async function saveEditableTableChanges(scope,patches,acknowledge){
  }
  const typed=patch=>patch.number?(patch.value.trim()===''?'':Number(patch.value)):patch.value;
  const request=async(path,body,method='POST')=>{
-  if(generation!==authRequestGeneration)throw Error('Sesi berubah.');const response=await fetch(path,{method,headers:{...await getAuthHeaders(),'Content-Type':'application/json','X-WMS-Editor':'INLINE_EDIT'},body:JSON.stringify(body),signal:AbortSignal.timeout(25000)}),data=await response.json().catch(()=>({}));
-  if(!response.ok||!data.success)throw Error(data.message||'Penyimpanan belum terkonfirmasi.');if(generation!==authRequestGeneration)throw Error('Sesi berubah.');return data;
+  if(generation!==authRequestGeneration)throw Error('Sesi berubah.');
+  let headers;try{headers=await getAuthHeaders();}catch{throw Error('Sesi belum dapat diverifikasi. Data belum dikirim; draf tetap tersedia. Coba kembali setelah koneksi pulih.');}
+  if(generation!==authRequestGeneration)throw Error('Sesi berubah.');
+  // Allow the server's audit, row verification and Google write to complete.
+  const timeoutMs=scope.startsWith('transaction-')||scope.startsWith('sku-detail-')?180000:90000;
+  let response,data;
+  try{response=await fetch(path,{method,headers:{...headers,'Content-Type':'application/json','X-WMS-Editor':'INLINE_EDIT'},body:JSON.stringify(body),signal:AbortSignal.timeout(timeoutMs)});data=await response.json();}
+  catch(error){if(['TimeoutError','AbortError','SyntaxError'].includes(error?.name)||error instanceof TypeError)throw Error('Penyimpanan belum terkonfirmasi karena koneksi lambat atau terputus. Draf tetap tersedia. Periksa data sumber dan Activity Log sebelum mengirim ulang.');throw error;}
+  if(!response.ok||!data?.success)throw Error(data?.message||'Penyimpanan belum terkonfirmasi. Periksa data sumber sebelum mengirim ulang.');if(generation!==authRequestGeneration)throw Error('Sesi berubah.');return data;
  };
  for(const patch of patches){
   let live=patch.rowRef;

@@ -55,9 +55,9 @@ export async function verifyTransactionRow({env,sheetName,rowNumber,expected,acc
  }
 }
 
-export async function updateTransactionRows({env,sheetName,rowNumbers,updates,expectedRows}){
+export async function updateTransactionRows({env,sheetName,rowNumbers,updates,expectedRows,accessToken}){
  const rows=[...new Set(rowNumbers.map(Number))];if(!rows.length||rows.some(row=>!Number.isInteger(row)||row<2)||rows.length>500)throw Error('Nomor baris transaksi tidak valid (maksimal 500 baris).');
- const access=await token(env);if(expectedRows)for(const rowNumber of rows)await verifyTransactionRow({env,sheetName,rowNumber,expected:expectedRows[rowNumber],accessToken:access});
+ const access=accessToken||await token(env);if(expectedRows)for(const rowNumber of rows)await verifyTransactionRow({env,sheetName,rowNumber,expected:expectedRows[rowNumber],accessToken:access});
  const map=sheetName===SHEET_BARANG_KELUAR?BARANG_KELUAR_FIELD_MAP:FIELD_MAP,data=rows.flatMap(row=>Object.entries(updates).filter(([field])=>map[field]).map(([field,value])=>({range:`${sheetName}!${map[field]}${row}`,values:[[value??'']]})));
  let response;try{response=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${env.SHEET_ID_2026}/values:batchUpdate`,{method:'POST',headers:{Authorization:`Bearer ${access}`,'Content-Type':'application/json'},body:JSON.stringify({valueInputOption:'USER_ENTERED',data}),signal:AbortSignal.timeout(60000)});}catch{throw Error('Penyimpanan belum terkonfirmasi. Periksa data Google Sheets sebelum mencoba kembali.');}
  const result=await response.json().catch(()=>null);if(!response.ok||!result)throw Error('Penyimpanan Google Sheets belum terkonfirmasi. Periksa data sebelum mencoba kembali.');
