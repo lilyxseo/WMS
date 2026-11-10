@@ -138,15 +138,16 @@ export async function onRequestGet({ request, env }) {
     const url = new URL(request.url);
     const mode = sanitize(url.searchParams.get("mode")).toLowerCase();
     const sku=sanitize(url.searchParams.get("sku")).toUpperCase();
-    if(sku&&!await getRequestRole(request,env))return json({success:false,message:"Sesi tidak valid"},401);
+    if(!await getRequestRole(request,env))return json({success:false,message:"Sesi tidak valid"},401);
     const spreadsheetId = sanitize(env.SHEET_ID_INVENTORY) || sanitize(env.SHEET_ID_2026);
     if (!spreadsheetId) return json({ success: false, message: "SHEET_ID_INVENTORY/SHEET_ID_2026 belum diset" }, 500);
 
     if (mode !== "test") {
       const accessToken = await createAccessToken(env);
       const read = await readSheetValues({ accessToken, sheetId: spreadsheetId, range: MOVEMENT_DATA_RANGE });
-      if (!read.res.ok && isPermissionError(read.data)) return json({ success: false, message: "Akun Gmail OAuth belum punya akses Editor ke Spreadsheet Movement" }, 403);
+      if (!read.res.ok && isPermissionError(read.data)) return json({ success: false, code:"MOVEMENT_SOURCE_PERMISSION_DENIED", message: "Akun Gmail WMS belum memiliki akses baca ke spreadsheet Inventory (sheet Movement). Bagikan spreadsheet kepada akun Gmail WMS, lalu coba kembali." }, 403);
       if (!read.res.ok) return json({ success: false, message: read.data?.error?.message || "Gagal baca sheet Movement" }, read.res.status);
+      if(mode==='history')return json({success:true,values:read.data?.values||[]});
       const rows = parseRows(read.data?.values || []).filter(row=>!sku||sanitize(row.sku).toUpperCase()===sku);
       const limit = Math.max(1, Number(url.searchParams.get("limit")) || 1000);
       const data = mode === "latest" ? rows.slice(-limit) : rows;

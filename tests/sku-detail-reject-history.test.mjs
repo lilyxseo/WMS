@@ -14,7 +14,7 @@ test('Advance Search preserves both Reject histories, exact SKU, row order and a
 });
 test('Advance Search keeps all detail source columns including fields unique to later rows and escapes values',async()=>{
  const data=await readAdvanceSection('detail','A',{request:async()=>({sources:{'Kartu Stock':[{sku:'A',qty:2},{sku:'A',note:'<img src=x onerror=alert(1)>'}],'Barang Masuk':[]}})});
- assert.equal(data.length,2);const html=advanceTable(data[0].rows);assert.match(html,/<th>note<\/th>/);assert.match(html,/&lt;img/);assert.doesNotMatch(html,/<img/);
+ assert.equal(data.length,2);const html=advanceTable(data[0].rows);assert.match(html,/<th[^>]*>note<\/th>/);assert.match(html,/&lt;img/);assert.doesNotMatch(html,/<img/);
 });
 test('Advance Search requests all Movement and paginates Cycle Count after an exact SKU filter',async()=>{
  const urls=[];const request=async url=>{urls.push(url);return {data:[{sku:'0012'},{sku:'12'}],rows:[{sku:'0012'},{sku:'12'}],total:73,page:2,limit:50};};
