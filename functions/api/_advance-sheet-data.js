@@ -70,3 +70,23 @@ export function readSkuTables(values,sku,{sheetName='',sourceName=''}={}){
   return {name:`${sourceName} · ${sheetName} · Tabel ${index+1} (${sheetColumn(table.start)}${table.headerRow+1}:${sheetColumn(table.end-1)})`,rows};
  });
 }
+
+// COUNT 1 uses Display Name for SKU, not for the human-readable product name.
+// Layout confirmed from the source: counted stock A:E, manual additions H:K.
+export function readCount1Tables(values,sku,{sheetName='COUNT 1',sourceName='Stok Opname 2026'}={}){
+ if(!Array.isArray(values))throw Error('Respons COUNT 1 tidak valid.');
+ const norm=value=>header(value).replace(/\s/g,'');
+ const specs=[{name:'Hasil hitung',start:0,end:5,skuColumn:1,expected:['lokasi','displayname','name','count1','count2']},{name:'Tambahan manual',start:7,end:11,skuColumn:8,expected:['lokasi','displayname','name','qty']}];
+ return specs.map((spec,index)=>{
+  const headerRow=values.findIndex(row=>spec.expected.every((label,offset)=>norm(row?.[spec.start+offset])===label));
+  if(headerRow<0)throw Error(`COUNT 1: header ${spec.name} (${sheetColumn(spec.start)}:${sheetColumn(spec.end-1)}) tidak sesuai sumber.`);
+  const rows=[];
+  for(let row=headerRow+1;row<values.length;row++){
+   const cells=values[row]||[];if(sheetSku(cells[spec.skuColumn])!==sheetSku(sku))continue;
+   const record={sku:text(cells[spec.skuColumn]),sheet:sheetName,tabel:index+1,baris:row+1};
+   for(let col=spec.start;col<spec.end;col++)record[text(values[headerRow][col])]=cells[col]??'';
+   rows.push(record);
+  }
+  return {name:`${sourceName} · ${sheetName} · ${spec.name} (${sheetColumn(spec.start)}:${sheetColumn(spec.end-1)})`,rows};
+ });
+}

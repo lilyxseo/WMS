@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readSkuTables} from '../functions/api/_advance-sheet-data.js';
+import {readSkuTables,readCount1Tables} from '../functions/api/_advance-sheet-data.js';
 import {handleAdvanceSources,resolveAdvanceSpreadsheet} from '../functions/api/advance-search-sources.js';
 
 test('COUNT 1 reads both side-by-side tables with different SKU columns and preserves zero and leading zeros',()=>{
@@ -31,9 +31,9 @@ test('2025 transactions resolve both archive tabs and return only exact SKU sour
  const source={};for(const title of ['Barang Masuk','Barang KeIuar'])source[title]=[['Tanggal','From','To','SKU','Nama Barang','Qty'],['2025-07-01','A','B','0012','Product',2],['2025-07-02','A','B','12','Other',9]];
  const response=await handleAdvanceSources({request:req('ledger2025'),env:{}},dependencies(Object.keys(source),source));assert.equal(response.status,200);const data=await response.json();assert.equal(data.groups.length,2);assert.ok(data.groups.every(group=>group.rows.length===1&&group.rows[0].sku==='0012'));assert.ok(data.groups[0].name.includes('2025'));
 });
-test('SO JULI 2025 reads Inventory while COUNT 1 accepts shared schemas',async()=>{
+test('SO JULI 2025 reads Inventory while COUNT 1 rejects an unrelated schema',async()=>{
  const deps=dependencies(['SO JULI 2025'],{'SO JULI 2025':[['SKU','Nama Barang','Qty'],['0012','A',4]]});const response=await handleAdvanceSources({request:req('so2025'),env:{}},deps);assert.equal(response.status,200);assert.equal((await response.json()).groups[0].rows[0].Qty,4);
- const fail=await handleAdvanceSources({request:req('so2026'),env:{SO_2026_SPREADSHEET_ID:'T'.repeat(30)}},dependencies(['COUNT 1'],{'COUNT 1':[['SKU','Nama Barang','Qty'],['0012','A',1]]}));assert.equal(fail.status,200);assert.equal((await fail.json()).groups[0].rows[0].Qty,1);
+ const fail=await handleAdvanceSources({request:req('so2026'),env:{SO_2026_SPREADSHEET_ID:'T'.repeat(30)}},dependencies(['COUNT 1'],{'COUNT 1':[['SKU','Nama Barang','Qty'],['0012','A',1]]}));assert.equal(fail.status,503);assert.match((await fail.json()).message,/header Hasil hitung/);
 });
 test('Balikan discovers all TRIP tabs and preserves original extra columns with no other SKU leakage',async()=>{
  const values={};for(const title of ['TRIP 1','TRIP 2'])values[title]=[['Centang','SKU','Nama Barang','Qty','Custom Field'],[false,'0012','Product',0,title],[false,'12','Other',999,'not returned']];
@@ -83,4 +83,12 @@ test('staggered side-by-side headers do not truncate the other tables rows',()=>
  ['0012','Left third',3,'','0012','Right',4],
  ],'0012',{sheetName:'COUNT 1'});
  assert.equal(data.length,2);assert.deepEqual(data[0].rows.map(row=>row.Qty),[1,2,3]);assert.equal(data[1].rows[0].Qty,4);
+});
+
+const count1Fixture=[['STOCK OPNAME KS TUBUN'],[],['','','','','','','','TAMBAHAN MANUAL INPUT DI SINI'],['Lokasi','Display Name','Name','Count 1','Count 2','','','Lokasi','Display Name','Name','Qty'],['A01-1','682200002979','GOTO PRODUCT',0,'','','','A09-4','682200002979','GOTO PRODUCT',19],['A01-1','OTHER','Other',8,'','','','A09-4','682200002979','GOTO PRODUCT',2],['A01-1','682200002979-X','Other',9,'','','','A09-4','OTHER','Other',3]];
+test('source COUNT 1 layout uses Display Name as exact SKU in both counted and manual tables',()=>{
+ const groups=readCount1Tables(count1Fixture,'682200002979');assert.equal(groups.length,2);assert.equal(groups[0].rows.length,1);assert.equal(groups[0].rows[0]['Count 1'],0);assert.equal(groups[0].rows[0]['Count 2'],'');assert.equal(groups[1].rows.length,2);assert.deepEqual(groups[1].rows.map(row=>row.Qty),[19,2]);assert.deepEqual(groups[1].rows.map(row=>row.baris),[5,6]);assert.match(groups[1].name,/Tambahan manual/);
+});
+test('COUNT 1 endpoint reads both real table ranges and returns matching SKU without losing manual rows',async()=>{
+ const response=await handleAdvanceSources({request:req('so2026','682200002979'),env:{SO_2026_SPREADSHEET_ID:'1HwfQ9tfNcfuDjHJUVhXOxjYE9degkmb9FvelGUfzq2g'}},dependencies(['COUNT 1'],{'COUNT 1':count1Fixture}));assert.equal(response.status,200);const data=await response.json();assert.equal(data.groups.length,2);assert.equal(data.groups[1].rows.length,2);assert.equal(data.partial,false);
 });

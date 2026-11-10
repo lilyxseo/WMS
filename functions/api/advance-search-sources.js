@@ -1,7 +1,7 @@
 import {getRequestRole} from './_authz.js';
 import {getGoogleAccessToken} from './_google-auth.js';
 import {archiveDb,configuredArchives,archiveSpreadsheetId} from './_archive-sources.js';
-import {readSkuTables,sheetColumn,sheetSku} from './_advance-sheet-data.js';
+import {readSkuTables,readCount1Tables,sheetColumn,sheetSku} from './_advance-sheet-data.js';
 import {buildHeaderInfo} from './balikan-store/_utils.js';
 import {parseBalikanSheet} from './balikan-store/_parse-sheet.js';
 const json=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'private, no-store'}});
@@ -41,7 +41,8 @@ export async function handleAdvanceSources({request,env},dependencies={}){
      for(const row of parsed.rows){const raw=values[row.rowNumber-1]||[];for(const [field,column] of Object.entries(headerInfo.columnMap))row[field]=['checked'].includes(field)?raw[column]??'':String(raw[column]??'').trim();for(const key of Object.keys(labels)){const column=Number(key.replace('extra_',''));row[key]=raw[column]??'';}}
      const rows=parsed.rows.filter(row=>sheetSku(row.sku)===sheetSku(sku)).map(row=>{const result={'Sumber Sheet':sheet.title};for(const [key,value] of Object.entries(row)){const label=labels[key]||key;result[Object.hasOwn(result,label)?`${label} (${key})`:label]=value;}return result;});
      groups.push({name:`Balikan Store · ${sheet.title}`,rows});
-    }else groups.push(...readSkuTables(values,sku,{sheetName:sheet.title,sourceName:kind==='ledger2025'?'Kartu Stok 2025':kind==='so2025'?'Stok Opname 2025':'Stok Opname 2026'}));
+    }else if(kind==='so2026')groups.push(...readCount1Tables(values,sku,{sheetName:sheet.title}));
+    else groups.push(...readSkuTables(values,sku,{sheetName:sheet.title,sourceName:kind==='ledger2025'?'Kartu Stok 2025':kind==='so2025'?'Stok Opname 2025':'Stok Opname 2026'}));
    }catch(error){failures.push({sheet:sheet.title,message:error.message});}});
   }}
   await Promise.all([worker(),worker()]);
