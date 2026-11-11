@@ -24,9 +24,20 @@ export function advanceCell(value,column=''){
  for(const match of matches){const raw=match[0],url=external(raw);if(!url)continue;result+=esc(value.slice(offset,match.index));index++;const label=/dokumen|document|file|pdf/i.test(column)?'Lihat dokumen':'Buka tautan';result+=`<a class="advance-link-button" href="${esc(url.href)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" title="${esc(url.href)}">${openIcon}<span>${label}${matches.length>1?' '+index:''}</span><small>${esc(url.hostname)}</small></a>`;offset=match.index+raw.length;}
  return result+esc(value.slice(offset));
 }
+function columnLayout(column,rows){
+ const name=normal(column),values=rows.map(row=>row[column]).filter(value=>value!==null&&value!==undefined&&value!=='');
+ if(values.length&&values.every(value=>advanceBoolean(value)!==null))return {kind:'boolean',width:96};
+ if(/^(qty|quantity|jumlah|count[12]?|aktual|selisih|stok.*|stock.*|saldo.*|akurasi|accuracy)$/.test(name))return {kind:'number',width:132};
+ if(/tanggal|date|timestamp|createdat|updatedat/.test(name))return {kind:'date',width:164};
+ if(/nama|name|catatan|keterangan|note|description|alasan/.test(name)&&name!=='sheetname'&&name!=='displayname')return {kind:'text',width:300};
+ if(/sku|barcode|iseller|netsuite|displayname/.test(name))return {kind:'identifier',width:184};
+ if(/link|url|dokumen|document|file|pdf/.test(name))return {kind:'link',width:240};
+ return {kind:'text',width:176};
+}
 export function advanceTable(rows){
  if(!rows.length)return '<div class="advance-empty-state">Tidak ada data untuk SKU ini.</div>';
  const columns=advanceColumns(rows);
  if(!columns.length)return '<div class="advance-empty-state">Tidak ada kolom data untuk ditampilkan.</div>';
- return `<div class="table-wrap advance-table-wrap" tabindex="0" aria-label="Tabel data sumber, geser untuk melihat semua kolom"><table class="advance-data-table"><thead><tr>${columns.map(column=>`<th scope="col">${esc(labels[normal(column)]||column)}</th>`).join('')}</tr></thead><tbody>${rows.map(row=>`<tr>${columns.map(column=>`<td class="${advanceBoolean(row[column])!==null?'advance-boolean-cell':''}">${advanceCell(row[column],column)}</td>`).join('')}</tr>`).join('')}</tbody></table></div><div class="advance-table-footer"><span>${rows.length.toLocaleString('id-ID')} baris data</span><span>Geser tabel untuk melihat kolom lainnya</span></div>`;
+ const layout=columns.map(column=>columnLayout(column,rows)),width=layout.reduce((sum,column)=>sum+column.width,0);
+ return `<div class="table-wrap advance-table-wrap" tabindex="0" role="region" aria-label="Tabel data sumber, geser untuk melihat semua kolom"><table class="advance-data-table" style="--advance-table-width:${width}px"><colgroup>${layout.map(column=>`<col style="width:${column.width}px">`).join('')}</colgroup><thead><tr>${columns.map((column,index)=>`<th scope="col" class="advance-column-${layout[index].kind}">${esc(labels[normal(column)]||column)}</th>`).join('')}</tr></thead><tbody>${rows.map(row=>`<tr>${columns.map((column,index)=>`<td class="advance-column-${layout[index].kind}${advanceBoolean(row[column])!==null?' advance-boolean-cell':''}">${advanceCell(row[column],column)}</td>`).join('')}</tr>`).join('')}</tbody></table></div><div class="advance-table-footer"><span>${rows.length.toLocaleString('id-ID')} baris data</span><span>Geser tabel untuk melihat kolom lainnya</span></div>`;
 }
