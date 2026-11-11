@@ -106,17 +106,19 @@ async function readSheetBarangMasuk({ accessToken, sheetId }) {
 }
 
 export async function onRequestPost({ request, env }) {
+  let writeAttempted = false;
+  const reply = (body, status = 200) => json({ ...body, ...(!body.success ? { writeState: writeAttempted ? 'uncertain' : 'not_started' } : {}) }, status);
   const authz = await requirePicRole({ request, env });
-  if (!authz.ok) return authz.response;
+  if (!authz.ok) { const body = await authz.response.json(); return reply(body, authz.response.status); }
   try {
     const inventorySpreadsheetId = sanitize(env.SHEET_ID_INVENTORY);
     const spreadsheetId = sanitize(env.SHEET_ID_2026);
-    if (!inventorySpreadsheetId) return json({ success: false, message: "SHEET_ID_INVENTORY belum diset" }, 500);
-    if (!spreadsheetId) return json({ success: false, message: "SHEET_ID_2026 belum diset" }, 500);
+    if (!inventorySpreadsheetId) return reply({ success: false, message: "SHEET_ID_INVENTORY belum diset" }, 500);
+    if (!spreadsheetId) return reply({ success: false, message: "SHEET_ID_2026 belum diset" }, 500);
 
     const body = await request.json();
     const requestItems = Array.isArray(body?.items) ? body.items : [body];
-    if (!requestItems.length) return json({ success: false, message: "items wajib diisi" }, 400);
+    if (!requestItems.length) return reply({ success: false, message: "items wajib diisi" }, 400);
 
     // The server owns the transaction date. Client-provided dates are deliberately
     // ignored so every item in this request uses one consistent business day.
@@ -137,31 +139,33 @@ export async function onRequestPost({ request, env }) {
     });
 
     for (const item of movementItems) {
-      if (!item.from) return json({ success: false, message: "from wajib diisi" }, 400);
-      if (!item.to) return json({ success: false, message: "to wajib diisi" }, 400);
-      if (!item.sku) return json({ success: false, message: "sku wajib diisi" }, 400);
-      if (!item.namaBarang) return json({ success: false, message: "namaBarang wajib diisi" }, 400);
-      if (item.qty === null) return json({ success: false, message: "qty harus angka > 0" }, 400);
-      if (item.stokDiLokasiAwal === null) return json({ success: false, message: "stokDiLokasiAwal harus angka >= 0" }, 400);
-      if (item.stokAktual === null) return json({ success: false, message: "stokAktual harus angka >= 0" }, 400);
+      if (!item.from) return reply({ success: false, message: "from wajib diisi" }, 400);
+      if (!item.to) return reply({ success: false, message: "to wajib diisi" }, 400);
+      if (!item.sku) return reply({ success: false, message: "sku wajib diisi" }, 400);
+      if (!item.namaBarang) return reply({ success: false, message: "namaBarang wajib diisi" }, 400);
+      if (item.qty === null) return reply({ success: false, message: "qty harus angka > 0" }, 400);
+      if (item.stokDiLokasiAwal === null) return reply({ success: false, message: "stokDiLokasiAwal harus angka >= 0" }, 400);
+      if (item.stokAktual === null) return reply({ success: false, message: "stokAktual harus angka >= 0" }, 400);
     }
 
     const accessToken = await createAccessToken(env);
     const inventoryRows = movementItems.map((item) => [item.tanggal, item.from, item.to, item.sku, item.namaBarang, item.stokDiLokasiAwal, item.stokAktual]);
     const barangMasukRows = movementItems.map((item) => [item.tanggalBarangMasuk, item.from, item.to, item.sku, item.namaBarang, item.qty, "Movement", item.pic, "INTERNAL STOCK TRANSFER"]);
 
+    writeAttempted = true;
     let inventoryWrite = await appendToSheet({ accessToken, sheetId: inventorySpreadsheetId, range: INVENTORY_MOVEMENT_RANGE, values: inventoryRows });
     if (!inventoryWrite.res.ok && isPermissionError(inventoryWrite.data)) {
-      return json({ success: false, message: "Akun Gmail OAuth belum punya akses Editor ke Spreadsheet Inventory" }, 403);
+      writeAttempted = false;
+      return reply({ success: false, message: "Akun Gmail OAuth belum punya akses Editor ke Spreadsheet Inventory" }, 403);
     }
-    if (!inventoryWrite.res.ok) return json({ success: false, message: inventoryWrite.data?.error?.message || "Gagal menulis history Movement", detail: inventoryWrite.data }, inventoryWrite.res.status);
+    if (!inventoryWrite.res.ok) return reply({ success: false, message: inventoryWrite.data?.error?.message || "Gagal menulis history Movement", detail: inventoryWrite.data }, inventoryWrite.res.status);
 
     const readResult = await readSheetValues({ accessToken, sheetId: spreadsheetId, range: PRIMARY_SHEET_RANGE });
     let { res, data } = readResult;
     if (!res.ok && isPermissionError(data)) {
-      return json({ success: false, message: "Akun Gmail OAuth belum punya akses Editor ke Spreadsheet 2026" }, 403);
+      return reply({ success: false, message: "Akun Gmail OAuth belum punya akses Editor ke Spreadsheet 2026" }, 403);
     }
-    if (!res.ok) return json({ success: false, message: data?.error?.message || "Gagal membaca Google Sheet", detail: data }, res.status);
+    if (!res.ok) return reply({ success: false, message: data?.error?.message || "Gagal membaca Google Sheet", detail: data }, res.status);
 
     const values = Array.isArray(data?.values) ? data.values : [];
     const emptyIndex = findFirstEmptyRowIndex(values);
@@ -171,12 +175,12 @@ export async function onRequestPost({ request, env }) {
     ({ res, data } = await batchUpdateSheetRows({ accessToken, sheetId: spreadsheetId, data: updateData }));
 
     if (!res.ok && isPermissionError(data)) {
-      return json({ success: false, message: "Akun Gmail OAuth belum punya akses Editor ke Spreadsheet 2026" }, 403);
+      return reply({ success: false, message: "Akun Gmail OAuth belum punya akses Editor ke Spreadsheet 2026" }, 403);
     }
-    if (!res.ok) return json({ success: false, message: data?.error?.message || "Gagal update Google Sheet", detail: data }, res.status);
-    return json({ success: true, processed: movementItems.length, businessDate: tanggal });
+    if (!res.ok) return reply({ success: false, message: data?.error?.message || "Gagal update Google Sheet", detail: data }, res.status);
+    return reply({ success: true, processed: movementItems.length, businessDate: tanggal });
   } catch (err) {
-    return json({ success: false, message: err?.message || "Internal server error" }, 500);
+    return reply({ success: false, message: err?.message || "Internal server error" }, 500);
   }
 }
 

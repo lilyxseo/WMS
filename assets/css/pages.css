@@ -2989,3 +2989,7 @@ html[data-theme="light"] .monthly-metric.inbound .monthly-metric-value,html[data
 #advanceSearchApp .advance-data-table td.advance-column-text{white-space:pre-line}
 #advanceSearchApp .advance-data-table .advance-link-button{max-width:100%;box-sizing:border-box;white-space:normal;overflow-wrap:anywhere;margin:2px 0;min-height:32px}
 @media(max-width:600px){#advanceSearchApp [data-advance-profile] .advance-source-section{padding:12px}.advance-source-group>.source-body{padding:0 6px 8px}#advanceSearchApp .advance-data-table :is(th,td){padding:10px!important}#advanceSearchApp .advance-table-wrap{max-height:420px}}
+
+.sku-netsuite-stock small{display:block;color:var(--muted);font-size:10px;line-height:1.6;margin-top:8px}.sku-netsuite-stock button{font-size:10px;margin-top:8px;min-height:30px}
+
+.movement-delivery-review{max-height:60vh;overflow:auto}.movement-delivery-review>label{display:flex;align-items:flex-start;gap:9px;margin:12px 0;padding:10px;border:1px solid var(--line);border-radius:8px;cursor:pointer}.movement-delivery-review input[type=radio]{appearance:auto;width:16px;height:16px;flex-shrink:0;margin-top:3px;accent-color:var(--primary)}
