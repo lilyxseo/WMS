@@ -4984,12 +4984,13 @@ function applyMovementDraftChanges(scope,patches){
  patches.forEach(({target,value})=>{target.rowRef[target.field]=target.number?(String(value).trim()===''?(cycle?null:''):Number(value)):String(value);});
  persistInventoryDraft(kind);
  if(cycle){
-  document.querySelectorAll('#ccSessionBody tr[data-idx]').forEach(tr=>{
-   const row=state.sessionItems[Number(tr.dataset.idx)];if(!row)return;
-   const diff=tr.querySelector("[data-cc-cell='diff']"),status=tr.querySelector("[data-cc-cell='st']");
-   if(diff)diff.textContent=String((Number(row.aktual)-Number(row.stok))||0);
-   if(status)status.innerHTML=cycleDiffBadge(row);
-  });
+  const changedRows=new Set(patches.map(({target})=>target.rowRef));
+  for(const row of changedRows){
+   const index=state.sessionItems.indexOf(row),tr=document.querySelector(`#ccSessionBody tr[data-idx='${index}']`);if(!tr)continue;
+   const diff=tr.querySelector("[data-cc-cell='diff']"),status=tr.querySelector("[data-cc-cell='st']"),value=String((Number(row.aktual)-Number(row.stok))||0),badge=cycleDiffBadge(row);
+   if(diff&&diff.textContent!==value)diff.textContent=value;
+   if(status&&status.innerHTML!==badge)status.innerHTML=badge;
+  }
  }
  const button=document.getElementById(cycle?'ccSubmitBtn':'mvSubmitBtn');if(button)button.disabled=!(cycle?canSubmitCycle():canSubmitMovement())||state.submitting;
 }

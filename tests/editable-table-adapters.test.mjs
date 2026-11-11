@@ -51,7 +51,7 @@ test('Movement retains typed edits when local persistence fails so account savin
 test('Cycle Count edits persist immediately, refresh derived cells and support undo values without transaction writes',()=>{
  const f=fixture();f.ctx.CYCLE_STATE.sessionActive=true;f.ctx.CYCLE_STATE.sessionItems[0].stok=10;
  const diff={},status={},button={},persisted=[];
- f.ctx.document={getElementById:()=>button,querySelectorAll:()=>[{dataset:{idx:'0'},querySelector:q=>q.includes('diff')?diff:status}]};
+ f.ctx.document={getElementById:()=>button,querySelector:()=>({dataset:{idx:'0'},querySelector:q=>q.includes('diff')?diff:status})};
  f.ctx.persistInventoryDraft=kind=>persisted.push(kind);f.ctx.canSubmitCycle=()=>f.ctx.CYCLE_STATE.sessionItems[0].aktual!==null;f.ctx.cycleDiffBadge=row=>row.aktual===10?'Sesuai':'Selisih';
  const target=f.ctx.describeEditableTableCell(f.cell({},[],{dataset:{cc:'aktual',idx:'0'}}));
  f.ctx.applyMovementDraftChanges('cycle-session',[{target,value:'10'}]);assert.equal(diff.textContent,'0');assert.equal(status.innerHTML,'Sesuai');assert.equal(button.disabled,false);
