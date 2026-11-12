@@ -2971,16 +2971,15 @@ html[data-theme="light"] .monthly-metric.inbound .monthly-metric-value,html[data
 @media(max-width:420px){.advance-search-controls{flex-direction:column}.advance-search-controls button{width:100%}.advance-profile-actions{width:100%}.advance-profile-actions>a,.advance-profile-actions>button{flex:1;justify-content:center}.advance-link-button small{display:none}}
 
 /* Keep source tables readable independently of the application's generic tables. */
-#advanceSearchApp .advance-table-wrap{isolation:isolate;position:relative;scrollbar-gutter:stable;overscroll-behavior-x:contain;scrollbar-width:auto;scrollbar-color:var(--muted) var(--panel-soft)}
+#advanceSearchApp .advance-table-wrap{isolation:isolate;position:relative;width:100%;min-width:0;box-sizing:border-box;max-height:min(460px,65dvh);scrollbar-gutter:stable;overscroll-behavior-x:contain;scrollbar-width:auto;scrollbar-color:var(--muted) var(--panel-soft)}
 #advanceSearchApp .advance-table-wrap:focus-visible{outline:2px solid var(--primary);outline-offset:3px}
-#advanceSearchApp .advance-data-table{table-layout:fixed;width:100%;min-width:var(--advance-table-width);font-size:12px}
-#advanceSearchApp .advance-data-table :is(th,td){box-sizing:border-box;min-width:0;max-width:none;padding:12px 14px!important;font-size:12px;line-height:1.6;white-space:normal;overflow-wrap:anywhere;word-break:normal;border-bottom:1px solid var(--line);border-right:1px solid var(--line)}
-#advanceSearchApp .advance-data-table th{color:var(--text);font-size:11px;font-weight:600;background:var(--panel-soft);z-index:3}
+#advanceSearchApp .advance-data-table{table-layout:fixed;width:100%;min-width:calc(var(--advance-table-width)*var(--advance-table-scale,1));font-size:12px}
+#advanceSearchApp .advance-data-table col{width:calc(var(--advance-column-width)*var(--advance-table-scale,1))}
+#advanceSearchApp .advance-data-table :is(th,td){position:static;inset:auto;z-index:auto;box-sizing:border-box;min-width:0;max-width:none;padding:12px 14px!important;font-size:12px;line-height:1.6;white-space:normal;overflow-wrap:anywhere;word-break:normal;border-bottom:1px solid var(--line);border-right:1px solid var(--line)}
+#advanceSearchApp .advance-data-table th{color:var(--text);font-size:11px;font-weight:600;background:var(--panel-soft);z-index:auto}
 #advanceSearchApp .advance-data-table td{background:var(--panel);vertical-align:top}
 #advanceSearchApp .advance-data-table tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--panel-soft) 45%,var(--panel))}
 #advanceSearchApp .advance-data-table tbody tr:hover td{background:color-mix(in srgb,var(--primary) 7%,var(--panel))}
-#advanceSearchApp .advance-data-table :is(th,td):first-child{position:sticky;left:0;z-index:2;border-right:2px solid var(--line)}
-#advanceSearchApp .advance-data-table th:first-child{z-index:4}
 #advanceSearchApp .advance-data-table :is(th,td):last-child{border-right:0}
 #advanceSearchApp .advance-data-table tbody tr:last-child td{border-bottom:0}
 #advanceSearchApp .advance-data-table .advance-column-number{text-align:right;font-variant-numeric:tabular-nums}
@@ -2988,7 +2987,7 @@ html[data-theme="light"] .monthly-metric.inbound .monthly-metric-value,html[data
 #advanceSearchApp .advance-data-table :is(.advance-column-identifier,.advance-column-date){font-variant-numeric:tabular-nums}
 #advanceSearchApp .advance-data-table td.advance-column-text{white-space:pre-line}
 #advanceSearchApp .advance-data-table .advance-link-button{max-width:100%;box-sizing:border-box;white-space:normal;overflow-wrap:anywhere;margin:2px 0;min-height:32px}
-@media(max-width:600px){#advanceSearchApp [data-advance-profile] .advance-source-section{padding:12px}.advance-source-group>.source-body{padding:0 6px 8px}#advanceSearchApp .advance-data-table :is(th,td){padding:10px!important}#advanceSearchApp .advance-table-wrap{max-height:420px}}
+@media(max-width:600px){#advanceSearchApp [data-advance-profile] .advance-source-section{padding:12px}.advance-source-group>.source-body{padding:0 6px 8px}#advanceSearchApp .advance-data-table :is(th,td){padding:10px!important}#advanceSearchApp .advance-table-wrap{--advance-table-scale:.85;max-height:min(420px,65dvh)}}
 
 .sku-netsuite-stock small{display:block;color:var(--muted);font-size:10px;line-height:1.6;margin-top:8px}.sku-netsuite-stock button{font-size:10px;margin-top:8px;min-height:30px}
 
