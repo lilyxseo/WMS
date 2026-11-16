@@ -65,3 +65,12 @@ test('lost first reply keeps the batch locked with a receipt for only Inventory'
 test('missing ID and unowned receipt cannot bypass duplicate prevention',async t=>{
  const f=await fixture(t);assert.equal((await f.post({items})).status,400);assert.equal(f.writes.length,0);assert.equal((await f.get()).status,404);
 });
+
+test('Movement writes Keterangan to Inventory column H and 2026 column I in the receipted batch',async t=>{
+ const f=await fixture(t);assert.equal((await f.post()).status,200);
+ const history=f.writes.find(write=>write.destination==='inventory').body.requests.find(request=>request.updateCells).updateCells;
+ const ledger=f.writes.find(write=>write.destination==='barangMasuk').body.requests.find(request=>request.updateCells).updateCells;
+ assert.equal(history.start.columnIndex,0);assert.equal(history.rows[0].values.length,8);assert.equal(history.rows[0].values[7].userEnteredValue.stringValue,'INTERNAL STOCK TRANSFER');
+ assert.equal(ledger.rows[0].values.length,9);assert.equal(ledger.rows[0].values[8].userEnteredValue.stringValue,'INTERNAL STOCK TRANSFER');
+ const before=f.writes.length;await f.post();assert.equal(f.writes.length,before);
+});

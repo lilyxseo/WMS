@@ -2,6 +2,7 @@ import {validBatchId,deliveryIdentity,claimDelivery,checkpointDelivery,readDeliv
 import { getGoogleAccessToken } from '../_google-auth.js';
 import { requirePicRole } from '../_authz.js';
 import { businessDateKey } from '../_inventory-analytics.js';
+const MOVEMENT_DESCRIPTION = 'INTERNAL STOCK TRANSFER';
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -116,8 +117,8 @@ export async function onRequestPost({ request, env }) {
     job=await claimDelivery(env,body.id,who,canonicalItems);
     if(job.response)return json(job.response,job.response.success?200:409);
     const accessToken = await createAccessToken(env);
-    const inventoryRows = movementItems.map((item) => [item.tanggal, item.from, item.to, item.sku, item.namaBarang, item.stokDiLokasiAwal, item.stokAktual]);
-    const barangMasukRows = movementItems.map((item) => [item.tanggalBarangMasuk, item.from, item.to, item.sku, item.namaBarang, item.qty, "Movement", item.pic, "INTERNAL STOCK TRANSFER"]);
+    const inventoryRows = movementItems.map((item) => [item.tanggal, item.from, item.to, item.sku, item.namaBarang, item.stokDiLokasiAwal, item.stokAktual, MOVEMENT_DESCRIPTION]);
+    const barangMasukRows = movementItems.map((item) => [item.tanggalBarangMasuk, item.from, item.to, item.sku, item.namaBarang, item.qty, "Movement", item.pic, MOVEMENT_DESCRIPTION]);
 
     await checkpointDelivery(env,job,'writing',{destinations});
     writeAttempted = true;

@@ -15,7 +15,8 @@ If the existing receipt table is unavailable, no spreadsheet write starts.
 Each spreadsheet write is an atomic row insertion, `updateCells`, and `createDeveloperMetadata`
 request: Inventory's `Movement` tab and 2026's `Barang Masuk` tab each retain a
 `wms_movement_<batch UUID>` receipt. SKU values are explicitly strings, preserving
-leading zeros. The server reads only business columns A:E (Inventory) or A:F
+leading zeros. Keterangan is written as `INTERNAL STOCK TRANSFER` in Inventory's
+column H and 2026's column I in the same receipted transaction. The server reads only business columns A:E (Inventory) or A:F
 (2026), finds the first empty business row after the header, and inserts/fills
 at that position. Status/PIC defaults and trailing template rows do not push
 Movement to the sheet bottom. Atomic insertion shifts existing records instead
