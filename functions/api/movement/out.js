@@ -1,6 +1,6 @@
 import { getGoogleAccessToken } from '../_google-auth.js';
 import { requirePicRole } from '../_authz.js';
-const SHEET_BARANG_KELUAR = "Barang KeIuar";
+const SHEET_BARANG_KELUAR = "Barang Keluar";
 const PRIMARY_SHEET_RANGE = `${SHEET_BARANG_KELUAR}!A:I`;
 const FALLBACK_SHEET_RANGE = `${SHEET_BARANG_KELUAR}!A:I`;
 
@@ -145,8 +145,8 @@ export async function onRequestGet({ request, env }) {
     }
     if (!sheetRead.res.ok) {
       const msg = String(sheetRead.data?.error?.message || "");
-      if (msg.toLowerCase().includes("unable to parse range")) return json({ success: false, message: "Sheet Barang KeIuar tidak ditemukan di SHEET_ID_2026" }, 404);
-      return json({ success: false, message: sheetRead.data?.error?.message || "Gagal baca sheet Barang KeIuar", detail: sheetRead.data }, sheetRead.res.status);
+      if (msg.toLowerCase().includes("unable to parse range")) return json({ success: false, message: "Sheet Barang Keluar tidak ditemukan di SHEET_ID_2026" }, 404);
+      return json({ success: false, message: sheetRead.data?.error?.message || "Gagal baca sheet Barang Keluar", detail: sheetRead.data }, sheetRead.res.status);
     }
 
     const appendDummy = sanitize(url.searchParams.get("appendDummy")).toLowerCase() === "1";

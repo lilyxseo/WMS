@@ -15,7 +15,7 @@ Buka **Data → Form Input** atau tombol **Form Input** di halaman Barang Masuk/
 
 ## Penyimpanan
 
-Endpoint `/api/stock-entry` memakai identitas sesi terverifikasi, izin PIC/Developer, dan Gmail OAuth server yang sama dengan CRUD aplikasi. Untuk SKU yang tersedia, nama diverifikasi ulang terhadap Kartu Stok; SKU yang tidak ada di master menggunakan nama input/PDF yang wajib diisi. Data dikirim ke tab Barang Masuk/Barang Keluar di `SHEET_ID_2026` sesuai Status; alias tab lama `Barang KeIuar` didukung. Tidak ada stok yang diubah langsung.
+Endpoint `/api/stock-entry` memakai identitas sesi terverifikasi, izin PIC/Developer, dan Gmail OAuth server yang sama dengan CRUD aplikasi. Untuk SKU yang tersedia, nama diverifikasi ulang terhadap Kartu Stok; SKU yang tidak ada di master menggunakan nama input/PDF yang wajib diisi. Data dikirim ke tab Barang Masuk/Barang Keluar di `SHEET_ID_2026` sesuai Status; nama tab keluar harus persis `Barang Keluar`. Tidak ada stok yang diubah langsung.
 
 Google batch tunggal menyisipkan baris pada posisi kosong pertama berdasarkan A:F, mengisi A:I, dan menyimpan receipt developer metadata. Penyisipan menggeser baris yang ada agar transaksi penulis lain tidak tertimpa. Angka SKU disimpan sebagai teks, tanggal sebagai nilai tanggal spreadsheet tanpa jam, dan teks tidak dieksekusi sebagai formula. Nilai dropdown/formula G:P pada baris kosong tidak membuat transaksi baru meloncat ke akhir tab.
 

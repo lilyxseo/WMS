@@ -12,5 +12,5 @@ test('range Barang Masuk tidak dibatasi sampai baris 20.000', () => {
 });
 
 test('range Barang Keluar tidak dibatasi sampai baris 20.000', () => {
-  assert.equal(barangDataRange(SHEET_BARANG_KELUAR), 'Barang KeIuar!A2:P');
+  assert.equal(barangDataRange(SHEET_BARANG_KELUAR), 'Barang Keluar!A2:P');
 });

@@ -23,7 +23,7 @@ function statefulGateway() {
 
 test('Barang Keluar maps its existing sheet and required columns with shared normalization', async () => {
   const parsed = await parseBarangKeluarValues([HEADER.map(item => ` ${item.toLowerCase()} `), row('SKU–1')]);
-  assert.equal(BARANG_KELUAR_SHEET_NAME, 'Barang KeIuar');
+  assert.equal(BARANG_KELUAR_SHEET_NAME, 'Barang Keluar');
   assert.equal(buildSourceRowKey(2), 'barang_keluar:2');
   assert.deepEqual(parsed.rows[0], {
     tanggal: '2026-08-30', from_location: 'OUTBOUND', to_location: 'STORE -01', sku: 'SKU-1', nama_barang: 'Produk SKU–1',
@@ -43,8 +43,8 @@ test('Barang Keluar maps the first and second STATUS columns independently', asy
 test('Barang Keluar fetches all 16 columns through DOKUMEN', async () => {
   let requestedUrl = '';
   await fetchBarangKeluarValues({ SHEET_ID_2026: 'sheet' }, { getGoogleAccessToken: async () => 'token', fetch: async url => { requestedUrl = String(url); return new Response(JSON.stringify({ values: [HEADER] })); } });
-  assert.equal(BARANG_KELUAR_SHEET_RANGE, "'Barang KeIuar'!A:P");
-  assert.equal(decodeURIComponent(requestedUrl).includes("'Barang KeIuar'!A:P"), true);
+  assert.equal(BARANG_KELUAR_SHEET_RANGE, "'Barang Keluar'!A:P");
+  assert.equal(decodeURIComponent(requestedUrl).includes("'Barang Keluar'!A:P"), true);
 });
 
 test('Barang Keluar validates headers and preserves invalid source identities', async () => {

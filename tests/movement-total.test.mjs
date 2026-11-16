@@ -31,6 +31,6 @@ test('Movement page renders and refreshes the global aggregate independently of 
   assert.doesNotMatch(aggregate, /mode=full|\.length/);
   assert.match(source, /movement:refreshMovement/);
   assert.match(source, /async function refreshMovement\(\).*refreshMovementTotal\(\)/s);
-  assert.match(source, /await syncData\(\{silent:true,force:true\}\);await refreshMovementTotal\(\)/);
+  const send=source.slice(source.indexOf('async function sendMovementSession()'),source.indexOf("document.addEventListener('click',event=>{const check="));assert.doesNotMatch(send,/syncData\(|refreshMovementTotal\(|renderMovementPage\(/);
   assert.match(source, /id='movementTotalValue'/);
 });

@@ -1,9 +1,7 @@
+import {validBatchId,deliveryIdentity,claimDelivery,checkpointDelivery,readDelivery,deliveryResult,appendDeliverySheet,readDeliveryReceipt} from './_delivery.js';
 import { getGoogleAccessToken } from '../_google-auth.js';
 import { requirePicRole } from '../_authz.js';
 import { businessDateKey } from '../_inventory-analytics.js';
-const INVENTORY_MOVEMENT_RANGE = "Movement!A:I";
-const PRIMARY_SHEET_RANGE = "Barang Masuk!A:I";
-const FALLBACK_SHEET_RANGE = "Barang Masuk!A:I";
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -39,47 +37,6 @@ function isPermissionError(data) {
 
 async function createAccessToken(env) { return getGoogleAccessToken(env); }
 
-async function appendToSheet({ accessToken, sheetId, range, values }) {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ values }),
-  });
-  const data = await res.json().catch(() => ({}));
-  return { res, data };
-}
-
-async function batchUpdateSheetRows({ accessToken, sheetId, data }) {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchUpdate`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ valueInputOption: "USER_ENTERED", data }),
-  });
-  const body = await res.json().catch(() => ({}));
-  return { res, data: body };
-}
-
-async function readSheetValues({ accessToken, sheetId, range }) {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}`;
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  const data = await res.json().catch(() => ({}));
-  return { res, data };
-}
-
-function findFirstEmptyRowIndex(values) {
-  for (let i = 1; i < values.length; i++) {
-    const row = values[i] || [];
-    const tanggal = sanitize(row[0]);
-    const sku = sanitize(row[3]);
-    if (!tanggal && !sku) return i;
-  }
-  return -1;
-}
-
 async function updateSheetRow({ accessToken, sheetId, range, values }) {
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`;
   const res = await fetch(url, {
@@ -106,8 +63,9 @@ async function readSheetBarangMasuk({ accessToken, sheetId }) {
 }
 
 export async function onRequestPost({ request, env }) {
-  let writeAttempted = false;
-  const reply = (body, status = 200) => json({ ...body, ...(!body.success ? { writeState: writeAttempted ? 'uncertain' : 'not_started' } : {}) }, status);
+  let writeAttempted = false, job=null;
+  const destinations={inventory:'not_started',barangMasuk:'not_started'};
+  const reply = (body, status = 200) => json({ ...body, ...(!body.success ? { writeState: writeAttempted ? 'uncertain' : 'not_started', destinations } : {}) }, status);
   const authz = await requirePicRole({ request, env });
   if (!authz.ok) { const body = await authz.response.json(); return reply(body, authz.response.status); }
   try {
@@ -117,7 +75,12 @@ export async function onRequestPost({ request, env }) {
     if (!spreadsheetId) return reply({ success: false, message: "SHEET_ID_2026 belum diset" }, 500);
 
     const body = await request.json();
+    if(!validBatchId(body?.id))return reply({success:false,message:'ID batch Movement wajib diisi.'},400);
+    const who=await deliveryIdentity(request,env);
+    if(!who)return reply({success:false,message:'Sesi tidak valid.'},401);
+    if(!/pic/i.test(who.role)&&! /^(developer|mode development)$/i.test(who.role)&&!who.id.startsWith('developer:'))return reply({success:false,message:'Hanya PIC atau Developer yang dapat mengirim Movement.'},403);
     const requestItems = Array.isArray(body?.items) ? body.items : [body];
+    if(requestItems.length>1000)return reply({success:false,message:'Maksimal 1000 item per batch.'},400);
     if (!requestItems.length) return reply({ success: false, message: "items wajib diisi" }, 400);
 
     // The server owns the transaction date. Client-provided dates are deliberately
@@ -148,38 +111,39 @@ export async function onRequestPost({ request, env }) {
       if (item.stokAktual === null) return reply({ success: false, message: "stokAktual harus angka >= 0" }, 400);
     }
 
+    // Canonical validated fields keep the receipt stable after JSONB key reordering.
+    const canonicalItems=movementItems.map(({tanggal,tanggalBarangMasuk,...item})=>item);
+    job=await claimDelivery(env,body.id,who,canonicalItems);
+    if(job.response)return json(job.response,job.response.success?200:409);
     const accessToken = await createAccessToken(env);
     const inventoryRows = movementItems.map((item) => [item.tanggal, item.from, item.to, item.sku, item.namaBarang, item.stokDiLokasiAwal, item.stokAktual]);
     const barangMasukRows = movementItems.map((item) => [item.tanggalBarangMasuk, item.from, item.to, item.sku, item.namaBarang, item.qty, "Movement", item.pic, "INTERNAL STOCK TRANSFER"]);
 
+    await checkpointDelivery(env,job,'writing',{destinations});
     writeAttempted = true;
-    let inventoryWrite = await appendToSheet({ accessToken, sheetId: inventorySpreadsheetId, range: INVENTORY_MOVEMENT_RANGE, values: inventoryRows });
+    destinations.inventory='uncertain';
+    let inventoryWrite = await appendDeliverySheet({accessToken,sheetId:inventorySpreadsheetId,title:'Movement',values:inventoryRows,job,destination:'inventory',businessDate:tanggal});
     if (!inventoryWrite.res.ok && isPermissionError(inventoryWrite.data)) {
       writeAttempted = false;
+      destinations.inventory='not_started';
+      await checkpointDelivery(env,job,'failed',{destinations});
       return reply({ success: false, message: "Akun Gmail OAuth belum punya akses Editor ke Spreadsheet Inventory" }, 403);
     }
     if (!inventoryWrite.res.ok) return reply({ success: false, message: inventoryWrite.data?.error?.message || "Gagal menulis history Movement", detail: inventoryWrite.data }, inventoryWrite.res.status);
 
-    const readResult = await readSheetValues({ accessToken, sheetId: spreadsheetId, range: PRIMARY_SHEET_RANGE });
-    let { res, data } = readResult;
-    if (!res.ok && isPermissionError(data)) {
-      return reply({ success: false, message: "Akun Gmail OAuth belum punya akses Editor ke Spreadsheet 2026" }, 403);
+    destinations.inventory='saved';
+    await checkpointDelivery(env,job,'writing',{destinations});
+    destinations.barangMasuk='uncertain';
+    const ledgerWrite=await appendDeliverySheet({accessToken,sheetId:spreadsheetId,title:'Barang Masuk',values:barangMasukRows,job,destination:'barangMasuk',businessDate:tanggal});
+    if(!ledgerWrite.res.ok){
+      await checkpointDelivery(env,job,'uncertain',{destinations});
+      return reply({success:false,message:ledgerWrite.data?.error?.message||'Barang Masuk belum terkonfirmasi; History Movement sudah ditulis.'},ledgerWrite.res.status);
     }
-    if (!res.ok) return reply({ success: false, message: data?.error?.message || "Gagal membaca Google Sheet", detail: data }, res.status);
-
-    const values = Array.isArray(data?.values) ? data.values : [];
-    const emptyIndex = findFirstEmptyRowIndex(values);
-    const targetIndex = emptyIndex === -1 ? values.length : emptyIndex;
-    const startRowNumber = Math.max(2, targetIndex + 1);
-    const updateData = barangMasukRows.map((row, idx) => ({ range: `Barang Masuk!A${startRowNumber + idx}:I${startRowNumber + idx}`, values: [row] }));
-    ({ res, data } = await batchUpdateSheetRows({ accessToken, sheetId: spreadsheetId, data: updateData }));
-
-    if (!res.ok && isPermissionError(data)) {
-      return reply({ success: false, message: "Akun Gmail OAuth belum punya akses Editor ke Spreadsheet 2026" }, 403);
-    }
-    if (!res.ok) return reply({ success: false, message: data?.error?.message || "Gagal update Google Sheet", detail: data }, res.status);
-    return reply({ success: true, processed: movementItems.length, businessDate: tanggal });
+    destinations.barangMasuk='saved';
+    await checkpointDelivery(env,job,'saved',{processed:movementItems.length,businessDate:tanggal,destinations});
+    return reply({ success: true, processed: movementItems.length, businessDate: tanggal, destinations, id:body.id });
   } catch (err) {
+    if(job&&!job.response)await checkpointDelivery(env,job,writeAttempted?'uncertain':'failed',{destinations}).catch(()=>{});
     return reply({ success: false, message: err?.message || "Internal server error" }, 500);
   }
 }
@@ -187,6 +151,20 @@ export async function onRequestPost({ request, env }) {
 export async function onRequestGet({ request, env }) {
   try {
     const url = new URL(request.url);
+    const id=url.searchParams.get('id');
+    if(id){
+      if(!validBatchId(id))return json({success:false,message:'ID batch tidak valid.'},400);
+      const who=await deliveryIdentity(request,env);if(!who)return json({success:false,message:'Sesi tidak valid.'},401);
+      const job=await readDelivery(env,id,who.id);
+      if(!job||job.result?.kind!=='movement')return json({success:false,status:'not_found',writeState:'uncertain',message:'Batch belum ditemukan. Jangan kirim ulang sebelum pemeriksaan selesai.'},404);
+      if(['writing','uncertain'].includes(job.status)){
+        const accessToken=await createAccessToken(env);
+        const inventory=await readDeliveryReceipt(accessToken,env.SHEET_ID_INVENTORY,job,'inventory'),ledger=await readDeliveryReceipt(accessToken,env.SHEET_ID_2026,job,'barangMasuk');
+        if(inventory&&ledger){job.status='saved';job.result={kind:'movement',processed:inventory.processed,businessDate:inventory.businessDate,destinations:{inventory:'saved',barangMasuk:'saved'}};await checkpointDelivery(env,job,'saved',job.result);}
+        else job.result={...job.result,destinations:{inventory:inventory?'saved':'uncertain',barangMasuk:ledger?'saved':'uncertain'}};
+      }
+      const result=deliveryResult(job);return json(result,result.success?200:409);
+    }
     const mode = sanitize(url.searchParams.get("mode")).toLowerCase();
     if (mode !== "test") return new Response("API OK", { status: 200, headers: { "Content-Type": "text/plain; charset=utf-8" } });
 

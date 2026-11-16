@@ -1708,7 +1708,7 @@ body.dark #page-balikan-store .balikan-row-highlight-fading{
 
 #page-movement .movement-scan-bar{width:100%;border:1px solid var(--line);border-radius:14px;padding:4px;background:var(--panel)}
 
-/* Barang Masuk / Barang KeIuar bulk + checkbox UI */
+/* Barang Masuk / Barang Keluar bulk + checkbox UI */
 #inResults .mv-bulkbar,
 #outResults .mv-bulkbar{display:flex;align-items:center;gap:8px;grid-template-columns:none;flex-wrap:nowrap;justify-content:flex-start}
 #inResults .mv-bulkbar-count,

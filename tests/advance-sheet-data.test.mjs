@@ -28,7 +28,7 @@ const dependencies=(sheets,values)=>({authorize:async()=>true,getToken:async()=>
  return Response.json({sheets:sheets.map(title=>({properties:{title,gridProperties:{columnCount:12}}}))});
 }});
 test('2025 transactions resolve both archive tabs and return only exact SKU source rows',async()=>{
- const source={};for(const title of ['Barang Masuk','Barang KeIuar'])source[title]=[['Tanggal','From','To','SKU','Nama Barang','Qty'],['2025-07-01','A','B','0012','Product',2],['2025-07-02','A','B','12','Other',9]];
+ const source={};for(const title of ['Barang Masuk','Barang Keluar'])source[title]=[['Tanggal','From','To','SKU','Nama Barang','Qty'],['2025-07-01','A','B','0012','Product',2],['2025-07-02','A','B','12','Other',9]];
  const response=await handleAdvanceSources({request:req('ledger2025'),env:{}},dependencies(Object.keys(source),source));assert.equal(response.status,200);const data=await response.json();assert.equal(data.groups.length,2);assert.ok(data.groups.every(group=>group.rows.length===1&&group.rows[0].sku==='0012'));assert.ok(data.groups[0].name.includes('2025'));
 });
 test('SO JULI 2025 reads Inventory while COUNT 1 rejects an unrelated schema',async()=>{

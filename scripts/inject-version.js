@@ -35,3 +35,6 @@ fs.writeFileSync(accountDraftPath,fs.readFileSync(accountDraftPath,"utf8").repla
 
 const allNotesPath="./assets/js/all-sku-notes.js";
 fs.writeFileSync(allNotesPath,fs.readFileSync(allNotesPath,"utf8").replaceAll("./sku-notes.js?v=__APP_VERSION__","./sku-notes.js?v="+version));
+
+// Include the shared stock search and immutable Movement delivery modules.
+fs.writeFileSync(mainPath,fs.readFileSync(mainPath,"utf8").replaceAll("./movement-stock-search.js?v=__APP_VERSION__","./movement-stock-search.js?v="+version).replaceAll("./movement-delivery.js?v=__APP_VERSION__","./movement-delivery.js?v="+version));

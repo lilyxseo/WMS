@@ -24,7 +24,7 @@ export const quoteSheet=name=>`'${name.replaceAll("'","''")}'`;
 export function selectLedgerSheets(sheets,entries){
  const result={};
  for(const status of new Set(entries.map(r=>r.status))){
-  const aliases=status==='Barang Masuk'?['barang masuk']:['barang keluar','barang keiuar'];
+  const aliases=status==='Barang Masuk'?['barang masuk']:['barang keluar'];
   const matches=sheets.filter(s=>aliases.includes(text(s.properties?.title).toLowerCase()));
   if(matches.length!==1)throw new Error(`Tab ${status} tidak ditemukan atau ambigu di Spreadsheet 2026.`);
   result[status]=matches[0].properties;
