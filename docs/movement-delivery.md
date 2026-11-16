@@ -12,11 +12,14 @@ and a hash including the module name. No new migration is required. A unique ID
 and conditional run claim prevent concurrent/replayed requests from writing twice.
 If the existing receipt table is unavailable, no spreadsheet write starts.
 
-Each spreadsheet write is an atomic `appendCells` plus `createDeveloperMetadata`
+Each spreadsheet write is an atomic row insertion, `updateCells`, and `createDeveloperMetadata`
 request: Inventory's `Movement` tab and 2026's `Barang Masuk` tab each retain a
 `wms_movement_<batch UUID>` receipt. SKU values are explicitly strings, preserving
-leading zeros. Appending avoids a full-sheet read and cannot overwrite a different
-batch's chosen empty row. The two spreadsheets are independent transactions.
+leading zeros. The server reads only business columns A:E (Inventory) or A:F
+(2026), finds the first empty business row after the header, and inserts/fills
+at that position. Status/PIC defaults and trailing template rows do not push
+Movement to the sheet bottom. Atomic insertion shifts existing records instead
+of overwriting another batch's chosen row. The two spreadsheets are independent transactions.
 Only confirmation of both is a full success.
 
 The UI reports **Sedang dikirim**, **Berhasil**, **Gagal**, or **Belum terkonfirmasi**.

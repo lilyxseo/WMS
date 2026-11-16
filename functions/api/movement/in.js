@@ -1,4 +1,4 @@
-import {validBatchId,deliveryIdentity,claimDelivery,checkpointDelivery,readDelivery,deliveryResult,appendDeliverySheet,readDeliveryReceipt} from './_delivery.js';
+import {validBatchId,deliveryIdentity,claimDelivery,checkpointDelivery,readDelivery,deliveryResult,writeDeliverySheet,readDeliveryReceipt} from './_delivery.js';
 import { getGoogleAccessToken } from '../_google-auth.js';
 import { requirePicRole } from '../_authz.js';
 import { businessDateKey } from '../_inventory-analytics.js';
@@ -122,7 +122,7 @@ export async function onRequestPost({ request, env }) {
     await checkpointDelivery(env,job,'writing',{destinations});
     writeAttempted = true;
     destinations.inventory='uncertain';
-    let inventoryWrite = await appendDeliverySheet({accessToken,sheetId:inventorySpreadsheetId,title:'Movement',values:inventoryRows,job,destination:'inventory',businessDate:tanggal});
+    let inventoryWrite = await writeDeliverySheet({accessToken,sheetId:inventorySpreadsheetId,title:'Movement',values:inventoryRows,job,destination:'inventory',businessDate:tanggal});
     if (!inventoryWrite.res.ok && isPermissionError(inventoryWrite.data)) {
       writeAttempted = false;
       destinations.inventory='not_started';
@@ -134,7 +134,7 @@ export async function onRequestPost({ request, env }) {
     destinations.inventory='saved';
     await checkpointDelivery(env,job,'writing',{destinations});
     destinations.barangMasuk='uncertain';
-    const ledgerWrite=await appendDeliverySheet({accessToken,sheetId:spreadsheetId,title:'Barang Masuk',values:barangMasukRows,job,destination:'barangMasuk',businessDate:tanggal});
+    const ledgerWrite=await writeDeliverySheet({accessToken,sheetId:spreadsheetId,title:'Barang Masuk',values:barangMasukRows,job,destination:'barangMasuk',businessDate:tanggal});
     if(!ledgerWrite.res.ok){
       await checkpointDelivery(env,job,'uncertain',{destinations});
       return reply({success:false,message:ledgerWrite.data?.error?.message||'Barang Masuk belum terkonfirmasi; History Movement sudah ditulis.'},ledgerWrite.res.status);

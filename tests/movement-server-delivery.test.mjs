@@ -25,20 +25,20 @@ async function fixture(t,{failDestination,lateFailure,holdInventory,failFinalChe
   assert.equal(url.hostname,'sheets.googleapis.com');const destination=url.pathname.includes('/inventory')?'inventory':'barangMasuk';
   if(url.pathname.endsWith('/developerMetadata:search'))return Response.json({matchedDeveloperMetadata:receipts.has(destination)?[{developerMetadata:{metadataValue:receipts.get(destination)}}]:[]});
   if(options.method==='POST'){
-   assert.ok(url.pathname.endsWith(':batchUpdate'));assert.equal(body.requests.length,2);assert.ok(body.requests[0].appendCells);assert.ok(body.requests[1].createDeveloperMetadata);assert.deepEqual(body.requests[1].createDeveloperMetadata.developerMetadata.location,{spreadsheet:true});
+   assert.ok(url.pathname.endsWith(':batchUpdate'));assert.equal(body.requests.length,3);assert.ok(body.requests[0].insertDimension);assert.ok(body.requests[1].updateCells);assert.ok(body.requests[2].createDeveloperMetadata);assert.deepEqual(body.requests[2].createDeveloperMetadata.developerMetadata.location,{spreadsheet:true});
    if(failDestination===destination)return Response.json({error:{message:'The caller does not have permission'}},{status:403});
-   writes.push({destination,body});receipts.set(destination,body.requests[1].createDeveloperMetadata.developerMetadata.metadataValue);
+   writes.push({destination,body});receipts.set(destination,body.requests[2].createDeveloperMetadata.developerMetadata.metadataValue);
    if(holdInventory&&destination==='inventory')await new Promise(resolve=>release=resolve);
    if(lateFailure===destination)throw TypeError('Reply lost after write');
    return Response.json({replies:[{},{}]});
   }
-  reads.push(url.toString());return Response.json({sheets:[{properties:{title:destination==='inventory'?'Movement':'Barang Masuk',sheetId:destination==='inventory'?1:2}}]});
+  reads.push(url.toString());if(url.pathname.includes('/values/'))return Response.json({values:[['TANGGAL','FROM','TO','SKU','Nama Barang','Qty'],['11/1/2026','A','B','EXISTING','Product',3],[],[],['11/16/2026','A','B','MISPLACED','Product',2]]});return Response.json({sheets:[{properties:{title:destination==='inventory'?'Movement':'Barang Masuk',sheetId:destination==='inventory'?1:2,gridProperties:{rowCount:1000}}}]});
  };
  const request=(method='POST',payload={id,items})=>new Request('https://wms.test/api/movement/in'+(method==='GET'?'?id='+id:''),{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(method==='POST'?{body:JSON.stringify(payload)}:{})});
  return {jobs,receipts,writes,reads,post:payload=>onRequestPost({request:request('POST',payload),env}),get:()=>onRequestGet({request:request('GET'),env}),release:()=>release()};
 }
-test('both destinations use atomic append + receipt, preserve SKU text, and duplicate ID never writes twice',async t=>{
- const f=await fixture(t),response=await f.post(),data=await response.json();assert.equal(response.status,200);assert.equal(data.success,true);assert.deepEqual(data.destinations,{inventory:'saved',barangMasuk:'saved'});assert.equal(f.writes.length,2);assert.equal(f.writes[0].body.requests[0].appendCells.rows[0].values[3].userEnteredValue.stringValue,'0012');assert.ok(Number.isFinite(f.writes[0].body.requests[0].appendCells.rows[0].values[0].userEnteredValue.numberValue));assert.equal(f.writes[1].body.requests[0].appendCells.rows[0].values[0].userEnteredFormat.numberFormat.type,'DATE');assert.equal(f.reads.length,2);assert.ok(f.reads.every(url=>!url.includes('/values/')));
+test('both destinations fill the first empty business row atomically with a receipt, preserve SKU text, and duplicate ID never writes twice',async t=>{
+ const f=await fixture(t),response=await f.post(),data=await response.json();assert.equal(response.status,200);assert.equal(data.success,true);assert.deepEqual(data.destinations,{inventory:'saved',barangMasuk:'saved'});assert.equal(f.writes.length,2);assert.equal(f.writes[0].body.requests[1].updateCells.rows[0].values[3].userEnteredValue.stringValue,'0012');assert.ok(Number.isFinite(f.writes[0].body.requests[1].updateCells.rows[0].values[0].userEnteredValue.numberValue));assert.equal(f.writes[1].body.requests[1].updateCells.rows[0].values[0].userEnteredFormat.numberFormat.type,'DATE');assert.equal(f.reads.length,4);assert.equal(f.writes[0].body.requests[1].updateCells.start.rowIndex,2);assert.equal(f.writes[1].body.requests[1].updateCells.start.rowIndex,2);assert.ok(f.reads.filter(url=>url.includes('/values/')).every(url=>/!A:[EF]$/.test(decodeURIComponent(url))));
  const reordered=items.map(item=>Object.fromEntries(Object.entries(item).reverse()));const again=await f.post({id,items:reordered});assert.equal((await again.json()).replayed,true);assert.equal(f.writes.length,2);
  const changed=await f.post({id,items:[{...items[0],qty:3}]});assert.notEqual(changed.status,200);assert.equal(f.writes.length,2);
 });
