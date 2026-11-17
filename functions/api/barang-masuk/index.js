@@ -96,7 +96,7 @@ export async function handleBarangMasukRequest({ request, env }) {
     let total = 0;
     console.info('[BarangMasukAPI] query-start');
     const rowsStartedAt = Date.now();
-    const result = await transactionPage(supabaseConfig, TABLE, { columns: COLUMNS, filterQuery, startDate, endDate, page, limit, sort: sort.name, bounded: true, full, search, searchFields: SEARCH_COLUMNS, ...columnOptions });
+    const result = await transactionPage(supabaseConfig, TABLE, { columns: COLUMNS, filterQuery, startDate, endDate, page, limit, sort: sort.name, bounded: true, full, search, searchFields: SEARCH_COLUMNS, cacheRead:url.searchParams.get('cache')==='1', cacheRefresh:url.searchParams.get('fresh')==='1', ...columnOptions });
     rawRows = result.rows;
     total = result.total;
     const rowsMs = Date.now() - rowsStartedAt;

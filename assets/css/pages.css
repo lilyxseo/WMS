@@ -3036,3 +3036,24 @@ html[data-theme="light"] .monthly-metric.inbound .monthly-metric-value,html[data
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Cpath d='m4 9 3 3 7-7' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-position:center;background-size:18px 18px;background-repeat:no-repeat;
 }
+
+#assetStoreEditor .asset-editor-drawer{height:100dvh;max-height:100dvh;width:min(760px,100%);padding:24px;display:flex;flex-direction:column;gap:18px}
+#assetStoreEditor .reject-drawer-head{margin:0;align-items:center}
+#assetStoreEditor .reject-drawer-head h3{font-size:22px;line-height:1.4;margin-top:6px}
+.asset-editor-context{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel-soft);font-size:12px}
+.asset-editor-context>span{color:var(--muted);white-space:nowrap}.asset-editor-context>strong{color:var(--text);overflow-wrap:anywhere}
+#assetEditorHelp{font-size:12px;line-height:1.7;margin:0;color:var(--muted)}
+#assetStoreEditor .reject-form{display:flex;flex-direction:column;flex:1;gap:16px;min-height:0}
+#assetStoreEditor .asset-editor-fields{border:0;padding:0 2px 12px;margin:0;overflow:auto;min-height:0;flex:1}
+#assetStoreEditor .asset-editor-fields legend{font-size:13px;font-weight:700;color:var(--text);padding:0 0 16px}
+#assetStoreEditor .asset-editor-field>span{font-size:12px;font-weight:600;color:var(--text)}
+#assetStoreEditor .asset-editor-field small{font-size:10px;line-height:1.5;color:var(--muted)}
+#assetStoreEditor .asset-editor-field--wide{grid-column:1/-1}
+#assetStoreEditor :is(input,textarea){background:var(--input-bg,var(--panel));font:inherit;font-size:13px;min-height:44px}
+#assetStoreEditor textarea{width:100%;min-width:0;resize:vertical;max-height:220px;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px}
+#assetStoreEditor :is(input,textarea):focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+#assetStoreEditor [data-asset-error]:not([hidden]){padding:12px;border:1px solid var(--danger);background:color-mix(in srgb,var(--danger) 8%,var(--panel));border-radius:9px;font-size:12px;margin:0}
+#assetStoreEditor .asset-editor-footer{margin:0;padding-top:16px;border-top:1px solid var(--line);align-items:center;flex-shrink:0}
+#assetStoreEditor [data-asset-progress]{margin-right:auto;font-size:11px;color:var(--muted)}
+#assetStoreEditor .asset-editor-footer button{min-height:42px}
+@media(max-width:640px){#assetStoreEditor .asset-editor-drawer{padding:18px 14px;gap:14px}#assetStoreEditor .asset-editor-footer{flex-wrap:wrap}#assetStoreEditor [data-asset-progress]{flex-basis:100%}#assetStoreEditor .asset-editor-footer button{flex:1}}

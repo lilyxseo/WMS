@@ -118,7 +118,28 @@ export function transactionSort(sort) {
 // `tanggal` is text in the deployed inventory tables, so PostgREST cannot
 // chronologically order mixed ISO and MM/DD/YYYY values. Read on the server,
 // normalize before range filtering, and only then apply page boundaries.
-export async function transactionPage(config, table, {
+const transactionWindows=new Map();
+// Cache only a small sorted window, never a full ledger. Identity and every
+// filter are part of the key; manual refresh bypasses a retained snapshot.
+export async function transactionPage(config,table,options={}){
+ const {cacheRead=false,cacheRefresh=false,...query}=options;
+ const page=query.page||1,limit=query.limit||50;
+ if(!cacheRead||query.full||query.facet||query.recentOnly||page*limit>500)return readTransactionPage(config,table,query);
+ const {page:ignoredPage,limit:ignoredLimit,...scope}=query;
+ const key=JSON.stringify([config.url,config.key,table,scope]);
+ const now=Date.now(),cached=transactionWindows.get(key);
+ let entry=cached;
+ if(cacheRefresh||!entry||now-entry.at>=10000){
+  entry={at:Infinity,promise:null};
+  entry.promise=readTransactionPage(config,table,{...query,page:1,limit:500}).then(result=>{entry.at=Date.now();return result;});
+  transactionWindows.delete(key);transactionWindows.set(key,entry);
+  while(transactionWindows.size>8)transactionWindows.delete(transactionWindows.keys().next().value);
+ }
+ try{const result=await entry.promise;return {...result,rows:result.rows.slice((page-1)*limit,page*limit)};}
+ catch(error){if(transactionWindows.get(key)===entry)transactionWindows.delete(key);throw error;}
+}
+
+async function readTransactionPage(config, table, {
   columns = '*', filterQuery = '', startDate = '', endDate = '', page = 1,
   limit = 50, sort = 'latest', direction, full = false, bounded = false, recentOnly = false,
   search = '', searchFields = [], columnRules={},facet='',sortField='',sortDir=1,
@@ -138,10 +159,11 @@ export async function transactionPage(config, table, {
   let useSearchRpc=Boolean(searchRpc);
   let rows = [],readCount=0;const skuSet=new Set(),facets=new Set();let totalRows=0,totalQty=0,latestDate=null,oldestDate=null,invalidDateCount=0;
   let sourceTotal = null, lastBatchSize=TRANSACTION_READ_BATCH_SIZE;
+  const pending=new Map();
+  const readBatch=offset=>supabaseRows(config,(useSearchRpc?searchRpc:table)+`?select=${columns}${filterQuery}&order=source_row_number.desc&offset=${offset}&limit=${TRANSACTION_READ_BATCH_SIZE}`,{count:offset===0,...(useSearchRpc?{method:'POST',body:{p_query:search}}:{})});
   for (let offset = 0; ; offset += lastBatchSize) {
-    const query=`?select=${columns}${filterQuery}&order=source_row_number.desc&offset=${offset}&limit=${TRANSACTION_READ_BATCH_SIZE}`;
     let result;
-    try { result=await supabaseRows(config,(useSearchRpc?searchRpc:table)+query,{count:offset===0,...(useSearchRpc?{method:'POST',body:{p_query:search}}:{})}); }
+    try { const queued=pending.get(offset);pending.delete(offset);if(queued){const outcome=await queued;if(outcome.error)throw outcome.error;result=outcome.result;}else result=await readBatch(offset); }
     catch(error){
       // Old deployments remain readable during rollout. Never turn a timeout or
       // permission failure into another full scan.
@@ -150,6 +172,13 @@ export async function transactionPage(config, table, {
     }
     if (offset === 0) sourceTotal = exactTotal(result.response, result.payload.length);
     readCount+=result.payload.length;lastBatchSize=result.payload.length;
+    // Three reads in flight at most. Handle rejections immediately, then throw
+    // when consuming the batch so a failed scan can never return partial data.
+    if(lastBatchSize)for(let step=1;step<=3;step++){
+      const next=offset+step*lastBatchSize;
+      if(next>=sourceTotal||pending.has(next))continue;
+      pending.set(next,readBatch(next).then(result=>({result}),error=>({error})));
+    }
     const ordered=orderTransactionRows(result.payload,selectedSort);invalidDateCount+=ordered.filter(item=>!item.parsedDate.valid).length;
     const scoped=ordered.filter(({row,parsedDate})=>transactionRowMatchesSearch(row,search,searchFields)&&(!startDate&&!endDate||parsedDate.valid&&(!startDate||parsedDate.value>=startDate)&&(!endDate||parsedDate.value<=endDate)));
     const batch=transactionFilterRows(scoped,{columnRules,facet,sortField,sortDir});for(const value of batch.facetValues||[])facets.add(value);
