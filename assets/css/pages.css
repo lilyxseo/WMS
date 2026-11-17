@@ -3057,3 +3057,12 @@ html[data-theme="light"] .monthly-metric.inbound .monthly-metric-value,html[data
 #assetStoreEditor [data-asset-progress]{margin-right:auto;font-size:11px;color:var(--muted)}
 #assetStoreEditor .asset-editor-footer button{min-height:42px}
 @media(max-width:640px){#assetStoreEditor .asset-editor-drawer{padding:18px 14px;gap:14px}#assetStoreEditor .asset-editor-footer{flex-wrap:wrap}#assetStoreEditor [data-asset-progress]{flex-basis:100%}#assetStoreEditor .asset-editor-footer button{flex:1}}
+
+#assetStoreEditor .asset-optional{font-weight:400;font-size:10px;margin-left:5px;color:var(--muted)}
+#assetStoreEditor select{width:100%;min-width:0;min-height:44px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--input-bg,var(--panel));color:var(--text);font:inherit;font-size:13px}
+#assetStoreEditor select:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+#assetStoreEditor .asset-editor-fields{flex:0 1 auto}
+#assetStoreEditor .reject-form-grid{align-items:start}
+#assetStoreEditor .asset-editor-field>span{display:flex;align-items:center;justify-content:space-between}
+#assetStoreEditor .asset-editor-footer{margin-top:auto}
+#assetStoreEditor input[type=date]{color-scheme:light dark}

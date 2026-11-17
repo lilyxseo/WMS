@@ -1,7 +1,7 @@
 import {getGoogleAccessToken} from '../_google-auth.js';
 import {getNoteIdentity} from '../_note-identity.js';
 import {json} from '../_work-store.js';
-import {ASSET_ID} from './rows.js';
+import {ASSET_ID,columnName} from './rows.js';
 import {retryAudit} from '../_audit-retry.js';
 export async function handleAssetRead({request,env},{identity=getNoteIdentity,getToken=getGoogleAccessToken,fetchFn=fetch}={}){try{
  if(request.method!=='GET')return json({success:false},405);
@@ -13,6 +13,20 @@ export async function handleAssetRead({request,env},{identity=getNoteIdentity,ge
  if(sheet===null)return json({success:true,sheets});
  if(!sheets.some(item=>item.properties.title===sheet))return json({success:false,message:'Sheet Asset tidak ditemukan.'},404);
  const range="'"+sheet.replaceAll("'","''")+"'!A1:ZZ",data=await read('/values/'+encodeURIComponent(range));
- return json({success:true,values:Array.isArray(data.values)?data.values:[]});
+ const values=Array.isArray(data.values)?data.values:[];
+ const sectionIndex=(values[0]||[]).findIndex(name=>/^section$/i.test(String(name).trim()));
+ let sectionOptions=[];
+ if(sectionIndex>=0){
+  const column=columnName(sectionIndex),quoted="'"+sheet.replaceAll("'","''")+"'";
+  const rules=await read('?'+new URLSearchParams({ranges:`${quoted}!${column}2:${column}100`,fields:'sheets.data.rowData.values.dataValidation'}));
+  const condition=rules.sheets?.flatMap(item=>item.data||[]).flatMap(item=>item.rowData||[]).flatMap(item=>item.values||[]).map(item=>item.dataValidation?.condition).find(item=>['ONE_OF_LIST','ONE_OF_RANGE'].includes(item?.type));
+  if(condition?.type==='ONE_OF_LIST')sectionOptions=(condition.values||[]).map(item=>item.userEnteredValue||'');
+  else if(condition?.type==='ONE_OF_RANGE'){
+   const reference=String(condition.values?.[0]?.userEnteredValue||'').replace(/^=/,'');
+   if(reference){const options=await read('/values/'+encodeURIComponent(reference));sectionOptions=(options.values||[]).flat();}
+  }else sectionOptions=values.slice(1).map(row=>row[sectionIndex]||'');
+  sectionOptions=[...new Set(sectionOptions.map(String).map(value=>value.trim()).filter(Boolean))];
+ }
+ return json({success:true,values,sectionOptions});
 }catch(error){return json({success:false,message:error.message||'Data Asset Store belum dapat dimuat.'},503);}}
 export const onRequest=context=>handleAssetRead(context);
