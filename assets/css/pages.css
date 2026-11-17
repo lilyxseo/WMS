@@ -2456,8 +2456,7 @@ html[data-accent] .account-card .account-profile-link strong{color:var(--text)}
 #page-balikan-store .balikan-table th{height:44px;white-space:nowrap;font-size:10px;letter-spacing:.02em}
 #page-balikan-store .balikan-table .th-filter-wrap{flex-wrap:nowrap;white-space:nowrap;word-break:normal;gap:7px}
 #page-balikan-store .balikan-table .th-filter-btn{flex-shrink:0}
-#page-balikan-store .balikan-table th:nth-child(1),#page-balikan-store .balikan-table td:nth-child(1){min-width:68px;width:68px;text-align:center;position:sticky;left:0;background:var(--panel);z-index:2}
-#page-balikan-store .balikan-table th:nth-child(1){z-index:6}
+#page-balikan-store .balikan-table th:nth-child(1),#page-balikan-store .balikan-table td:nth-child(1){min-width:68px;width:68px;text-align:center;background:var(--panel)}
 #page-balikan-store .balikan-table th:nth-child(2),#page-balikan-store .balikan-table td:nth-child(2){min-width:115px}
 #page-balikan-store .balikan-table th:nth-child(3),#page-balikan-store .balikan-table td:nth-child(3){min-width:65px;text-align:right;font-variant-numeric:tabular-nums}
 #page-balikan-store .balikan-table th:nth-child(4),#page-balikan-store .balikan-table td:nth-child(4){min-width:160px;white-space:nowrap}
