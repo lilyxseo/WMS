@@ -6,6 +6,22 @@ import {createAdvanceSearchHistory} from './advance-search-history.js';
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
 const key=value=>String(value??'').trim().toUpperCase();
 export const exactSkuRows=(rows,sku)=>(Array.isArray(rows)?rows:[]).filter(row=>key(row.sku)===key(sku));
+export function syncAdvanceSourceTabs(root,sources,status,active,filledOnly=false){
+ const visible=sources.filter(([kind])=>{const state=status.get(kind);return !(filledOnly&&state?.status==='loaded'&&state.count===0);});
+ if(!visible.some(([kind])=>kind===active))active=visible[0]?.[0]||'';
+ for(const [kind]of sources){
+  const tab=root.querySelector(`[data-advance-jump="${kind}"]`),panel=root.querySelector(`[data-advance-section="${kind}"]`),state=status.get(kind);
+  if(panel)panel.hidden=kind!==active;
+  if(!tab)continue;
+  tab.hidden=!visible.some(([name])=>name===kind);
+  tab.setAttribute('aria-selected',String(kind===active));tab.tabIndex=kind===active?0:-1;
+  const count=tab.querySelector('[data-advance-tab-count]');
+  if(count)count.textContent=['loaded','partial'].includes(state?.status)?String(state.count):state?.status==='error'?'!':'…';
+ }
+ let empty=root.querySelector('[data-advance-no-sources]');
+ if(empty)empty.hidden=visible.length>0;
+ return active;
+}
 export async function readAdvanceSection(kind,sku,{request,page=1}={}){
  const encoded=encodeURIComponent(sku);
  if(kind==='detail'){
@@ -26,7 +42,8 @@ export function mountAdvanceSearch(root,{fetchFn=(...args)=>fetch(...args),isCur
  if(!root)return null;
  const sources=[['detail','Detail SKU'],['reject','Transaksi Reject'],['movement','History Movement'],['cycle','Cycle Count'],['accuracy','Akurasi Stok'],['ledger2025','Transaksi 2025'],['so2025','Stok Opname 2025'],['so2026','Stok Opname 2026'],['trips','Balikan Store']];
  const sourceStatus=new Map();
- let disposed=false,version=0,searchVersion=0,selectedSku='',notes=null,photo=null,abort=null;
+ let disposed=false,version=0,searchVersion=0,selectedSku='',activeSource='detail',notes=null,photo=null,abort=null;
+ const skuNames=new Map();
  const alive=()=>!disposed&&root.isConnected&&isCurrent();
  root.innerHTML='<div class="advance-search-card"><div class="advance-search-heading"><span class="advance-eyebrow">PENCARIAN TERPADU</span><h4>Telusuri satu SKU, lihat seluruh riwayatnya.</h4><p id="advanceSearchHint">Stok, transaksi, hasil opname, dan catatan dalam satu halaman.</p></div><form data-advance-form class="search-bar"><label for="advanceQuery">SKU atau nama barang</label><div class="advance-search-controls"><input id="advanceQuery" class="search-lg" type="search" required maxlength="200" placeholder="Ketik SKU atau nama barang…" aria-describedby="advanceSearchHint"><button class="btn-primary" type="submit">Cari data</button></div></form></div><div data-advance-results aria-live="polite" class="advance-results"></div><div data-advance-profile></div>';
  const el=name=>root.querySelector(`[data-advance-${name}]`);
@@ -47,15 +64,17 @@ export function mountAdvanceSearch(root,{fetchFn=(...args)=>fetch(...args),isCur
  function updateProgress(){
   const loaded=[...sourceStatus.values()].filter(item=>['loaded','partial'].includes(item.status)),failed=[...sourceStatus.values()].filter(item=>['error','partial'].includes(item.status)).length;
   const progress=el('progress');if(progress)progress.textContent=`${loaded.length} dari ${sources.length} sumber siap${failed?` · ${failed} belum lengkap`:''}`;
-  for(const [kind]of sources){const state=sourceStatus.get(kind),section=root.querySelector(`[data-advance-section="${kind}"]`),badge=section?.querySelector('[data-source-count]'),jump=root.querySelector(`[data-advance-jump="${kind}"]`);if(!section)continue;section.hidden=!!el('filled')?.checked&&state?.status==='loaded'&&state.count===0;section.setAttribute('aria-busy',String(state?.status==='loading'));if(badge)badge.textContent=['loaded','partial'].includes(state?.status)?`${state.count} baris${state.status==='partial'?' · sebagian':''}`:state?.status==='error'?'Belum tersedia':'Memuat…';if(jump)jump.dataset.state=state?.status||'loading';}
+  activeSource=syncAdvanceSourceTabs(root,sources,sourceStatus,activeSource,!!el('filled')?.checked);
+  for(const [kind]of sources){const state=sourceStatus.get(kind),section=root.querySelector(`[data-advance-section="${kind}"]`),badge=section?.querySelector('[data-source-count]'),jump=root.querySelector(`[data-advance-jump="${kind}"]`);if(!section)continue;section.setAttribute('aria-busy',String(state?.status==='loading'));if(badge)badge.textContent=['loaded','partial'].includes(state?.status)?`${state.count} baris${state.status==='partial'?' · sebagian':''}`:state?.status==='error'?'Belum tersedia':'Memuat…';if(jump)jump.dataset.state=state?.status||'loading';}
  }
  async function select(sku){
   selectedSku=String(sku||'').trim();if(!selectedSku||!alive())return;
   const token=++version;abort?.abort();abort=new AbortController();const signal=abort.signal;
   notes?.dispose();photo?.dispose();
   sourceStatus.clear();
-  el('profile').innerHTML=`<div class="advance-workspace"><header class="advance-profile-header"><div><span class="advance-eyebrow">PROFIL SKU</span><h4>${esc(selectedSku)}</h4><p data-advance-name>Stok dan riwayat dari sumber terhubung</p></div><div class="advance-profile-actions"><span data-advance-photo hidden></span><a class="btn-ghost" href="/sku/${encodeURIComponent(selectedSku)}">Buka Detail SKU</a><button class="btn-ghost" type="button" data-advance-refresh>Perbarui data</button></div></header><div class="advance-status-line"><span data-advance-progress role="status" aria-live="polite">Memuat sumber…</span><label><input type="checkbox" data-advance-filled> Hanya sumber berisi data</label></div><nav class="advance-source-nav" aria-label="Lompat ke sumber data">${sources.map(([kind,name])=>`<button type="button" class="btn-ghost" data-advance-jump="${kind}">${name}</button>`).join('')}</nav>${sources.map(([kind,name])=>`<section class="card advance-source-section" data-advance-section="${kind}"><header class="advance-source-heading"><h4>${name}</h4><span class="advance-count" data-source-count>Memuat…</span></header><div data-advance-body><div class="advance-loading">Memuat data…</div></div></section>`).join('')}<section class="advance-notes" data-advance-notes></section></div>`;
+  el('profile').innerHTML=`<div class="advance-workspace"><header class="advance-profile-header"><div class="advance-product-identity"><span class="advance-eyebrow">PROFIL BARANG</span><span class="advance-sku-label">SKU <strong>${esc(selectedSku)}</strong></span><h4 data-advance-name>${esc(skuNames.get(key(selectedSku))||'Nama barang belum tersedia')}</h4><p>Stok dan riwayat dari sumber terhubung</p></div><div class="advance-profile-actions"><span data-advance-photo hidden></span><a class="btn-ghost" href="/sku/${encodeURIComponent(selectedSku)}">Buka Detail SKU</a><button class="btn-ghost" type="button" data-advance-refresh>Perbarui data</button></div></header><div class="advance-status-line"><span data-advance-progress role="status" aria-live="polite">Memuat sumber…</span><label><input type="checkbox" data-advance-filled> Hanya sumber berisi data</label></div><nav class="advance-source-nav" role="tablist" aria-label="Sumber data">${sources.map(([kind,name])=>`<button type="button" class="btn-ghost" role="tab" id="advance-tab-${kind}" aria-controls="advance-panel-${kind}" aria-selected="${kind===activeSource}" tabindex="${kind===activeSource?0:-1}" data-advance-jump="${kind}">${name}<span class="advance-tab-count" data-advance-tab-count>…</span></button>`).join('')}</nav><div class="advance-empty-state" data-advance-no-sources hidden>Tidak ada sumber berisi data. Nonaktifkan filter untuk melihat semua sumber.</div>${sources.map(([kind,name])=>`<section class="card advance-source-section" role="tabpanel" id="advance-panel-${kind}" aria-labelledby="advance-tab-${kind}" tabindex="0" data-advance-section="${kind}" ${kind===activeSource?'':'hidden'}><header class="advance-source-heading"><h4>${name}</h4><span class="advance-count" data-source-count>Memuat…</span></header><div data-advance-body><div class="advance-loading">Memuat data…</div></div></section>`).join('')}<section class="advance-notes" data-advance-notes></section></div>`;
   el('filled').addEventListener('change',updateProgress);
+  updateProgress();
   const current=()=>alive()&&version===token;
   notes=mountSkuNotes(el('notes'),{sku:selectedSku,account,confirmDelete,fetchFn,isCurrent:current});
   photo=mountSkuCatalogPhoto(el('photo'),{sku:selectedSku,fetchFn,fetchImageFn:fetchFn,isCurrent:current});
@@ -89,11 +108,19 @@ export function mountAdvanceSearch(root,{fetchFn=(...args)=>fetch(...args),isCur
    const data=await request('/api/inventory-search?'+new URLSearchParams({q:query}));
    if(!alive()||token!==searchVersion)return;
    const rows=data.rows||[];
+   for(const row of rows){const name=row.nama||row.nama_barang;if(name)skuNames.set(key(row.sku),name);}
+   if(rows.length===1&&String(rows[0].sku||'').trim()){
+    el('results').replaceChildren();
+    await select(rows[0].sku);
+    return;
+   }
    el('results').innerHTML=`<div class="advance-exact-result"><span>Sudah tahu SKU lengkapnya?</span><button type="button" class="btn-ghost" data-advance-sku="${esc(query)}">Buka SKU persis: ${esc(query)}</button></div><div class="advance-result-list">${rows.map(row=>`<button type="button" class="advance-result-option" data-advance-sku="${esc(row.sku)}"><strong>${esc(row.sku)}</strong><span>${esc(row.nama||row.nama_barang||'Nama belum tersedia')}</span><small>Lihat riwayat</small></button>`).join('')}</div>${!rows.length?'<p>Tidak ada hasil pada sumber inventory. Gunakan SKU persis untuk memeriksa riwayat lainnya.</p>':''}`;
   }catch(error){if(!alive()||token!==searchVersion)return;el('results').innerHTML=`<div class="state error">${esc(error.message)} <button class="btn-ghost" data-advance-search-retry>Coba lagi</button></div><button class="btn-primary" data-advance-sku="${esc(query)}">Buka SKU persis: ${esc(query)}</button>`;el('results').querySelector('[data-advance-search-retry]').onclick=()=>search();}
  }
- const profileClick=event=>{if(event.target.closest('[data-advance-refresh]')){void select(selectedSku);return;}const jump=event.target.closest('[data-advance-jump]');if(jump){const target=root.querySelector(`[data-advance-section="${jump.dataset.advanceJump}"]`);if(target?.hidden){el('filled').checked=false;updateProgress();}target?.scrollIntoView({behavior:'smooth',block:'start'});}};root.addEventListener('click',profileClick);
+ const profileClick=event=>{if(event.target.closest('[data-advance-refresh]')){void select(selectedSku);return;}const jump=event.target.closest('[data-advance-jump]');if(jump){activeSource=jump.dataset.advanceJump;updateProgress();}};root.addEventListener('click',profileClick);
+ const tabKeydown=event=>{const tab=event.target.closest('[role=tab]');if(!tab||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;const tabs=[...root.querySelectorAll('[role=tab]')].filter(item=>!item.hidden),index=tabs.indexOf(tab);if(index<0)return;event.preventDefault();const next=event.key==='Home'?0:event.key==='End'?tabs.length-1:(index+(event.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;activeSource=tabs[next].dataset.advanceJump;updateProgress();tabs[next].focus();};
+ root.addEventListener('keydown',tabKeydown);
  const click=event=>{const button=event.target.closest('[data-advance-sku]');if(button)void select(button.dataset.advanceSku);};
  el('form').addEventListener('submit',search);el('results').addEventListener('click',click);
- return {refresh:()=>selectedSku?select(selectedSku):search(),dispose(){root.removeEventListener('click',profileClick);el('history')?.removeEventListener('click',historyClick);disposed=true;++version;++searchVersion;abort?.abort();notes?.dispose();photo?.dispose();el('form')?.removeEventListener('submit',search);el('results')?.removeEventListener('click',click);}};
+ return {refresh:()=>selectedSku?select(selectedSku):search(),dispose(){root.removeEventListener('keydown',tabKeydown);root.removeEventListener('click',profileClick);el('history')?.removeEventListener('click',historyClick);disposed=true;++version;++searchVersion;abort?.abort();notes?.dispose();photo?.dispose();el('form')?.removeEventListener('submit',search);el('results')?.removeEventListener('click',click);}};
 }
