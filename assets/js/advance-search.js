@@ -2,6 +2,7 @@ import {advanceTable} from './advance-table.js';
 export {advanceTable} from './advance-table.js';
 import {mountSkuNotes} from './sku-notes.js';
 import {mountSkuCatalogPhoto} from './catalog.js';
+import {createAdvanceSearchHistory} from './advance-search-history.js';
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
 const key=value=>String(value??'').trim().toUpperCase();
 export const exactSkuRows=(rows,sku)=>(Array.isArray(rows)?rows:[]).filter(row=>key(row.sku)===key(sku));
@@ -29,6 +30,18 @@ export function mountAdvanceSearch(root,{fetchFn=(...args)=>fetch(...args),isCur
  const alive=()=>!disposed&&root.isConnected&&isCurrent();
  root.innerHTML='<div class="advance-search-card"><div class="advance-search-heading"><span class="advance-eyebrow">PENCARIAN TERPADU</span><h4>Telusuri satu SKU, lihat seluruh riwayatnya.</h4><p id="advanceSearchHint">Stok, transaksi, hasil opname, dan catatan dalam satu halaman.</p></div><form data-advance-form class="search-bar"><label for="advanceQuery">SKU atau nama barang</label><div class="advance-search-controls"><input id="advanceQuery" class="search-lg" type="search" required maxlength="200" placeholder="Ketik SKU atau nama barang…" aria-describedby="advanceSearchHint"><button class="btn-primary" type="submit">Cari data</button></div></form></div><div data-advance-results aria-live="polite" class="advance-results"></div><div data-advance-profile></div>';
  const el=name=>root.querySelector(`[data-advance-${name}]`);
+ const history=createAdvanceSearchHistory({account});
+ el('form').insertAdjacentHTML('afterend','<section data-advance-history aria-label="Riwayat pencarian"></section>');
+ function renderHistory(){
+  el('history').innerHTML=history.entries.length?`<div class="advance-status-line"><strong>Riwayat pencarian</strong><button type="button" class="btn-ghost" data-advance-history-clear>Hapus riwayat</button></div><div class="advance-source-nav">${history.entries.map(query=>`<button type="button" class="btn-ghost" data-advance-history-query="${esc(query)}">${esc(query)}</button>`).join('')}</div>`:'';
+ }
+ const historyClick=event=>{
+  if(!alive())return;
+  if(event.target.closest('[data-advance-history-clear]')){history.clear();renderHistory();return;}
+  const button=event.target.closest('[data-advance-history-query]');
+  if(button){root.querySelector('#advanceQuery').value=button.dataset.advanceHistoryQuery;void search();}
+ };
+ el('history').addEventListener('click',historyClick);renderHistory();
  async function request(url,signal){const response=await fetchFn(url,{cache:'no-store',signal});const data=await response.json();if(!response.ok||data.success===false)throw Error(data.message||'Gagal memuat data.');return data;}
  const groups=items=>items.length?items.map(({name,rows})=>`<details class="source-card advance-source-group" ${rows.length?'open':''}><summary><span>${esc(name)}</span><span class="advance-count">${rows.length} baris</span></summary><div class="source-body">${advanceTable(rows)}</div></details>`).join(''):'<div class="advance-empty-state">Tidak ada data untuk SKU ini.</div>';
  function updateProgress(){
@@ -68,6 +81,7 @@ export function mountAdvanceSearch(root,{fetchFn=(...args)=>fetch(...args),isCur
  }
  async function search(event){
   event?.preventDefault();const query=root.querySelector('#advanceQuery').value.trim();if(!query||!alive())return;
+  history.add(query);renderHistory();
   const token=++searchVersion;selectedSku='';el('results').textContent='Mencari…';
   // A complete SKU can be opened even when it exists only in Reject or audit history.
   el('profile').replaceChildren();++version;abort?.abort();notes?.dispose();photo?.dispose();
@@ -81,5 +95,5 @@ export function mountAdvanceSearch(root,{fetchFn=(...args)=>fetch(...args),isCur
  const profileClick=event=>{if(event.target.closest('[data-advance-refresh]')){void select(selectedSku);return;}const jump=event.target.closest('[data-advance-jump]');if(jump){const target=root.querySelector(`[data-advance-section="${jump.dataset.advanceJump}"]`);if(target?.hidden){el('filled').checked=false;updateProgress();}target?.scrollIntoView({behavior:'smooth',block:'start'});}};root.addEventListener('click',profileClick);
  const click=event=>{const button=event.target.closest('[data-advance-sku]');if(button)void select(button.dataset.advanceSku);};
  el('form').addEventListener('submit',search);el('results').addEventListener('click',click);
- return {refresh:()=>selectedSku?select(selectedSku):search(),dispose(){root.removeEventListener('click',profileClick);disposed=true;++version;++searchVersion;abort?.abort();notes?.dispose();photo?.dispose();el('form')?.removeEventListener('submit',search);el('results')?.removeEventListener('click',click);}};
+ return {refresh:()=>selectedSku?select(selectedSku):search(),dispose(){root.removeEventListener('click',profileClick);el('history')?.removeEventListener('click',historyClick);disposed=true;++version;++searchVersion;abort?.abort();notes?.dispose();photo?.dispose();el('form')?.removeEventListener('submit',search);el('results')?.removeEventListener('click',click);}};
 }

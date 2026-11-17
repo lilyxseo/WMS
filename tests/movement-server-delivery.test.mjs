@@ -42,6 +42,20 @@ test('both destinations fill the first empty business row atomically with a rece
  const reordered=items.map(item=>Object.fromEntries(Object.entries(item).reverse()));const again=await f.post({id,items:reordered});assert.equal((await again.json()).replayed,true);assert.equal(f.writes.length,2);
  const changed=await f.post({id,items:[{...items[0],qty:3}]});assert.notEqual(changed.status,200);assert.equal(f.writes.length,2);
 });
+test('one source split into two destinations preserves both rows in both spreadsheets',async t=>{
+ const f=await fixture(t);
+ const split=[{...items[0],to:'B',qty:4,stokAktual:4},{...items[0],to:'C',qty:6,stokAktual:6}];
+ const response=await f.post({id,items:split});
+ assert.equal(response.status,200);
+ assert.equal((await response.json()).success,true);
+ assert.equal(f.writes.length,2);
+ for(const {destination,body} of f.writes){
+  const rows=body.requests[1].updateCells.rows.map(row=>row.values.map(cell=>cell.userEnteredValue.stringValue??cell.userEnteredValue.numberValue));
+  assert.equal(rows.length,2);
+  assert.deepEqual(rows.map(row=>row.slice(1,4)),[['A','B','0012'],['A','C','0012']]);
+  assert.deepEqual(rows.map(row=>row[destination==='inventory'?6:5]),[4,6]);
+ }
+});
 test('concurrent duplicate while the first batch writes does not append again',async t=>{
  const f=await fixture(t,{holdInventory:true}),pending=f.post();while(!f.writes.length)await new Promise(setImmediate);const duplicate=await f.post();assert.equal(duplicate.status,409);assert.equal(f.writes.length,1);f.release();assert.equal((await pending).status,200);assert.equal(f.writes.length,2);
 });
