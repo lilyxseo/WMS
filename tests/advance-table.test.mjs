@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {advanceBoolean,advanceColumns,advanceCell,advanceTable} from '../assets/js/advance-table.js';
+test('Balikan source uses native read-only checkboxes with the Balikan style for its Centang column',()=>{
+ const html=advanceTable([{sku:'0012',checkedRaw:'TRUE',checked:true},{sku:'0013',checked:false}],{balikanCheckbox:true});
+ assert.equal((html.match(/class="balikan-check advance-balikan-check"/g)||[]).length,2);
+ assert.equal((html.match(/checked disabled/g)||[]).length,1);
+ assert.equal((html.match(/aria-label="Tidak dicentang"/g)||[]).length,1);
+ assert.equal((html.match(/>Centang<\/th>/g)||[]).length,1);
+ assert.match(advanceCell(true,'other',{balikanCheckbox:true}),/advance-check/);
+ assert.doesNotMatch(advanceTable([{checked:true}]),/balikan-check/);
+});
 test('actual and string booleans render checked/unchecked indicators instead of literal values',()=>{
  for(const value of [true,'TRUE',' true ']){const html=advanceCell(value);assert.match(html,/is-checked/);assert.match(html,/aria-label="Dicentang"/);assert.doesNotMatch(html,/>true</i);}
  for(const value of [false,'FALSE',' false ']){const html=advanceCell(value);assert.doesNotMatch(html,/is-checked/);assert.match(html,/aria-label="Tidak dicentang"/);assert.doesNotMatch(html,/>false</i);}

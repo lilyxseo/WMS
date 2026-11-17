@@ -19,8 +19,9 @@ export function advanceColumns(rows){return columnGroups(rows).map(group=>group.
 const columnValue=(row,keys)=>{const key=keys.find(key=>!empty(row[key]));return key===undefined?row[keys[0]]:row[key];};
 const external=value=>{try{const url=new URL(value);return ['https:','http:'].includes(url.protocol)&&!url.username&&!url.password?url:null;}catch{return null;}};
 const openIcon='<svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor"><path d="M6 3H3v10h10v-3M8 3h5v5M7 9l6-6"/></svg>';
-export function advanceCell(value,column=''){
+export function advanceCell(value,column='',{balikanCheckbox=false}={}){
  const bool=advanceBoolean(value);
+ if(bool!==null&&balikanCheckbox&&family(column)==='checked')return `<input type="checkbox" class="balikan-check advance-balikan-check" ${bool?'checked ':''}disabled aria-label="${bool?'Dicentang':'Tidak dicentang'}" title="${bool?'Dicentang':'Tidak dicentang'}">`;
  if(bool!==null)return `<span class="advance-check ${bool?'is-checked':''}" role="img" aria-label="${bool?'Dicentang':'Tidak dicentang'}" title="${bool?'Dicentang':'Tidak dicentang'}">${bool?'<svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor"><path d="m3 8 3 3 7-7"/></svg>':''}</span>`;
  if(value===null||value===undefined||value==='')return '<span class="advance-empty-cell" aria-label="Kosong">—</span>';
  if(typeof value!=='string')return esc(typeof value==='object'?JSON.stringify(value):value);
@@ -39,10 +40,10 @@ function columnLayout(column,rows){
  if(/link|url|dokumen|document|file|pdf/.test(name))return {kind:'link',width:220};
  return {kind:'text',width:152};
 }
-export function advanceTable(rows){
+export function advanceTable(rows,options={}){
  if(!rows.length)return '<div class="advance-empty-state">Tidak ada data untuk SKU ini.</div>';
  const groups=columnGroups(rows),columns=groups.map(group=>group.column);
  if(!columns.length)return '<div class="advance-empty-state">Tidak ada kolom data untuk ditampilkan.</div>';
  const projected=rows.map(row=>Object.fromEntries(groups.map(group=>[group.column,columnValue(row,group.keys)]))),layout=columns.map(column=>columnLayout(column,projected)),width=layout.reduce((sum,column)=>sum+column.width,0);
- return `<div class="table-wrap advance-table-wrap" tabindex="0" role="region" aria-label="Tabel data sumber, geser untuk melihat semua kolom"><table class="advance-data-table" style="--advance-table-width:${width}px"><colgroup>${layout.map(column=>`<col style="--advance-column-width:${column.width}px">`).join('')}</colgroup><thead><tr>${columns.map((column,index)=>`<th scope="col" class="advance-column-${layout[index].kind}">${esc(labels[normal(column)]||column)}${columns.some(other=>other!==column&&(labels[normal(other)]||other)===(labels[normal(column)]||column))?' ('+esc(column)+')':''}</th>`).join('')}</tr></thead><tbody>${projected.map(row=>`<tr>${columns.map((column,index)=>`<td class="advance-column-${layout[index].kind}${advanceBoolean(row[column])!==null?' advance-boolean-cell':''}">${advanceCell(row[column],column)}</td>`).join('')}</tr>`).join('')}</tbody></table></div><div class="advance-table-footer"><span>${rows.length.toLocaleString('id-ID')} baris data</span><span>Geser tabel untuk melihat kolom lainnya</span></div>`;
+ return `<div class="table-wrap advance-table-wrap" tabindex="0" role="region" aria-label="Tabel data sumber, geser untuk melihat semua kolom"><table class="advance-data-table" style="--advance-table-width:${width}px"><colgroup>${layout.map(column=>`<col style="--advance-column-width:${column.width}px">`).join('')}</colgroup><thead><tr>${columns.map((column,index)=>`<th scope="col" class="advance-column-${layout[index].kind}">${esc(labels[normal(column)]||column)}${columns.some(other=>other!==column&&(labels[normal(other)]||other)===(labels[normal(column)]||column))?' ('+esc(column)+')':''}</th>`).join('')}</tr></thead><tbody>${projected.map(row=>`<tr>${columns.map((column,index)=>`<td class="advance-column-${layout[index].kind}${advanceBoolean(row[column])!==null?' advance-boolean-cell':''}">${advanceCell(row[column],column,options)}</td>`).join('')}</tr>`).join('')}</tbody></table></div><div class="advance-table-footer"><span>${rows.length.toLocaleString('id-ID')} baris data</span><span>Geser tabel untuk melihat kolom lainnya</span></div>`;
 }

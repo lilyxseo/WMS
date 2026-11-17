@@ -60,7 +60,7 @@ export function mountAdvanceSearch(root,{fetchFn=(...args)=>fetch(...args),isCur
  };
  el('history').addEventListener('click',historyClick);renderHistory();
  async function request(url,signal){const response=await fetchFn(url,{cache:'no-store',signal});const data=await response.json();if(!response.ok||data.success===false)throw Error(data.message||'Gagal memuat data.');return data;}
- const groups=items=>items.length?items.map(({name,rows})=>`<details class="source-card advance-source-group" ${rows.length?'open':''}><summary><span>${esc(name)}</span><span class="advance-count">${rows.length} baris</span></summary><div class="source-body">${advanceTable(rows)}</div></details>`).join(''):'<div class="advance-empty-state">Tidak ada data untuk SKU ini.</div>';
+ const groups=(items,options={})=>items.length?items.map(({name,rows})=>`<details class="source-card advance-source-group" ${rows.length?'open':''}><summary><span>${esc(name)}</span><span class="advance-count">${rows.length} baris</span></summary><div class="source-body">${advanceTable(rows,options)}</div></details>`).join(''):'<div class="advance-empty-state">Tidak ada data untuk SKU ini.</div>';
  function updateProgress(){
   const loaded=[...sourceStatus.values()].filter(item=>['loaded','partial'].includes(item.status)),failed=[...sourceStatus.values()].filter(item=>['error','partial'].includes(item.status)).length;
   const progress=el('progress');if(progress)progress.textContent=`${loaded.length} dari ${sources.length} sumber siap${failed?` · ${failed} belum lengkap`:''}`;
@@ -86,7 +86,7 @@ export function mountAdvanceSearch(root,{fetchFn=(...args)=>fetch(...args),isCur
   try{
    const data=await readAdvanceSection(kind,selectedSku,{request:url=>request(url,signal),page});
    if(!alive()||token!==version||!body.isConnected)return;
-   body.innerHTML=['ledger2025','so2025','so2026','trips'].includes(kind)?`${groups(data.groups)}${data.failures.length?`<div class="state error">Sebagian sumber belum terbaca: ${data.failures.map(item=>esc(item.sheet)+': '+esc(item.message)).join('; ')} <button class="btn-ghost" data-advance-partial-retry>Coba lagi</button></div>`:''}`:kind==='detail'?groups(data):kind==='reject'?`${data.warning?`<p class="state">${esc(data.warning)}</p>`:''}${groups(data.groups)}`:advanceTable(kind==='cycle'?data.rows:data);
+   body.innerHTML=['ledger2025','so2025','so2026','trips'].includes(kind)?`${groups(data.groups,{balikanCheckbox:kind==='trips'})}${data.failures.length?`<div class="state error">Sebagian sumber belum terbaca: ${data.failures.map(item=>esc(item.sheet)+': '+esc(item.message)).join('; ')} <button class="btn-ghost" data-advance-partial-retry>Coba lagi</button></div>`:''}`:kind==='detail'?groups(data):kind==='reject'?`${data.warning?`<p class="state">${esc(data.warning)}</p>`:''}${groups(data.groups)}`:advanceTable(kind==='cycle'?data.rows:data);
    const count=kind==='detail'?data.reduce((n,group)=>n+group.rows.length,0):['reject','ledger2025','so2025','so2026','trips'].includes(kind)?data.groups.reduce((n,group)=>n+group.rows.length,0):kind==='cycle'?Number(data.total)||0:data.length;
    sourceStatus.set(kind,{status:data.failures?.length||data.warning?'partial':'loaded',count});updateProgress();
    if(kind==='detail'){const rows=data.flatMap(group=>group.rows),name=rows.map(row=>row.namaBarang||row.nama_barang||row['Nama Barang']).find(Boolean);if(name&&el('name'))el('name').textContent=name;}
