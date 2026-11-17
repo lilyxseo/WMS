@@ -3024,4 +3024,15 @@ html[data-theme="light"] .monthly-metric.inbound .monthly-metric-value,html[data
 .advance-source-nav [role=tab]:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
 .advance-source-nav [role=tab][hidden],[data-advance-no-sources][hidden]{display:none!important}
 
-#advanceSearchApp [data-advance-section="trips"] .advance-balikan-check{cursor:default;vertical-align:middle}
+/* Explicit read-only colors avoid the browser's gray disabled checkbox palette. */
+#advanceSearchApp [data-advance-section="trips"] .advance-balikan-check{
+  appearance:none!important;-webkit-appearance:none!important;
+  cursor:default;vertical-align:middle;border:1px solid var(--muted);border-radius:3px;
+  background-color:var(--panel);background-image:none;box-shadow:none;
+  opacity:1!important;filter:none;-webkit-text-fill-color:initial;
+}
+#advanceSearchApp [data-advance-section="trips"] .advance-balikan-check:checked{
+  background-color:var(--primary-2,var(--primary));border-color:var(--primary-2,var(--primary));
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Cpath d='m4 9 3 3 7-7' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position:center;background-size:18px 18px;background-repeat:no-repeat;
+}
