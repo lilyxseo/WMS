@@ -2828,7 +2828,17 @@ function positionColumnFilterMenu(menu){
   if(prevHidden){menu.hidden=true;}
 }
 function sortTableRows(rows,sort){const m={latest:(a,b)=>(a._sheetOrder??0)-(b._sheetOrder??0),oldest:(a,b)=>(a._sheetOrder??0)-(b._sheetOrder??0),sku:(a,b)=>String(getVal(a,["sku"])||"").localeCompare(String(getVal(b,["sku"])||"")),name:(a,b)=>String(getVal(a,["nama barang","namabarang","namaBarang","nama","item","description"])||"").localeCompare(String(getVal(b,["nama barang","namabarang","namaBarang","nama","item","description"])||"")),qtyDesc:(a,b)=>(b._qty||0)-(a._qty||0),qtyAsc:(a,b)=>(a._qty||0)-(b._qty||0)};return [...rows].sort(m[sort]||m.latest);}
-function paginateRows(mode,action){const st=TABLE_STATE[mode];const max=Math.max(1,Math.ceil(st.total/st.pageSize));const page=action==="prev"?Math.max(1,st.page-1):Math.min(max,st.page+1);return loadTransactionTablePage(mode,{page});}
+async function paginateRows(mode,action){
+ const st=TABLE_STATE[mode],max=Math.max(1,Math.ceil(st.total/st.pageSize));
+ const page=action==="prev"?Math.max(1,st.page-1):Math.min(max,st.page+1);
+ if(page===st.page)return;
+ const route=mode==='in'?'barang-masuk':'barang-keluar',scroll=captureActivePageScroll(route);
+ // Keep existing rows mounted while fetching, avoiding a shorter skeleton that
+ // clamps the viewport before the next page is ready.
+ const pending=loadTransactionTablePage(mode,{page,background:true}),requestId=st.requestId;
+ try{return await pending;}
+ finally{if(st.requestId===requestId&&getActivePage()===route)await restoreActivePageScroll(route,scroll);}
+}
 function toggleColumnVisibility(mode){const root=document.getElementById(`mv-cols-${mode}`);const cols=[...root.querySelectorAll('input[type="checkbox"]')].filter(c=>c.checked).map(c=>c.value);renderDataTablePage(mode,mode==="in"?"Barang Masuk":"Barang Keluar",true,cols);}
 function closeColumnMenus(){document.querySelectorAll(".mv-columns.open").forEach(el=>el.classList.remove("open"));Object.keys(TABLE_STATE).forEach(k=>TABLE_STATE[k].columnMenuOpen=false);}
 function positionColumnMenu(mode){

@@ -20,7 +20,7 @@ test('cache, next page and prefetch carry the selected sort with stale protectio
   assert.match(loader, /transactionPageKey\(\{source,page,limit,query,filters,sort\}\)/);
   assert.match(loader, /URLSearchParams\(\{page:String\(page\),limit:String\(limit\),sort,includeSummary:'0'\}\)/);
   assert.match(loader, /requestId!==st\.requestId\|\|controller\.signal\.aborted/);
-  assert.match(main, /return loadTransactionTablePage\(mode,\{page\}\)/);
+  assert.match(main, /loadTransactionTablePage\(mode,\{page,background:true\}\)/);
   assert.doesNotMatch(loader, /mode=full/);
 });
 
