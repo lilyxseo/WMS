@@ -109,7 +109,7 @@ export async function handleBarangMasukRequest({ request, env }) {
     const summaryStartedAt = Date.now();
     let summary = result.summary;
     if (includeSummary) {
-      const metadata = await Promise.allSettled([fetchSyncStatus(supabaseConfig), summary ? Promise.resolve(summary) : transactionSummary(supabaseConfig, TABLE, filterQuery)]);
+      const metadata = await Promise.allSettled([fetchSyncStatus(supabaseConfig), summary || result.readOrder ? Promise.resolve(summary) : transactionSummary(supabaseConfig, TABLE, filterQuery)]);
       if (metadata[0].status === 'fulfilled') syncStatus = metadata[0].value;
       else console.error('[BarangMasukAPI] sync-status-error', { code: metadata[0].reason?.code, message: metadata[0].reason?.message });
       if (metadata[1].status === 'fulfilled') summary = metadata[1].value;
@@ -130,6 +130,7 @@ export async function handleBarangMasukRequest({ request, env }) {
       rows,
       values: rows.map(row => BARANG_MASUK_COLUMNS.map(key => row[key] ?? '')),
       total,
+      ...(result.readOrder ? { readOrder: result.readOrder } : {}),
       ...(result.facetValues?{facetValues:result.facetValues}:{}),
       ...(summary ? { summary } : {}),
       page: full ? 1 : page,

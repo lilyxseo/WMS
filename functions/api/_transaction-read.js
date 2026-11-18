@@ -1,6 +1,8 @@
 import {transactionFilterRows} from './_transaction-filters.js';
 export const TRANSACTION_COLUMNS = 'tanggal,from_location,to_location,sku,nama_barang,qty,status,pic,keterangan,source_row_number';
 export const TRANSACTION_READ_BATCH_SIZE = 1000;
+// Leave headroom in the Pages subrequest budget for metadata and recovery.
+const MAX_INBOUND_BROWSE_BATCHES = 40;
 
 // Inventory sheets define slash dates as MM/DD/YYYY. Keep this deliberately
 // strict: accepting Date.parse() here would make ambiguous/localized values
@@ -144,6 +146,14 @@ async function readTransactionPage(config, table, {
   limit = 50, sort = 'latest', direction, full = false, bounded = false, recentOnly = false,
   search = '', searchFields = [], columnRules={},facet='',sortField='',sortDir=1,
 } = {}) {
+  const inboundBrowse = table === 'inventory_barang_masuk' && bounded && !full && !recentOnly
+    && sort === 'latest' && !direction && !startDate && !endDate && !search.trim()
+    && !Object.keys(columnRules).length && !facet && !sortField;
+  const readInboundBySourceRow = async () => {
+    const offset = (page - 1) * limit;
+    const result = await supabaseRows(config, `${table}?select=${columns}${filterQuery}&order=source_row_number.desc&offset=${offset}&limit=${limit}`, { count: true });
+    return { rows: result.payload, total: exactTotal(result.response, offset + result.payload.length), summary: null, readOrder: 'source-row' };
+  };
   if (recentOnly && !filterQuery && !startDate && !endDate && sort === 'latest' && !full && !Object.keys(columnRules).length && !facet && !sortField) {
     const offset = (page - 1) * limit;
     const result = await supabaseRows(config, `${table}?select=${columns}&order=source_row_number.desc&offset=${offset}&limit=${limit}`, { count: true });
@@ -165,12 +175,21 @@ async function readTransactionPage(config, table, {
     let result;
     try { const queued=pending.get(offset);pending.delete(offset);if(queued){const outcome=await queued;if(outcome.error)throw outcome.error;result=outcome.result;}else result=await readBatch(offset); }
     catch(error){
+      if(inboundBrowse&&(error?.code==='57014'||error?.name==='TimeoutError'||/too many subrequests/i.test(error?.message||''))){
+        console.warn('[BarangMasukAPI] date sort exceeded the browse budget; using source row order');
+        return readInboundBySourceRow();
+      }
       // Old deployments remain readable during rollout. Never turn a timeout or
       // permission failure into another full scan.
       if(!useSearchRpc||!['PGRST202','42883'].includes(error.code))throw error;
       useSearchRpc=false;rows=[];readCount=0;skuSet.clear();facets.clear();totalRows=0;totalQty=0;latestDate=null;oldestDate=null;invalidDateCount=0;sourceTotal=null;offset=0;lastBatchSize=0;continue;
     }
-    if (offset === 0) sourceTotal = exactTotal(result.response, result.payload.length);
+    if (offset === 0) {
+      sourceTotal = exactTotal(result.response, result.payload.length);
+      if (inboundBrowse && sourceTotal > result.payload.length * MAX_INBOUND_BROWSE_BATCHES) {
+        return readInboundBySourceRow();
+      }
+    }
     readCount+=result.payload.length;lastBatchSize=result.payload.length;
     // Three reads in flight at most. Handle rejections immediately, then throw
     // when consuming the batch so a failed scan can never return partial data.

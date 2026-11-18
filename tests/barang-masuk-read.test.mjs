@@ -179,3 +179,48 @@ test('mode=full returns every bounded read batch for analytics while ordinary re
     assert.equal(paged.rows.length, 25);assert.equal(paged.hasNext, true);assert.equal(paged.complete, false);
   } finally { globalThis.fetch = originalFetch; }
 });
+
+test('large Barang Masuk ledgers return a bounded page without scanning the whole source', async t => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const calls = [];
+  globalThis.fetch = async input => {
+    const url = new URL(input);
+    if (url.pathname.endsWith('/inventory_sync_status')) return Response.json([]);
+    calls.push(url);
+    const offset = Number(url.searchParams.get('offset'));
+    const limit = Number(url.searchParams.get('limit'));
+    const rows = Array.from({length:limit}, (_, index) => ({
+      source_row_number: 62000 - offset - index,
+      status: 'Movement',
+    }));
+    return Response.json(rows, {headers:{'content-range':`${offset}-${offset + limit - 1}/62000`}});
+  };
+  const result = await handleBarangMasukRequest({request:request('?page=2&limit=25&sort=latest'),env});
+  assert.equal(result.status,200);
+  const body = await result.json();
+  assert.equal(body.readOrder,'source-row');
+  assert.equal(body.summary,undefined);
+  assert.equal(body.total,62000);
+  assert.equal(body.rows.length,25);
+  assert.equal(body.rows[0].rowNumber,61975);
+  assert.equal(body.hasNext,true);
+  assert.deepEqual(calls.map(url=>url.searchParams.get('limit')),['1000','25']);
+  assert.ok(calls.every(url=>url.searchParams.get('status')==='in.(Barang Masuk,Movement)'));
+});
+
+test('Barang Masuk retries a timed-out default read with page-sized source ordering', async t => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const limits = [];
+  globalThis.fetch = async input => {
+    const limit = new URL(input).searchParams.get('limit');
+    limits.push(limit);
+    if (limit === '1000') return Response.json({code:'57014',message:'Statement timeout'}, {status:500});
+    return Response.json([{source_row_number:42}], {headers:{'content-range':'0-0/1'}});
+  };
+  const response = await handleBarangMasukRequest({request:request('?page=1&limit=25&sort=latest&includeSummary=0'),env});
+  assert.equal(response.status,200);
+  assert.equal((await response.json()).rows[0].rowNumber,42);
+  assert.deepEqual(limits,['1000','25']);
+});
