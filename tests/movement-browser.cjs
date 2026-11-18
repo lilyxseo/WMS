@@ -1,5 +1,6 @@
 // Optional Chromium integration check. All auth and API responses are mocked.
 const {chromium}=require('playwright-core');
+const assert=require('node:assert/strict');
 const fs=require('fs'),nodePath=require('path');
 const buildDir=process.env.WMS_BROWSER_BUILD_DIR||nodePath.resolve(__dirname,'..');
 const baseURL=process.env.WMS_BROWSER_BASE_URL||'http://127.0.0.1:8790';
@@ -27,6 +28,22 @@ const baseURL=process.env.WMS_BROWSER_BASE_URL||'http://127.0.0.1:8790';
  });
  await page.goto(baseURL+'/movement');await page.waitForFunction(()=>!!window.__wmsTest);await page.getByRole('button',{name:'Mulai Movement',exact:true}).click();await page.waitForTimeout(100);
  await page.locator('#movementSearchInput').fill('00123456');await page.locator('[data-mvm-action="add"]').click();
+ const lockedCells=page.locator('#mvSessionBody tr').first().locator('[data-mvm-readonly]');
+ const lockedValues=['A01','00123456','Product 00123456','7'];
+ for(const [index,value] of lockedValues.entries()){
+  const cell=lockedCells.nth(index);
+  await cell.click();
+  assert.equal(await cell.getAttribute('aria-selected'),'true');
+  assert.equal(await cell.getAttribute('aria-readonly'),'true');
+  const copied=await cell.evaluate(node=>{
+   const clipboardData=new DataTransfer();
+   node.dispatchEvent(new ClipboardEvent('copy',{bubbles:true,cancelable:true,clipboardData}));
+   return clipboardData.getData('text/plain');
+  });
+  assert.equal(copied,value);
+  await cell.press('F2');
+  assert.equal(await page.locator('[data-grid-editor]').count(),0);
+ }
  async function edit(cell,value){await page.locator('#mvSessionBody tr').first().locator('td').nth(cell).dblclick();const input=page.locator('[data-grid-editor]');await input.fill(value);await input.press('Enter');}
  await edit(1,'B01');await edit(5,'2');await page.locator('#mvSubmitBtn').click();await page.locator('[data-confirm-ok]').click();await page.waitForFunction(()=>window.__wmsTest.batches()[0]?.status==='sending');
  await page.locator('#movementSearchInput').fill('00999999');await page.locator('[data-mvm-action="add"]').click();await edit(1,'C01');await edit(5,'3');
