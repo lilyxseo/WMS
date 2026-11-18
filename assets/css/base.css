@@ -56,6 +56,38 @@ body {
 }
     
     body { margin:0;font-family:"Poppins","Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);overflow-x:hidden; }
+    .auth-loading {
+      display: flex;
+      min-height: 100vh;
+      min-height: 100dvh;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: radial-gradient(ellipse at center, color-mix(in srgb, var(--primary) 8%, transparent), transparent 56%), var(--bg);
+      color: var(--text);
+      text-align: center;
+    }
+    .auth-loading[hidden] { display: none; }
+    .auth-loading-content { display: grid; justify-items: center; }
+    .auth-loading-logo {
+      display: block;
+      width: clamp(68px, 13vw, 88px);
+      height: auto;
+      aspect-ratio: 1;
+      object-fit: contain;
+      border-radius: 50%;
+      background: #fff;
+      animation: auth-logo-spin 2.4s linear infinite;
+    }
+    .auth-loading h1 { margin: 20px 0 5px; font-size: clamp(22px, 4vw, 28px); }
+    .auth-loading p { margin: 0; color: var(--muted); font-size: 13px; }
+    @keyframes auth-logo-spin { to { transform: rotate(1turn); } }
+    @media (prefers-reduced-motion: reduce) {
+      .auth-loading-logo { animation: none; }
+    }
+    @media (scripting: none) {
+      .auth-loading { display: none; }
+    }
     .app{display:none;min-height:100vh}
     .app .sidebar,
     .app .content,

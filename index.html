@@ -51,7 +51,13 @@
   <link rel="apple-touch-icon" href="/assets/goto.png" />
 </head>
 <body>
-<div id="authLoadingScreen" aria-live="polite" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg,#0b1220);color:var(--text,#fff);"><div style="text-align:center;padding:24px;max-width:540px"><h1 style="font-size:24px">WMS Goto Living</h1><p>Warehouse Management System untuk pengelolaan stok dan operasional gudang.</p><p class="subtitle">Memeriksa sesi untuk membuka halaman login atau dashboard Anda…</p></div></div>
+<div id="authLoadingScreen" class="auth-loading">
+  <div class="auth-loading-content">
+    <img class="auth-loading-logo" src="/assets/goto.png" width="499" height="500" alt="" fetchpriority="high" />
+    <h1>WMS Goto Living</h1>
+    <p role="status">Memeriksa sesi Anda…</p>
+  </div>
+</div>
 <noscript><section lang="id" style="padding:24px;text-align:center"><h2>WMS Goto Living</h2><p>Aktifkan JavaScript untuk masuk ke sistem pengelolaan gudang. Data inventory hanya tersedia setelah login.</p></section></noscript>
 <main class="login-page" id="loginView" hidden>
   <section class="login-shell" aria-labelledby="loginTitle">
