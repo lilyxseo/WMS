@@ -1,0 +1,1 @@
+export const BALIKAN_BASE_COLUMNS=[['checked','CENTANG'],['sheetName','SHEET'],['no','NO'],['sku','SKU'],['namaBarang','NAMA BARANG'],['qty','QTY'],['rakTujuan','RAK TUJUAN'],['lokasi','LOKASI'],['stokBulky','STOK BULKY'],['stokRetail','STOK RETAIL'],['status','STATUS'],['keterangan','KETERANGAN']];

@@ -1,3 +1,4 @@
+import {BALIKAN_BASE_COLUMNS} from './balikan-columns.js';
 import {assetEditorFields,assetToday} from './asset-editor.js';
 import {createMovementDelivery} from './movement-delivery.js?v=__APP_VERSION__';
 import {createMovementStockSearch} from './movement-stock-search.js?v=__APP_VERSION__';
@@ -3548,7 +3549,6 @@ function scrollToBalikanRow(rowNumber,sheetName=""){const el=document.getElement
 
 
 function formatBalikanFieldName(field){const map={qty:'Qty',rakTujuan:'Rak Tujuan',lokasi:'Lokasi',stokBulky:'Stok Bulky',stokRetail:'Stok Retail',status:'Status',keterangan:'Keterangan'};return map[field]||field;}
-const BALIKAN_BASE_COLUMNS=[['checked','CENTANG'],['sheetName','SHEET'],['no','NO'],['sku','SKU'],['namaBarang','NAMA BARANG'],['qty','QTY'],['rakTujuan','RAK TUJUAN'],['lokasi','LOKASI'],['stokBulky','STOK BULKY'],['stokRetail','STOK RETAIL'],['status','STATUS'],['keterangan','KETERANGAN']];
 function getBalikanTableColumns(){const dynamic=(window.BALIKAN_DYNAMIC_COLUMNS||[]).map(col=>[col.key,col.header||col.key]);return [...BALIKAN_BASE_COLUMNS,...dynamic.filter(([key])=>!BALIKAN_BASE_COLUMNS.some(([baseKey])=>baseKey===key))];}
 function getBalikanUniqueOptions(rows,col){const version=`${BALIKAN_STATE.lastDataChecksum}|${getBalikanTableColumns().map(([key])=>key).join('|')}`;if(BALIKAN_STATE.filterOptionsVersion!==version){BALIKAN_STATE.filterOptionsVersion=version;BALIKAN_STATE.filterOptionsByColumn={};}const cache=BALIKAN_STATE.filterOptionsByColumn||(BALIKAN_STATE.filterOptionsByColumn={});if(!cache[col])cache[col]=getUniqueOptions(rows,col,'balikan');return cache[col];}
 function ensureBalikanFilterState(){if(!BALIKAN_STATE.filterState)BALIKAN_STATE.filterState={page:1,pageSize:50,openFilterCol:'',columnFilters:{},rows:[],filtered:[]};const st=BALIKAN_STATE.filterState;if(![25,50,100].includes(Number(st.pageSize)))st.pageSize=50;if(!Number.isFinite(Number(st.page))||Number(st.page)<1)st.page=1;getBalikanTableColumns().forEach(([k])=>{if(!Array.isArray(st.columnFilters[k]))st.columnFilters[k]=[];});return st;}

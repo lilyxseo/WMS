@@ -6,7 +6,7 @@ test('Balikan source uses native read-only checkboxes with the Balikan style for
  assert.equal((html.match(/class="balikan-check advance-balikan-check"/g)||[]).length,2);
  assert.equal((html.match(/checked disabled/g)||[]).length,1);
  assert.equal((html.match(/aria-label="Tidak dicentang"/g)||[]).length,1);
- assert.equal((html.match(/>Centang<\/th>/g)||[]).length,1);
+ assert.equal((html.match(/>CENTANG<\/th>/g)||[]).length,1);
  assert.match(advanceCell(true,'other',{balikanCheckbox:true}),/advance-check/);
  assert.doesNotMatch(advanceTable([{checked:true}]),/balikan-check/);
 });
@@ -62,4 +62,11 @@ test('COUNT 1 prioritizes the product name and uses the full-width table layout'
  const headers=[...html.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map(match=>match[1]);
  assert.deepEqual(headers,['SKU','Nama Barang','Lokasi','Count 1','Count 2','Sumber Sheet']);
  assert.doesNotMatch(html,/advance-data-table--aligned/);
+});
+
+test('Advance Search Balikan matches the Balikan Store column sequence and appends extra columns',()=>{
+ const html=advanceTable([{sku:'0012',qty:0,'Sumber Sheet':'DSN TRIP 4',checked:true,no:1,'Dokumen Tambahan':'File',namaBarang:'Product'}],{balikanCheckbox:true});
+ const headers=[...html.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map(match=>match[1]);
+ assert.deepEqual(headers,['CENTANG','SHEET','NO','SKU','NAMA BARANG','QTY','RAK TUJUAN','LOKASI','STOK BULKY','STOK RETAIL','STATUS','KETERANGAN','Dokumen Tambahan']);
+ assert.match(html,/>DSN TRIP 4<\/td>/);
 });

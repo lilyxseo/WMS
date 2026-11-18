@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
+import {BALIKAN_BASE_COLUMNS} from '../assets/js/balikan-columns.js';
 
 const source = fs.readFileSync(new URL('../assets/js/main.js', import.meta.url), 'utf8');
 const helperNames = ['isEmptyFilterValue', 'sanitizeFilterValue', 'getFilterOptionLabel'];
@@ -24,10 +25,7 @@ test('(Kosong) only represents nullish or whitespace values', () => {
 });
 
 test('Balikan table derives filters from the complete table schema', () => {
-  const baseMatch = source.match(/const BALIKAN_BASE_COLUMNS=([^;]+);/);
-  assert.ok(baseMatch);
-  const columns = vm.runInNewContext(baseMatch[1]);
-  const keys = columns.map(([key]) => key);
+  const keys = BALIKAN_BASE_COLUMNS.map(([key]) => key);
   for (const key of ['checked','sheetName','no','sku','namaBarang','qty','rakTujuan','lokasi','stokBulky','stokRetail','status','keterangan']) assert.ok(keys.includes(key), `${key} is filterable`);
   assert.match(source, /getBalikanTableColumns\(\)\.map\(\(\[key,label\]\)=>headerWithFilter/);
   assert.match(source, /dynamic\.filter/);
