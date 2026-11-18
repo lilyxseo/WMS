@@ -56,3 +56,10 @@ test('Advance Search orders inventory and transaction columns by purpose across 
  assert.deepEqual(advanceColumns([{Qty:2,Location:'A',SKU:'0012','Product Name':'Product',Extra:'Detail'}]),['SKU','Product Name','Location','Qty','Extra']);
  assert.deepEqual(advanceColumns([{SKU:'0012',Status:'Movement',Qty:2,To:'B',From:'A',Date:'2026-09-25'}]),['Date','From','To','SKU','Qty','Status']);
 });
+
+test('COUNT 1 prioritizes the product name and uses the full-width table layout',()=>{
+ const html=advanceTable([{sku:'GT-SBS-PN',sheet:'COUNT 1',Lokasi:'G15-5','Display Name':'GT-SBS-PN',Name:'GOTO SHOE BOX', 'Count 1':2449,'Count 2':''}]);
+ const headers=[...html.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map(match=>match[1]);
+ assert.deepEqual(headers,['SKU','Nama Barang','Lokasi','Count 1','Count 2','Sumber Sheet']);
+ assert.doesNotMatch(html,/advance-data-table--aligned/);
+});

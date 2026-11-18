@@ -2964,7 +2964,8 @@ html[data-theme="light"] .monthly-metric.inbound .monthly-metric-value,html[data
 /* Keep source tables readable independently of the application's generic tables. */
 #advanceSearchApp .advance-table-wrap{isolation:isolate;position:relative;width:100%;min-width:0;box-sizing:border-box;max-height:min(460px,65dvh);scrollbar-gutter:stable;overscroll-behavior-x:contain;scrollbar-width:auto;scrollbar-color:var(--muted) var(--panel-soft)}
 #advanceSearchApp .advance-table-wrap:focus-visible{outline:2px solid var(--primary);outline-offset:3px}
-#advanceSearchApp .advance-data-table{table-layout:fixed;width:calc(var(--advance-table-width)*var(--advance-table-scale,1));font-size:12px}
+#advanceSearchApp .advance-data-table{table-layout:fixed;width:100%;min-width:calc(var(--advance-table-width)*var(--advance-table-scale,1));font-size:12px}
+#advanceSearchApp .advance-data-table--aligned{width:calc(var(--advance-table-width)*var(--advance-table-scale,1))}
 #advanceSearchApp .advance-data-table col{width:calc(var(--advance-column-width)*var(--advance-table-scale,1))}
 #advanceSearchApp .advance-data-table :is(th,td){position:static;inset:auto;z-index:auto;box-sizing:border-box;min-width:0;max-width:none;padding:12px 14px!important;font-size:12px;line-height:1.6;white-space:normal;overflow-wrap:anywhere;word-break:normal;border-bottom:1px solid var(--line);border-right:1px solid var(--line)}
 #advanceSearchApp .advance-data-table th{color:var(--text);font-size:11px;font-weight:600;background:var(--panel-soft);z-index:auto}
