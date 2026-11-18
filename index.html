@@ -345,13 +345,16 @@
     <div id="mainContentPages">
     <section id="page-dashboard" class="page" aria-labelledby="dashboard-title">
       <header class="dashboard-header">
-        <div>
-          <h1 id="dashboard-title">Dashboard Gudang</h1>
-          <p>Ringkasan stok dan aktivitas gudang.</p>
+        <div class="dashboard-header-identity">
+          <span class="dashboard-header-icon" aria-hidden="true"><i data-lucide="warehouse"></i></span>
+          <div>
+            <h1 id="dashboard-title">Dashboard Gudang</h1>
+            <p>Ringkasan stok dan aktivitas gudang.</p>
+          </div>
         </div>
         <nav class="dashboard-jump" aria-label="Bagian dashboard">
-          <a href="#dashboard-recent">Transaksi terbaru <span aria-hidden="true">↓</span></a>
-          <a href="#dashboard-insight">Insight bulanan <span aria-hidden="true">↓</span></a>
+          <a href="#dashboard-recent"><i data-lucide="arrow-left-right" aria-hidden="true"></i><span>Transaksi terbaru</span><i class="dashboard-jump-arrow" data-lucide="arrow-down" aria-hidden="true"></i></a>
+          <a href="#dashboard-insight"><i data-lucide="chart-column" aria-hidden="true"></i><span>Insight bulanan</span><i class="dashboard-jump-arrow" data-lucide="arrow-down" aria-hidden="true"></i></a>
         </nav>
       </header>
       <section class="dashboard-summary" aria-labelledby="dashboard-summary-title">
