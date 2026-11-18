@@ -1,7 +1,6 @@
 import { getGoogleAccessToken } from './_google-auth.js';
 import { getRequestRole } from './_authz.js';
-import {rejectDate} from './_reject-entry.js';
-const REJECT_SPREADSHEET_ID = '1BVGcIWnYqrG-DefzmnO_hZjNn3H3c4sriI7CBAWsxw8';
+import {rejectDate,rejectSheet} from './_reject-entry.js';
 const STOCK_SHEET = 'KARTU STOCK KST';
 const IN_SHEET = 'Barang Masuk';
 const OUT_SHEET = 'Barang Keluar';
@@ -12,7 +11,6 @@ let serverBarangRejectLoading = null;
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8' } });
 
 async function token(env) { return getGoogleAccessToken(env); }
-function ssId(env) { return String(env.BARANG_REJECT_SHEET_ID || env.SHEET_ID_BARANG_REJECT || REJECT_SPREADSHEET_ID).trim(); }
 function isQuotaError(err) {
   const msg = String(err?.message || err || '');
   return /quota|read requests per minute|rate limit/i.test(msg);
@@ -82,7 +80,7 @@ export async function onRequestGet({ request, env }) {
     if (!serverBarangRejectLoading) {
       serverBarangRejectLoading = (async () => {
         const access = await token(env);
-        const spreadsheetId = ssId(env);
+        const spreadsheetId = rejectSheet(env);
         const data = await readAll(access, spreadsheetId);
         return cachePayload(spreadsheetId, data);
       })().finally(() => { serverBarangRejectLoading = null; });

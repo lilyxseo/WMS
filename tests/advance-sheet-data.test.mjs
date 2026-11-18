@@ -27,13 +27,39 @@ const dependencies=(sheets,values)=>({authorize:async()=>true,getToken:async()=>
  const parsed=new URL(url);if(parsed.pathname.endsWith('batchGet'))return Response.json({valueRanges:parsed.searchParams.getAll('ranges').map(range=>({values:values[range.split("'")[1]]}))});
  return Response.json({sheets:sheets.map(title=>({properties:{title,gridProperties:{columnCount:12}}}))});
 }});
-test('2025 transactions resolve both archive tabs and return only exact SKU source rows',async()=>{
- const source={};for(const title of ['Barang Masuk','Barang Keluar'])source[title]=[['Tanggal','From','To','SKU','Nama Barang','Qty'],['2025-07-01','A','B','0012','Product',2],['2025-07-02','A','B','12','Other',9]];
- const response=await handleAdvanceSources({request:req('ledger2025'),env:{}},dependencies(Object.keys(source),source));assert.equal(response.status,200);const data=await response.json();assert.equal(data.groups.length,2);assert.ok(data.groups.every(group=>group.rows.length===1&&group.rows[0].sku==='0012'));assert.ok(data.groups[0].name.includes('2025'));
+test('2025 transactions return exact SKU rows with Barang Masuk before Barang Keluar',async()=>{
+ const source={};for(const title of ['Barang Keluar','Barang Masuk'])source[title]=[['Tanggal','From','To','SKU','Nama Barang','Qty'],['2025-07-01','A','B','0012','Product',2],['2025-07-02','A','B','12','Other',9]];
+ const response=await handleAdvanceSources({request:req('ledger2025'),env:{}},dependencies(Object.keys(source),source));
+ assert.equal(response.status,200);
+ const data=await response.json();
+ assert.deepEqual(data.groups.map(group=>group.rows[0]?.sheet),['Barang Masuk','Barang Keluar']);
+ assert.ok(data.groups.every(group=>group.rows.length===1&&group.rows[0].sku==='0012'));
+ assert.ok(data.groups[0].name.includes('2025'));
 });
 test('SO JULI 2025 reads Inventory while COUNT 1 rejects an unrelated schema',async()=>{
  const deps=dependencies(['SO JULI 2025'],{'SO JULI 2025':[['SKU','Nama Barang','Qty'],['0012','A',4]]});const response=await handleAdvanceSources({request:req('so2025'),env:{}},deps);assert.equal(response.status,200);assert.equal((await response.json()).groups[0].rows[0].Qty,4);
  const fail=await handleAdvanceSources({request:req('so2026'),env:{SO_2026_SPREADSHEET_ID:'T'.repeat(30)}},dependencies(['COUNT 1'],{'COUNT 1':[['SKU','Nama Barang','Qty'],['0012','A',1]]}));assert.equal(fail.status,503);assert.match((await fail.json()).message,/header Hasil hitung/);
+});
+test('Reject history reads only Barang Masuk History in the configured Reject spreadsheet',async()=>{
+ const sheet='Barang Masuk History',spreadsheetId='R'.repeat(30);
+ const deps=dependencies(['Barang Masuk',sheet,'Barang Keluar'],{[sheet]:[
+  ['Tanggal','SKU','Nama Barang','Qty','Keterangan'],
+  ['2025-07-01','0012','Product',0,'Archived'],
+  ['2025-07-02','12','Other',9,'Another SKU']
+ ]});
+ const fetchFixture=deps.fetch;
+ deps.fetch=async url=>{
+  const parsed=new URL(url);
+  assert.match(parsed.pathname,new RegExp('/spreadsheets/'+spreadsheetId+'(?:/|$)'));
+  if(parsed.pathname.endsWith('batchGet'))assert.deepEqual(parsed.searchParams.getAll('ranges'),["'Barang Masuk History'!A1:L"]);
+  return fetchFixture(url);
+ };
+ const response=await handleAdvanceSources({request:req('rejectHistory'),env:{BARANG_REJECT_SHEET_ID:spreadsheetId}},deps);
+ assert.equal(response.status,200);
+ const data=await response.json();
+ assert.equal(data.groups.length,1);
+ assert.match(data.groups[0].name,/Barang Masuk History/);
+ assert.deepEqual(data.groups[0].rows.map(row=>[row.sku,row.Qty,row.Keterangan]),[['0012',0,'Archived']]);
 });
 test('Balikan discovers all TRIP tabs and preserves original extra columns with no other SKU leakage',async()=>{
  const values={};for(const title of ['TRIP 1','TRIP 2'])values[title]=[['Centang','SKU','Nama Barang','Qty','Custom Field'],[false,'0012','Product',0,title],[false,'12','Other',999,'not returned']];

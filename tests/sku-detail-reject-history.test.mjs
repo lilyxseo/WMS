@@ -8,9 +8,23 @@ test('Detail SKU no longer mounts or requests Reject history; source API remains
  assert.doesNotMatch(render,/skuRejectHistoryRoot|loadSkuRejectHistory|Barang Masuk Reject|Barang Keluar Reject/);
  assert.match(source,/\/api\/barang-reject/);
 });
-test('Advance Search preserves both Reject histories, exact SKU, row order and all business fields',async()=>{
- const data=await readAdvanceSection('reject','0012',{request:async url=>{assert.equal(url,'/api/barang-reject');return {warning:'Sebagian sumber',masuk:[{sku:'0012',rowNumber:8,qty:2,noIseller:'#T-008937'},{sku:'12',qty:100},{sku:'0012-X',qty:100},{sku:'0012',rowNumber:2,qty:1}],keluar:[{sku:'0012',qty:3,statusProses:'Selesai'}]};}});
+test('Advance Search includes Barang Masuk History alongside both existing Reject ledgers',async()=>{
+ const history={name:'Barang Masuk History',rows:[{sku:'0012',Qty:5}]};
+ const data=await readAdvanceSection('reject','0012',{request:async url=>{
+  if(url==='/api/advance-search-sources?source=rejectHistory&sku=0012')return {groups:[history]};
+  assert.equal(url,'/api/barang-reject');
+  return {warning:'Sebagian sumber',masuk:[{sku:'0012',rowNumber:8,qty:2,noIseller:'#T-008937'},{sku:'12',qty:100},{sku:'0012-X',qty:100},{sku:'0012',rowNumber:2,qty:1}],keluar:[{sku:'0012',qty:3,statusProses:'Selesai'}]};
+ }});
  assert.equal(data.warning,'Sebagian sumber');assert.equal(data.groups[0].name,'Barang Masuk Reject');assert.deepEqual(data.groups[0].rows.map(row=>row.rowNumber),[2,8]);assert.equal(data.groups[0].rows[1].noIseller,'#T-008937');assert.equal(data.groups[1].rows[0].statusProses,'Selesai');
+ assert.deepEqual(data.groups[2],history);
+});
+test('a missing Reject history tab leaves both existing ledgers visible with a warning',async()=>{
+ const data=await readAdvanceSection('reject','0012',{request:async url=>{
+  if(url==='/api/barang-reject')return {masuk:[{sku:'0012'}],keluar:[]};
+  throw Error('Tab tidak ditemukan');
+ }});
+ assert.deepEqual(data.groups.map(group=>group.name),['Barang Masuk Reject','Barang Keluar Reject']);
+ assert.match(data.warning,/Barang Masuk History: Tab tidak ditemukan/);
 });
 test('Advance Search keeps all detail source columns including fields unique to later rows and escapes values',async()=>{
  const data=await readAdvanceSection('detail','A',{request:async()=>({sources:{'Kartu Stock':[{sku:'A',qty:2},{sku:'A',note:'<img src=x onerror=alert(1)>'}],'Barang Masuk':[]}})});

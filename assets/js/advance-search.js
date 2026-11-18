@@ -29,8 +29,19 @@ export async function readAdvanceSection(kind,sku,{request,page=1}={}){
   return Object.entries(data.sources||{}).map(([name,rows])=>({name,rows}));
  }
  if(kind==='reject'){
-  const data=await request('/api/barang-reject');
-  return {warning:data.warning,groups:[['masuk','Barang Masuk Reject'],['keluar','Barang Keluar Reject']].map(([field,name])=>({name,rows:exactSkuRows(data[field],sku).sort((a,b)=>(Number(a.rowNumber)||0)-(Number(b.rowNumber)||0))}))};
+  const [ledger,history]=await Promise.allSettled([
+   request('/api/barang-reject'),
+   request(`/api/advance-search-sources?source=rejectHistory&sku=${encoded}`)
+  ]);
+  if(ledger.status==='rejected'&&history.status==='rejected')throw ledger.reason;
+  const data=ledger.value;
+  const groups=data?[['masuk','Barang Masuk Reject'],['keluar','Barang Keluar Reject']].map(([field,name])=>({name,rows:exactSkuRows(data[field],sku).sort((a,b)=>(Number(a.rowNumber)||0)-(Number(b.rowNumber)||0))})):[];
+  const warnings=[];
+  if(data?.warning)warnings.push(data.warning);
+  if(ledger.status==='rejected')warnings.push('Barang Masuk/Keluar Reject: '+(ledger.reason?.message||'Gagal memuat data.'));
+  if(history.status==='rejected')warnings.push('Barang Masuk History: '+(history.reason?.message||'Gagal memuat data.'));
+  else groups.push(...(history.value.groups||[]));
+  return {groups,warning:warnings.join(' · ')};
  }
  if(kind==='movement'){const data=await request(`/api/movement?sku=${encoded}`);return exactSkuRows(data.data,sku);}
  if(kind==='cycle'){const data=await request(`/api/cycle-count?sku=${encoded}&page=${page}&limit=50`);return {...data,rows:exactSkuRows(data.rows,sku)};}
@@ -86,7 +97,7 @@ export function mountAdvanceSearch(root,{fetchFn=(...args)=>fetch(...args),isCur
   try{
    const data=await readAdvanceSection(kind,selectedSku,{request:url=>request(url,signal),page});
    if(!alive()||token!==version||!body.isConnected)return;
-   body.innerHTML=['ledger2025','so2025','so2026','trips'].includes(kind)?`${groups(data.groups,{balikanCheckbox:kind==='trips'})}${data.failures.length?`<div class="state error">Sebagian sumber belum terbaca: ${data.failures.map(item=>esc(item.sheet)+': '+esc(item.message)).join('; ')} <button class="btn-ghost" data-advance-partial-retry>Coba lagi</button></div>`:''}`:kind==='detail'?groups(data):kind==='reject'?`${data.warning?`<p class="state">${esc(data.warning)}</p>`:''}${groups(data.groups)}`:advanceTable(kind==='cycle'?data.rows:data);
+   body.innerHTML=['ledger2025','so2025','so2026','trips'].includes(kind)?`${groups(data.groups,{balikanCheckbox:kind==='trips'})}${data.failures.length?`<div class="state error">Sebagian sumber belum terbaca: ${data.failures.map(item=>esc(item.sheet)+': '+esc(item.message)).join('; ')} <button class="btn-ghost" data-advance-partial-retry>Coba lagi</button></div>`:''}`:kind==='detail'?groups(data):kind==='reject'?`${data.warning?`<p class="state">${esc(data.warning)} <button type="button" class="btn-ghost" data-advance-partial-retry>Coba lagi</button></p>`:''}${groups(data.groups)}`:advanceTable(kind==='cycle'?data.rows:data);
    const count=kind==='detail'?data.reduce((n,group)=>n+group.rows.length,0):['reject','ledger2025','so2025','so2026','trips'].includes(kind)?data.groups.reduce((n,group)=>n+group.rows.length,0):kind==='cycle'?Number(data.total)||0:data.length;
    sourceStatus.set(kind,{status:data.failures?.length||data.warning?'partial':'loaded',count});updateProgress();
    if(kind==='detail'){const rows=data.flatMap(group=>group.rows),name=rows.map(row=>row.namaBarang||row.nama_barang||row['Nama Barang']).find(Boolean);if(name&&el('name'))el('name').textContent=name;}
