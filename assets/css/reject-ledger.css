@@ -88,3 +88,122 @@
 .reject-ledger-filter-details[open]>summary>span:first-child::before{content:'▾'}
 .reject-filter-indicator{color:var(--muted);font-size:10px}
 @media(max-width:700px){.reject-ledger-filter-details{margin-top:8px}.reject-ledger-filter-details>summary{min-height:38px;padding-top:4px}.reject-ledger-filter-details .reject-ledger-filters{margin-top:8px}}
+
+/* Reject workspace */
+#page-barang-reject .reject-page-header {
+  display: flex;
+  flex-flow: row wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px 20px;
+  margin: 0 0 16px;
+  padding: clamp(12px, 2vw, 20px);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(115deg, color-mix(in srgb, var(--primary) 9%, var(--panel)), var(--panel) 62%);
+}
+
+.reject-page-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.reject-page-icon {
+  display: grid;
+  flex: none;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--primary) 25%, var(--line));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--primary) 9%, var(--panel));
+  color: var(--primary);
+}
+
+.reject-page-icon svg { width: 21px; height: 21px; }
+#page-barang-reject #rejectPageTitle {
+  margin: 0;
+  font-size: clamp(19px, 2.4vw, 28px);
+  line-height: 1.18;
+  letter-spacing: -.03em;
+  overflow-wrap: anywhere;
+}
+
+#page-barang-reject .reject-header-actions { margin: 0; }
+#page-barang-reject #rejectUpdatedAt { font-size: 11px; color: var(--muted); }
+#rejectUpdatedAt:empty { display: none; }
+#page-barang-reject #rejectRefreshBtn { min-height: 42px; }
+
+#page-barang-reject .reject-dashboard-cards {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+#page-barang-reject .reject-dashboard-cards .metric {
+  min-height: 88px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: none;
+}
+
+#page-barang-reject .reject-dashboard-cards .metric::after { display: none; }
+#page-barang-reject .reject-dashboard-cards .metric-head { align-items: center; gap: 6px; }
+#page-barang-reject .reject-dashboard-cards .metric-head svg { color: var(--primary); }
+#page-barang-reject .reject-dashboard-cards .v { margin: 6px 0 0; font-variant-numeric: tabular-nums; }
+
+.reject-search-field {
+  display: block;
+  position: relative;
+  min-width: 0;
+}
+
+.reject-search-field svg {
+  position: absolute;
+  inset: 50% auto auto 12px;
+  width: 16px;
+  height: 16px;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+#page-barang-reject .reject-search-field input { padding-inline-start: 36px; }
+#page-barang-reject .reject-stock-toolbar :is(input, select) { min-height: 42px; }
+
+#page-barang-reject .reject-stock-table { min-width: 0; }
+#page-barang-reject .reject-stock-table:focus-within { border-color: var(--primary); }
+#page-barang-reject .reject-ledger table tbody tr:nth-child(even):not(:hover) td {
+  background: color-mix(in srgb, var(--panel-soft) 42%, var(--panel));
+}
+
+#page-barang-reject :is(button, input, select, summary):focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.reject-ledger-filter-details > summary { min-height: 42px; }
+.reject-ledger-filter-details[open] .reject-ledger-filters { margin-top: 6px; }
+.reject-filter-indicator { padding: 2px 7px; border-radius: 6px; background: var(--panel-soft); }
+
+@media (max-width: 700px) {
+  #page-barang-reject .reject-dashboard-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #page-barang-reject .reject-dashboard-cards .metric { padding: 10px; }
+  #page-barang-reject .reject-dashboard-cards .metric .k { font-size: 11px; }
+  #page-barang-reject .reject-ledger-tools button,
+  #page-barang-reject .reject-view-toggle button,
+  #page-barang-reject .reject-ledger .reject-pager :is(button, select) { min-height: 44px; }
+  .reject-ledger-actions > button { flex: 1; }
+  .reject-transaction-qty { padding: 5px 8px; border-radius: 8px; background: var(--panel-soft); }
+  .reject-transaction-route {
+    padding: 8px;
+    margin-bottom: 8px;
+    border: 0;
+    border-radius: 7px;
+    background: var(--panel-soft);
+  }
+  .reject-transaction summary { min-height: 44px; }
+}
