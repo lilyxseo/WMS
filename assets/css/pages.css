@@ -2420,23 +2420,13 @@ html[data-accent] .account-card .account-profile-link strong{color:var(--text)}
 #mainContentPages :is(.table-wrap,.table-scroll,.archive-table-wrap,.stats-table-wrap,.cc-table-wrap):has(>.workspace-table){max-height:min(68vh,720px);overflow:auto;scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--muted) 45%,transparent) transparent;overscroll-behavior:contain;border:1px solid var(--line);border-radius:10px}
 #mainContentPages .mv-pagination{gap:12px;flex-wrap:wrap;padding-top:14px;color:var(--muted);font-size:11px}.mv-pagination button{min-width:38px}
 .workspace-filter-toggle{display:none}
-#page-dashboard>.dashboard-section .section-header--dashboard{display:none}
-#page-dashboard #dashboardCards{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
-#page-dashboard #dashboardCards .metric{padding:16px;border:1px solid var(--line);background:var(--panel-soft);border-radius:11px}
-#page-dashboard #dashboardCards .metric .k{font-size:11px;color:var(--muted)}#page-dashboard #dashboardCards .metric .v{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--text)}
-#page-dashboard .dashboard-sections{display:grid;grid-template-columns:minmax(0,1fr);gap:18px;align-items:start}
-#page-dashboard .dashboard-sections .dashboard-section{min-width:0;margin:0}#page-dashboard .dashboard-sections .card{height:100%}
-#page-dashboard .dashboard-sections .table-scroll{max-height:380px}
-#page-dashboard .metric-delta--out{color:var(--muted)}
 .dashboard-insight-more{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}.dashboard-insight-more summary{cursor:pointer;color:var(--primary);font-size:12px;min-height:30px}.dashboard-insight-more .auto-insight-list{margin-top:12px}
 #toast.toast{position:fixed;top:auto;bottom:22px;right:22px;left:auto;z-index:1500;width:min(360px,calc(100vw - 32px));display:grid;gap:8px;pointer-events:none}
 #toast .toast-item{pointer-events:auto;display:flex;align-items:flex-start;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 14px;box-shadow:0 8px 30px #0002;font-size:12px;line-height:1.6;color:var(--text)}
 #toast .toast-icon{flex:none;font-size:14px;font-weight:700}#toast .toast-message{flex:1;overflow-wrap:anywhere}#toast .toast-close{flex:none;min-width:28px;min-height:28px;padding:0;color:var(--muted);border:0;background:transparent}
 #toast .error .toast-icon{color:var(--danger)}#toast .success .toast-icon{color:var(--success)}#toast .warning .toast-icon{color:var(--warning)}#toast .info .toast-icon{color:var(--primary)}
-@media(max-width:1100px){#page-dashboard .dashboard-sections{grid-template-columns:1fr}}
 @media(max-width:700px){
  .workspace-heading{align-items:flex-start;flex-direction:column;gap:14px}.workspace-heading h1{font-size:23px}.workspace-heading .workspace-actions{width:100%}.workspace-heading .workspace-actions button{flex:1;min-height:42px}
- #page-dashboard #dashboardCards{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}#page-dashboard #dashboardCards .metric{padding:13px}#page-dashboard #dashboardCards .metric .v{font-size:21px}
  #mainContentPages .transaction-page-heading{align-items:flex-start}.transaction-page-actions{width:100%;display:flex}.transaction-page-actions button{flex:1;min-height:42px!important}
  .workspace-filter-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;margin:10px 0;min-height:42px;border:1px solid var(--line);color:var(--text);font-size:12px}.workspace-filter-toggle::after{content:'+';font-size:17px;color:var(--muted)}.workspace-filter-toggle[aria-expanded="true"]::after{content:'−'}
  #mainContentPages .workspace-tools-collapsible{display:none!important}#mainContentPages .workspace-tools-collapsible.workspace-tools-expanded{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:12px}

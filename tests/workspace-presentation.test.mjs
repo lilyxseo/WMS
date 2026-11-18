@@ -24,7 +24,7 @@ test('compact dashboard keeps the remaining insights available in a disclosure',
 test('dashboard recent section renders the latest fifty rows and retains navigation to the complete ledger',()=>{
  let received;const context=vm.createContext({esc,renderDashboardSheetTable:rows=>{received=rows;return 'table';}});
  vm.runInContext(between('function renderDashboardTableSection','function renderDashboardSheetTable'),context);
- const html=context.renderDashboardTableSection('Barang Masuk','',Array.from({length:80},(_,i)=>i),'');assert.equal(received.length,50);assert.equal(received[49],49);assert.ok(html.includes('/barang-masuk'));assert.ok(html.includes('Lihat semua'));
+ const html=context.renderDashboardTableSection('Barang Masuk',Array.from({length:80},(_,i)=>i));assert.equal(received.length,50);assert.equal(received[49],49);assert.ok(html.includes('/barang-masuk'));assert.ok(html.includes('Lihat semua'));
 });
 test('SKU navigation opens the full page and keeps browser history',()=>{
  const routes=[],history={pushState:(_state,_title,path)=>routes.push(path)};
@@ -48,8 +48,15 @@ test('dashboard compact transactions retain SKU, quantity and all nine ledger fi
  assert.match(mobile,/<details>/);assert.match(mobile,/navigateToSku/);assert.equal((table.match(/<th>/g)||[]).length,9);
 });
 test('dashboard view preference applies to both transaction sections',()=>{
- const sections=Array.from({length:2},()=>({dataset:{},buttons:['cards','table'].map(mode=>({dataset:{dashboardMode:mode},setAttribute(name,value){this[name]=value;}})),querySelectorAll(){return this.buttons;}}));const context=vm.createContext({window:{},document:{querySelectorAll:()=>sections}});
+ const sections=Array.from({length:2},()=>({dataset:{},buttons:['cards','table'].map(mode=>({dataset:{dashboardMode:mode},setAttribute(name,value){this[name]=value;}})),querySelectorAll(){return this.buttons;}}));
+ const storage=new Map();
+ const window={matchMedia:()=>({matches:true}),localStorage:{getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value)}};
+ const context=vm.createContext({window,document:{querySelectorAll:()=>sections}});
  vm.runInContext(between("let dashboardTransactionView=",'function renderDashboardTableSection'),context);context.window.setDashboardTransactionView('table');
+ assert.equal(storage.get('wms-dashboard-transaction-view'),'table');
+ const reloaded=vm.createContext({window:{...window}});
+ vm.runInContext(between("let dashboardTransactionView=",'function renderDashboardTableSection'),reloaded);
+ assert.equal(vm.runInContext('dashboardTransactionView',reloaded),'table');
  for(const section of sections){assert.equal(section.dataset.dashboardView,'table');assert.equal(section.buttons[1]['aria-pressed'],'true');}
  context.window.setDashboardTransactionView('invalid');assert.equal(sections[0].dataset.dashboardView,'cards');
 });
