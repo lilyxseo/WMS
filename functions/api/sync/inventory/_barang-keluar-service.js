@@ -13,7 +13,8 @@ async function parseValues(values, helpers) {
   // the later business status. Preserve both positions rather than collapsing them.
   const indexes = new Map(), occurrences = new Map();
   values[0].forEach((header, index) => {
-    const normalized = normalizedHeader(header);
+    const name = normalizedHeader(header);
+    const normalized = name === 'NAMA BARANG' ? 'NAMABARANG' : name;
     if (!indexes.has(normalized)) indexes.set(normalized, index);
     occurrences.set(normalized, [...(occurrences.get(normalized) || []), index]);
   });
