@@ -87,7 +87,15 @@ export function createInventorySyncService(config) {
       committedSourceVersion(){return fastProof;},
       async finishSuccess(args) {const payload={p_source:args.source,p_lock_id:args.lock_id,p_row_count:args.row_count,p_inserted_count:args.inserted_count,p_updated_count:args.updated_count,p_deleted_count:args.deleted_count,p_duration_ms:args.duration_ms,p_source_version:args.source_version};try{return await rpc('finish_inventory_sync_fast',{...payload,p_full:args.fullReconcile!==false});}catch(error){if(!error.rpcMissing)throw error;return rpc('finish_inventory_sync_success',payload);}},
       finishError(lockSource, lockId, message, durationMs) { return rpc('finish_inventory_sync_error', { p_source: lockSource, p_lock_id: lockId, p_error: message, p_duration_ms: durationMs }); },
-      async insertHistory(row) { const result = await request('/rest/v1/inventory_sync_history?select=id', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) }); return result?.[0]?.id; },
+      async insertHistory(row) {
+        const id = crypto.randomUUID();
+        await request('/rest/v1/inventory_sync_history', {
+          method: 'POST',
+          headers: { Prefer: 'return=minimal' },
+          body: JSON.stringify({ ...row, id }),
+        });
+        return id;
+      },
       updateHistory(id, row) { return request(`/rest/v1/inventory_sync_history?id=eq.${encodeURIComponent(id)}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) }); },
       async existingMetadata() { const all = [], columns = ['source_row_key', 'source_hash', ...(config.metadataFields || [])].join(','); for (let offset = 0; ; offset += SYNC_READ_PAGE_SIZE) { const page = await request(`/rest/v1/${tableName}?select=${columns}&order=source_row_key&limit=${SYNC_READ_PAGE_SIZE}&offset=${offset}`, {}, 'read'); all.push(...page); if (page.length < SYNC_READ_PAGE_SIZE) return all; } },
       async upsertRows(rows) { for (const batch of chunks(rows)) await request(`/rest/v1/${tableName}?on_conflict=source_row_key`, { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(batch) }); },

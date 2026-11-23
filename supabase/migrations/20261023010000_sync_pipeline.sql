@@ -4,7 +4,7 @@ declare prior public.inventory_sync_status%rowtype; acquired boolean;
 begin
  select * into prior from public.inventory_sync_status where source=p_source for update;
  acquired:=public.acquire_inventory_sync_lock(p_source,p_lock_id,p_stale_after_seconds);
- return jsonb_build_object('acquired',acquired,'source_version',prior.source_version,'allow_fast',acquired and prior.status='success' and prior.locked_at is null and prior.last_full_sync_at>now()-interval '10 minutes');
+ return jsonb_build_object('acquired',acquired,'source_version',prior.source_version,'allow_fast',acquired and prior.status='success' and prior.locked_at is null and prior.last_full_sync_at>now()-interval '30 minutes');
 end$$;
 create or replace function public.finish_inventory_sync_fast(p_source text,p_lock_id uuid,p_row_count integer,p_inserted_count integer,p_updated_count integer,p_deleted_count integer,p_duration_ms integer,p_source_version text,p_full boolean default true) returns void language plpgsql security definer set search_path=public as $$
 begin
