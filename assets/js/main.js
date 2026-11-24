@@ -878,14 +878,14 @@ if(getActivePage()===page)rerenderCurrentPage({force:true});
 renderPageDataStatus(page);
 });return state.promise;
 }
-function showPage(page){syncBalikanShortcutListeners(page==="balikan-store");if(page!=='orderan-gt'){gtOrdersController?.dispose();gtOrdersController=null;}if(page!=='advance-search'){advanceSearchController?.dispose();advanceSearchController=null;}if(page==='file-manager')cancelStartupPrefetch();if(page!=='anomaly'){warningEvidenceController?.dispose();warningEvidenceController=null;}if(page!=='detail'){skuCatalogPhotoController?.dispose();skuCatalogPhotoController=null;}if(page==='balikan-store')setupBalikanEntry();if(page!=="search")closeScannerModal();
+function showPage(page){syncBalikanShortcutListeners(page==="balikan-store");if(page!=='orderan-gt'&&page!=='detail'){gtOrdersController?.dispose();gtOrdersController=null;}if(page!=='advance-search'){advanceSearchController?.dispose();advanceSearchController=null;}if(page==='file-manager')cancelStartupPrefetch();if(page!=='anomaly'){warningEvidenceController?.dispose();warningEvidenceController=null;}if(page!=='detail'){skuCatalogPhotoController?.dispose();skuCatalogPhotoController=null;}if(page==='balikan-store')setupBalikanEntry();if(page!=="search")closeScannerModal();
 document.querySelectorAll(".page").forEach(p=>p.classList.add("hidden"));document.getElementById(`page-${page}`)?.classList.remove("hidden");
 document.querySelectorAll(".side-link[data-page]").forEach(b=>b.classList.toggle("active",b.dataset.page===page||(page==="barang-reject"&&b.dataset.page===getBarangRejectNavPage())));
 syncActiveSidebarParent(page);invalidateInactiveTransactionRequests(page);setMainContentLoading(false);
 if(page==="barang-reject"){ensureBarangRejectLoaded();renderBarangRejectPage();return;}
 if(page==="detail"){return;}
 if(page==='orderan-gt'){
- gtOrdersController ??= mountGtOrders(document.getElementById('orderanGtApp'),{read:async signal=>{
+ gtOrdersController ??= mountGtOrders(document.getElementById('orderanGtApp'),{navigate:navigateTo,read:async signal=>{
   const {res,data}=await fetchJsonSafe('/api/orderan-gt',{signal,cache:'no-store'});
   if(!res.ok||!data?.success)throw Error(data?.message||'Gagal memuat Orderan GT.');
   return data;

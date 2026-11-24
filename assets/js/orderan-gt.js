@@ -4,6 +4,18 @@ const date = new Intl.DateTimeFormat('id-ID',{dateStyle:'medium',timeStyle:'shor
 const qty = value => value == null ? '—' : number.format(value);
 const cell = value => escape(value || '—');
 const PAGE_SIZE = 15;
+const badgeColors = new Map([
+  ['permintaan baru','info'],['proses','info'],['packing','warning'],
+  ['siap kirim','success'],['terkirim','success'],['selesai','success'],['done','success'],
+  ['close','muted'],['closed','muted'],['sudah dipicking','success'],
+  ['masih kurang','warning'],['belum dipicking','danger'],
+  ['req ecom','danger'],['gausah req','success'],['gak usah req','success']
+]);
+function statusBadge(value) {
+  if (!value) return '—';
+  const color = badgeColors.get(value.trim().toLowerCase().replace(/\s+/g,' ')) || 'muted';
+  return `<span class="gt-badge gt-badge--${color}">${escape(value)}</span>`;
+}
 
 export function filterGtOrders(orders, view, search, {status='', pickingStatus=''}={}) {
   const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -36,8 +48,8 @@ function orderMarkup(order) {
     : null;
   const fields = [
     ['Nama produk','product'],['Qty request','requested',qty],['Qty picking','picked',qty],
-    ['Status','status'],['Payment','payment'],['Status picking','pickingStatus'],
-    ['Bulky','bulky',qty],['Retail','retail',qty],['Ket','note'],['Remark','remark']
+    ['Status','status',statusBadge],['Payment','payment'],['Status picking','pickingStatus',statusBadge],
+    ['Bulky','bulky',qty],['Retail','retail',qty],['Ket','note',statusBadge],['Remark','remark']
   ];
   return `<details class="gt-order" data-gt-row="${order.row}">
     <summary>
@@ -51,7 +63,7 @@ function orderMarkup(order) {
         ${progress === null ? '' : `<progress class="gt-progress" max="${requested}" value="${progress}" aria-label="Progres picking"></progress>`}
       </span>
       <span class="gt-order-status">
-        ${(statuses.length ? statuses : ['Status belum diisi']).map(status => `<span class="gt-badge">${escape(status)}</span>`).join('')}
+        ${(statuses.length ? statuses : ['Status belum diisi']).map(statusBadge).join('')}
       </span>
     </summary>
     <div class="gt-table" tabindex="0" role="region" aria-label="Item order baris ${order.row}">
@@ -64,7 +76,7 @@ function orderMarkup(order) {
   </details>`;
 }
 
-export function mountGtOrders(root, {read}) {
+export function mountGtOrders(root, {read,navigate}) {
   let orders = [], view = 'active', page = 1, controller, loaded = false;
   root.innerHTML = `<header class="gt-heading">
     <div><h1 id="orderan-gt-title">Orderan GT</h1><p>Pantau status order dan progres picking.</p></div>
@@ -163,6 +175,13 @@ export function mountGtOrders(root, {read}) {
       }
     }
   }
+  el('orders').onclick = event => {
+    const link = event.target.closest('.gt-sku a');
+    if (!link || !navigate || event.defaultPrevented || event.button !== 0
+      || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    navigate(link.getAttribute('href'));
+  };
   el('refresh').onclick = refresh;
   el('search').oninput = () => { page=1;render(); };
   el('view').onchange = event => { view=event.target.value;page=1;render(); };

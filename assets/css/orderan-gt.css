@@ -173,3 +173,17 @@
   .gt-order-status { grid-column: 1 / -1; }
   .gt-metrics .metric { grid-template-columns: minmax(0,1fr); }
 }
+
+.gt-badge[class*="gt-badge--"] {
+  display: inline-block;
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid color-mix(in srgb,var(--gt-badge-color) 40%,var(--line));
+  background: color-mix(in srgb,var(--gt-badge-color) 13%,var(--panel));
+  font-weight: 600;
+}
+.gt-badge--info { --gt-badge-color: #5288df; }
+.gt-badge--warning { --gt-badge-color: #d59525; }
+.gt-badge--success { --gt-badge-color: #25a374; }
+.gt-badge--danger { --gt-badge-color: #e35359; }
+.gt-badge--muted { --gt-badge-color: var(--muted); }
