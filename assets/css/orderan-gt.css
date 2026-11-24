@@ -93,17 +93,41 @@
 }
 
 .gt-status-summary { min-width: 0; }
-.gt-status-summary h2 { margin: 0 0 8px; font-size: 15px; }
-.gt-status-cards { gap: 8px; }
+.gt-status-summary h2 { margin: 0 0 9px; font-size: 15px; }
+.gt-status-cards { display: grid; grid-template-columns: repeat(auto-fill,minmax(145px,1fr)); gap: 8px; }
 .gt-status-card {
-  display: grid; gap: 5px; text-align: start; min-height: 60px; min-width: 0;
-  background: var(--panel); color: var(--text); font: inherit; cursor: pointer; overflow-wrap: anywhere;
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  min-height: 70px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  text-align: start;
+  font: inherit;
+  cursor: pointer;
 }
 .gt-status-card:hover, .gt-status-card[aria-pressed=true] {
-  border-color: var(--primary);
-  background: color-mix(in srgb, var(--primary) 8%, var(--panel));
+  border-color: var(--gt-badge-color,var(--primary));
+  background: color-mix(in srgb,var(--gt-badge-color,var(--primary)) 9%,var(--panel));
 }
-.gt-status-card .v { font-size: 19px; font-variant-numeric: tabular-nums; }
+.gt-status-card-label { display: flex; align-items: baseline; gap: 7px; padding-inline-end: 14px; font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.gt-status-card-label::before {
+  content: "";
+  flex: 0 0 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--gt-badge-color,var(--muted));
+}
+.gt-status-card-count { color: var(--muted); font-size: 11px; }
+.gt-status-card-count strong { color: var(--text); font-size: 20px; font-variant-numeric: tabular-nums; }
+.gt-status-card-check { position: absolute; inset: 8px 9px auto auto; color: var(--text); visibility: hidden; }
+.gt-status-card[aria-pressed=true] .gt-status-card-check { visibility: visible; }
+@media (max-width: 380px) { .gt-status-cards { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 
 .gt-results { margin: 16px 0 10px; }
 .gt-results h2 { margin: 0 0 4px; font-size: 16px; }
@@ -126,13 +150,7 @@
 .gt-filters summary { min-height: 42px; padding: 11px 4px; cursor: pointer; font-size: 12px; color: var(--text); }
 .gt-filters summary span { margin-left: 6px; color: var(--primary); }
 .gt-filter-fields { grid-template-columns: repeat(2,minmax(0,1fr)); padding: 2px 0 4px; }
-.gt-status-cards { display: flex; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
-.gt-status-card { flex: 0 0 113px; }
 .gt-feedback { margin-top: 0; }
-
-@media (min-width: 760px) {
-  .gt-status-card { flex: 0 0 auto; min-width: 105px; }
-}
 
 @media (max-width: 480px) {
   .gt-search-row { grid-template-columns: minmax(0,1fr); }

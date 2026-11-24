@@ -11,10 +11,10 @@ const badgeColors = new Map([
   ['masih kurang','warning'],['belum dipicking','danger'],
   ['req ecom','danger'],['gausah req','success'],['gak usah req','success']
 ]);
+const statusColor = value => badgeColors.get(value.trim().toLowerCase().replace(/\s+/g,' ')) || 'muted';
 function statusBadge(value) {
   if (!value) return '—';
-  const color = badgeColors.get(value.trim().toLowerCase().replace(/\s+/g,' ')) || 'muted';
-  return `<span class="gt-badge gt-badge--${color}">${escape(value)}</span>`;
+  return `<span class="gt-badge gt-badge--${statusColor(value)}">${escape(value)}</span>`;
 }
 
 export function filterGtOrders(orders, view, search, {status='', pickingStatus=''}={}) {
@@ -55,7 +55,7 @@ function orderMarkup(order) {
     <summary>
       <span class="gt-order-summary">
         <strong>${escape(order.customer || 'Customer belum tercatat')}</strong>
-        <small>Baris ${number.format(order.row)} · ${number.format(order.items.length)} item · ${number.format(skus.length)} SKU</small>
+        <small>${number.format(order.items.length)} item · ${number.format(skus.length)} SKU</small>
       </span>
       <span class="gt-order-picking">
         <small>Picking</small>
@@ -66,7 +66,7 @@ function orderMarkup(order) {
         ${(statuses.length ? statuses : ['Status belum diisi']).map(statusBadge).join('')}
       </span>
     </summary>
-    <div class="gt-table" tabindex="0" role="region" aria-label="Item order baris ${order.row}">
+    <div class="gt-table" tabindex="0" role="region" aria-label="Item order ${escape(order.customer || 'tanpa customer')}">
       <table role="table"><thead role="rowgroup"><tr role="row">${['SKU',...fields.map(([label])=>label)].map(label=>`<th scope="col" role="columnheader">${label}</th>`).join('')}</tr></thead>
       <tbody role="rowgroup">${order.items.map(item => `<tr role="row">
         <td role="cell" class="gt-sku" data-label="SKU">${item.sku ? `<a href="/sku/${encodeURIComponent(item.sku)}">${escape(item.sku)}</a>` : '<span class="gt-badge gt-badge-warning">SKU kosong</span>'}</td>
@@ -160,7 +160,7 @@ export function mountGtOrders(root, {read,navigate}) {
       el('metrics').innerHTML = [[active.length,'Order berjalan'],[active.reduce((total,order)=>total+order.items.length,0),'Item pada order berjalan']].map(([value,label])=>`<div class="metric"><span class="k">${label}</span><strong class="v">${number.format(value)}</strong></div>`).join('');
       const statusCounts = gtOrderStatusCounts(orders);
       el('status-summary').hidden = !statusCounts.length;
-      el('status-cards').innerHTML = statusCounts.map(([status,count])=>`<button class="metric gt-status-card" type="button" data-status="${escape(status)}" aria-pressed="false"><span class="k">${escape(status)}</span><strong class="v">${number.format(count)}</strong></button>`).join('');
+      el('status-cards').innerHTML = statusCounts.map(([status,count])=>`<button class="gt-status-card gt-badge--${statusColor(status)}" type="button" data-status="${escape(status)}" aria-pressed="false"><span class="gt-status-card-label">${escape(status)}</span><span class="gt-status-card-count"><strong>${number.format(count)}</strong> order</span><span class="gt-status-card-check" aria-hidden="true">✓</span></button>`).join('');
       el('metrics').hidden = el('controls').hidden = false;
       el('feedback').textContent = `Terakhir dibaca ${date.format(new Date(data.lastReadAt))} WIB`;
       loaded = true;
