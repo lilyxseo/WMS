@@ -65,3 +65,20 @@ test('status cards count distinct orders for each status, including CLOSE',()=>{
   ];
   assert.deepEqual(gtOrderStatusCounts(orders),[['CLOSE',1],['Packing',2],['Proses',1]]);
 });
+
+test('Stok Kosong and Close do not count as active, but a mixed order can still have an active item',()=>{
+  const source={data:[{rowData:[
+    sheet.data[0].rowData[0],
+    row('GT-01','Produk A',2,0,' Stok Kosong ','','Customer A'),
+    row('GT-02','Produk B',1,0,'CLOSE','',''),
+    row('GT-03','Produk C',3,0,'STOK KOSONG','','Customer B'),
+    row('GT-04','Produk D',2,1,'Packing','','')
+  ]}],merges:[
+    {startRowIndex:1,endRowIndex:3,startColumnIndex:6,endColumnIndex:7},
+    {startRowIndex:3,endRowIndex:5,startColumnIndex:6,endColumnIndex:7}
+  ]};
+  const orders=readGtOrders(source);
+  assert.deepEqual(filterGtOrders(orders,'active','').map(order=>order.customer),['Customer B']);
+  assert.equal(filterGtOrders(orders,'all','',{status:'Stok Kosong'})[0].customer,'Customer A');
+  assert.equal(filterGtOrders(orders,'all','',{status:'CLOSE'})[0].customer,'Customer A');
+});

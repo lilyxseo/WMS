@@ -6,7 +6,7 @@ const SHEET_ID = 784945780;
 const required = {sku:'sku', product:'namaproduk', requested:'qtyrequest', picked:'qtypicking', status:'status', customer:'customer'};
 const optional = {payment:'payment', bulky:'bulky', retail:'retail', note:'ket', pickingStatus:'statuspicking', remark:'remark'};
 const normalize = value => String(value ?? '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-const finished = new Set(['close','closed','selesai','done','terkirim','sudahkirim','sudahdikirim','shipped','delivered','complete','completed','batal','cancel','cancelled','canceled']);
+const finished = new Set(['stokkosong','close','closed','selesai','done','terkirim','sudahkirim','sudahdikirim','shipped','delivered','complete','completed','batal','cancel','cancelled','canceled']);
 const json = (data, status = 200) => Response.json(data, {status, headers:{'Cache-Control':'private, no-store'}});
 const quantity = cell => {
   if (!cell?.formattedValue?.trim()) return null;
