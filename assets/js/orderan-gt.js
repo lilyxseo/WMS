@@ -41,15 +41,18 @@ function orderMarkup(order) {
   ];
   return `<details class="gt-order" data-gt-row="${order.row}">
     <summary>
-      <div class="gt-order-summary">
+      <span class="gt-order-summary">
         <strong>${escape(order.customer || 'Customer belum tercatat')}</strong>
         <small>Baris ${number.format(order.row)} · ${number.format(order.items.length)} item · ${number.format(skus.length)} SKU</small>
-        <small>Qty request ${qty(requested)} · Qty picking ${qty(picked)}</small>
+      </span>
+      <span class="gt-order-picking">
+        <small>Picking</small>
+        <strong>${qty(picked)} / ${qty(requested)}</strong>
         ${progress === null ? '' : `<progress class="gt-progress" max="${requested}" value="${progress}" aria-label="Progres picking"></progress>`}
-      </div>
-      <div class="gt-order-status">
+      </span>
+      <span class="gt-order-status">
         ${(statuses.length ? statuses : ['Status belum diisi']).map(status => `<span class="gt-badge">${escape(status)}</span>`).join('')}
-      </div>
+      </span>
     </summary>
     <div class="gt-table" tabindex="0" role="region" aria-label="Item order baris ${order.row}">
       <table role="table"><thead role="rowgroup"><tr role="row">${['SKU',...fields.map(([label])=>label)].map(label=>`<th scope="col" role="columnheader">${label}</th>`).join('')}</tr></thead>
@@ -64,7 +67,7 @@ function orderMarkup(order) {
 export function mountGtOrders(root, {read}) {
   let orders = [], view = 'active', page = 1, controller, loaded = false;
   root.innerHTML = `<header class="gt-heading">
-    <div class="gt-heading-identity"><span class="gt-heading-icon" aria-hidden="true">GT</span><div><h1 id="orderan-gt-title">Orderan GT</h1><p>Status order dan progres picking dari LIST GT ORDER.</p></div></div>
+    <div><h1 id="orderan-gt-title">Orderan GT</h1><p>Pantau status order dan progres picking.</p></div>
     <button class="btn-ghost" type="button" data-gt-refresh>Perbarui data</button>
   </header>
   <div class="gt-metrics" data-gt-metrics hidden></div>
@@ -75,7 +78,7 @@ export function mountGtOrders(root, {read}) {
         <label><span>Tampilkan</span><select data-gt-view aria-label="Tampilkan"><option value="active">Order berjalan</option><option value="all">Semua order</option></select></label>
       </div>
       <details class="gt-filters">
-        <summary>Filter status <span data-gt-filter-count hidden></span></summary>
+        <summary>Filter lanjutan <span data-gt-filter-count hidden></span></summary>
         <div class="gt-filter-fields">
           <label><span>Status</span><select data-gt-status aria-label="Status"><option value="">Semua status</option></select></label>
           <label><span>Status Picking</span><select data-gt-picking aria-label="Status Picking"><option value="">Semua status picking</option></select></label>
