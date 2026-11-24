@@ -82,3 +82,17 @@ test('Stok Kosong and Close do not count as active, but a mixed order can still 
   assert.equal(filterGtOrders(orders,'all','',{status:'Stok Kosong'})[0].customer,'Customer A');
   assert.equal(filterGtOrders(orders,'all','',{status:'CLOSE'})[0].customer,'Customer A');
 });
+
+test('Permintaan Baru filters and counts skip orders that also contain Close or Closed',()=>{
+  const orders=[
+    {customer:'Mixed',active:true,items:[{status:'Permintaan Baru',pickingStatus:'Belum'},{status:' CLOSE '}]},
+    {customer:'Closed alias',active:true,items:[{status:'Permintaan Baru'},{status:'Closed'}]},
+    {customer:'New',active:true,items:[{status:'Permintaan Baru',pickingStatus:'Belum'}]}
+  ];
+  for(const view of ['active','all']){
+    assert.deepEqual(filterGtOrders(orders,view,'',{status:'Permintaan Baru',pickingStatus:'Belum'}).map(order=>order.customer),['New']);
+  }
+  assert.equal(new Map(gtOrderStatusCounts(orders)).get('Permintaan Baru'),1);
+  assert.equal(filterGtOrders(orders,'all','',{status:'Closed'}).length,1);
+  assert.equal(filterGtOrders(orders,'all','').length,3);
+});

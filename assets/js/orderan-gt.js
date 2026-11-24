@@ -11,7 +11,10 @@ const badgeColors = new Map([
   ['masih kurang','warning'],['belum dipicking','danger'],
   ['req ecom','danger'],['gausah req','success'],['gak usah req','success']
 ]);
-const statusColor = value => badgeColors.get(value.trim().toLowerCase().replace(/\s+/g,' ')) || 'muted';
+const normalizeStatus = value => String(value ?? '').trim().toLowerCase().replace(/\s+/g,' ');
+const statusColor = value => badgeColors.get(normalizeStatus(value)) || 'muted';
+const matchesStatusGroup = (order, status) => normalizeStatus(status) !== 'permintaan baru'
+  || !order.items.some(item => ['close','closed'].includes(normalizeStatus(item.status)));
 function statusBadge(value) {
   if (!value) return '—';
   return `<span class="gt-badge gt-badge--${statusColor(value)}">${escape(value)}</span>`;
@@ -21,6 +24,7 @@ export function filterGtOrders(orders, view, search, {status='', pickingStatus='
   const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
   return orders.filter(order => {
     if (view === 'active' && !order.active) return false;
+    if (!matchesStatusGroup(order,status)) return false;
     if ((status || pickingStatus) && !order.items.some(item =>
       (!status || item.status === status) && (!pickingStatus || item.pickingStatus === pickingStatus)
     )) return false;
@@ -32,7 +36,7 @@ export function gtOrderStatusCounts(orders) {
   const counts = new Map();
   for (const order of orders) {
     const statuses = new Set(order.items.map(item=>item.status).filter(Boolean));
-    for (const status of statuses) counts.set(status,(counts.get(status)??0)+1);
+    for (const status of statuses) counts.set(status,(counts.get(status)??0)+Number(matchesStatusGroup(order,status)));
   }
   return [...counts].sort(([left],[right])=>left.localeCompare(right,'id'));
 }
