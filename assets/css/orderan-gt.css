@@ -1,0 +1,53 @@
+#page-orderan-gt, #orderanGtApp { min-width: 0; }
+#orderanGtApp [hidden] { display: none; }
+
+.gt-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: clamp(16px, 3vw, 30px);
+  background: linear-gradient(110deg, color-mix(in srgb, var(--primary) 12%, var(--panel)), var(--panel) 64%);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+.gt-heading h1 { margin: 0 0 6px; font-size: clamp(24px, 4vw, 36px); letter-spacing: -.04em; }
+.gt-heading p, .gt-feedback { margin: 0; font-size: 13px; color: var(--muted); }
+.gt-heading button, .gt-pager button { min-height: 44px; }
+.gt-metrics { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; margin: 14px 0; }
+.gt-metrics .metric { display: grid; gap: 6px; background: var(--panel); min-width: 0; }
+.gt-metrics .v { font-size: clamp(18px,3vw,26px); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.gt-controls { display: grid; grid-template-columns: minmax(0,1fr) minmax(155px, .37fr); gap: 10px; }
+.gt-controls label { display: grid; gap: 5px; min-width: 0; color: var(--muted); font-size: 12px; }
+.gt-controls :is(input, select) {
+  width: 100%; min-width: 0; min-height: 44px; margin: 0; padding: 8px 10px;
+  color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 9px;
+}
+.gt-feedback { margin: 12px 0; }
+.gt-orders { display: grid; gap: 8px; }
+.gt-order { min-width: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); overflow: hidden; }
+.gt-order summary { display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; min-height: 56px; padding: 10px 14px; cursor: pointer; }
+.gt-order summary::before { content: '▸'; color: var(--primary); }
+.gt-order[open] summary::before { content: '▾'; }
+.gt-order summary::-webkit-details-marker { display: none; }
+.gt-order-summary { flex: 1 1 180px; min-width: 0; display: grid; gap: 3px; overflow-wrap: anywhere; }
+.gt-order-summary small { color: var(--muted); }
+.gt-order-status { display: flex; flex-wrap: wrap; gap: 5px; min-width: 0; }
+.gt-badge { padding: 4px 7px; border-radius: 6px; color: var(--text); background: var(--panel-soft); font-size: 11px; overflow-wrap: anywhere; }
+.gt-badge-warning { background: color-mix(in srgb,var(--warning,#e7a339) 20%,var(--panel)); }
+.gt-table { overflow: auto; max-width: 100%; border-top: 1px solid var(--line); }
+.gt-table table { min-width: 1100px; width: 100%; }
+.gt-table :is(td,th) { padding: 10px; text-align: left; vertical-align: top; }
+.gt-table tr :is(td,th):nth-child(2) { min-width: 190px; white-space: normal; }
+.gt-table tr :is(td,th):is(:nth-child(3),:nth-child(4),:nth-child(8),:nth-child(9)) { text-align: end; }
+.gt-sku a { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; }
+.gt-pager { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 12px 0; }
+.gt-pager span { flex: 1 1 220px; color: var(--muted); font-size: 12px; }
+#orderanGtApp :is(button,input,select,summary,a,.gt-table):focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+@media (max-width: 570px) {
+  .gt-controls { grid-template-columns: minmax(0,1fr); }
+  .gt-controls input { font-size: 16px; }
+  .gt-metrics .metric { padding: 8px; }
+  .gt-order-status { flex-basis: 100%; }
+}

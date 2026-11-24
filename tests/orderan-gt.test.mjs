@@ -1,0 +1,46 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readGtOrders,handleGtOrders} from '../functions/api/orderan-gt.js';
+import {filterGtOrders} from '../assets/js/orderan-gt.js';
+
+const row = (...values) => ({values:values.map(value=>typeof value==='number'?{formattedValue:String(value),effectiveValue:{numberValue:value}}:{formattedValue:value})});
+const sheet = {
+  properties:{sheetId:784945780,title:'LIST GT ORDER'},
+  merges:[{startRowIndex:1,endRowIndex:3,startColumnIndex:6,endColumnIndex:7}],
+  data:[{rowData:[
+    row('SKU','Nama Produk','Qty\nRequest','Qty Picking','Status','Payment','Customer','BULKY','RETAIL','KET','status picking','Remark'),
+    row('0012','Produk A',6,2,'Packing','TOP','Customer A',0,3,'REQ ECOM','MASIH KURANG'),
+    row('GT-02','Produk B',5,5,'Siap Kirim','DONE',''),
+    row('GT-03','Produk C',1,1,'Terkirim','DONE','Customer A'),
+    row('','Produk D',9,'','Permintaan Baru','BELUM',''),
+    row('','','','','','','')
+  ]}]
+};
+
+test('GT parser groups only actual Customer merges, keeps source SKU and flags incomplete items',()=>{
+  const orders=readGtOrders(sheet);
+  assert.deepEqual(orders.map(order=>[order.row,order.customer,order.active,order.missingSku]),[[5,'',true,1],[4,'Customer A',false,0],[2,'Customer A',true,0]]);
+  assert.deepEqual(orders[2].items.map(item=>item.sku),['0012','GT-02']);
+  assert.equal(orders[2].items[0].bulky,0);
+  assert.equal(orders[2].items[0].pickingStatus,'MASIH KURANG');
+  assert.equal(orders[0].items[0].picked,null);
+  assert.deepEqual(filterGtOrders(orders,'active','customer a gt-02').map(order=>order.row),[2]);
+  assert.deepEqual(filterGtOrders(orders,'review','').map(order=>order.row),[5]);
+});
+
+test('GT endpoint requires a session and reads the configured sheet/tab only',async()=>{
+  const context={request:new Request('https://wms.example/api/orderan-gt'),env:{SHEET_ID_2026:'A'.repeat(35)}};
+  const getToken=async()=>{throw Error('Unexpected token call');};
+  assert.equal((await handleGtOrders(context,{authorize:async()=>false,getToken})).status,401);
+  const response=await handleGtOrders(context,{authorize:async()=>true,getToken:async()=>'mock',fetchFn:async input=>{
+    const url=new URL(input);
+    assert.equal(url.hostname,'sheets.googleapis.com');
+    assert.equal(url.pathname,`/v4/spreadsheets/${context.env.SHEET_ID_2026}`);
+    assert.equal(url.searchParams.get('ranges'),"'LIST GT ORDER'!A:L");
+    return Response.json({sheets:[sheet]});
+  }});
+  assert.equal(response.status,200);
+  assert.equal((await response.json()).orders[2].items[0].sku,'0012');
+  const wrong=await handleGtOrders(context,{authorize:async()=>true,getToken:async()=>'mock',fetchFn:async()=>Response.json({sheets:[{...sheet,properties:{...sheet.properties,sheetId:1}}]})});
+  assert.equal(wrong.status,503);
+});
