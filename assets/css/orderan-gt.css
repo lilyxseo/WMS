@@ -15,7 +15,7 @@
 .gt-heading h1 { margin: 0 0 6px; font-size: clamp(24px, 4vw, 36px); letter-spacing: -.04em; }
 .gt-heading p, .gt-feedback { margin: 0; font-size: 13px; color: var(--muted); }
 .gt-heading button, .gt-pager button { min-height: 44px; }
-.gt-metrics { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; margin: 14px 0; }
+.gt-metrics { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin: 14px 0; }
 .gt-metrics .metric { display: grid; gap: 6px; background: var(--panel); min-width: 0; }
 .gt-metrics .v { font-size: clamp(18px,3vw,26px); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .gt-controls { display: grid; gap: 10px; }
@@ -111,3 +111,23 @@
   background: color-mix(in srgb, var(--primary) 8%, var(--panel));
 }
 .gt-status-card .v { font-size: 19px; font-variant-numeric: tabular-nums; }
+
+.gt-results { margin: 16px 0 10px; }
+.gt-results h2 { margin: 0 0 4px; font-size: 16px; }
+.gt-results p { margin: 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.gt-empty { padding: 24px 14px; text-align: center; border: 1px dashed var(--line); border-radius: 12px; background: var(--panel); }
+.gt-empty p { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
+
+.gt-heading-identity { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.gt-heading-icon {
+  display: grid; place-items: center; flex: none; width: 46px; height: 46px;
+  border-radius: 12px; font-size: 14px; font-weight: 700; color: var(--primary);
+  border: 1px solid color-mix(in srgb,var(--primary) 30%,var(--line));
+  background: color-mix(in srgb,var(--primary) 10%,var(--panel));
+}
+.gt-loading { display: grid; gap: 8px; }
+.gt-loading span {
+  display: block; height: 58px; border: 1px solid var(--line); border-radius: 12px;
+  background: linear-gradient(105deg,var(--panel),var(--panel-soft),var(--panel));
+}
+@media (max-width: 570px) { .gt-heading button { width: 100%; } }

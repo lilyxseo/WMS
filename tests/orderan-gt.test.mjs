@@ -25,7 +25,6 @@ test('GT parser groups only actual Customer merges, keeps source SKU and flags i
   assert.equal(orders[2].items[0].pickingStatus,'MASIH KURANG');
   assert.equal(orders[0].items[0].picked,null);
   assert.deepEqual(filterGtOrders(orders,'active','customer a gt-02').map(order=>order.row),[2]);
-  assert.deepEqual(filterGtOrders(orders,'review','').map(order=>order.row),[5]);
 });
 
 test('GT endpoint requires a session and reads the configured sheet/tab only',async()=>{
