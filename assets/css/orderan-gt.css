@@ -18,7 +18,7 @@
 .gt-metrics { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; margin: 14px 0; }
 .gt-metrics .metric { display: grid; gap: 6px; background: var(--panel); min-width: 0; }
 .gt-metrics .v { font-size: clamp(18px,3vw,26px); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.gt-controls { display: grid; grid-template-columns: minmax(0,1fr) minmax(155px, .37fr); gap: 10px; }
+.gt-controls { display: grid; gap: 10px; }
 .gt-controls label { display: grid; gap: 5px; min-width: 0; color: var(--muted); font-size: 12px; }
 .gt-controls :is(input, select) {
   width: 100%; min-width: 0; min-height: 44px; margin: 0; padding: 8px 10px;
@@ -46,8 +46,68 @@
 .gt-pager span { flex: 1 1 220px; color: var(--muted); font-size: 12px; }
 #orderanGtApp :is(button,input,select,summary,a,.gt-table):focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
 @media (max-width: 570px) {
-  .gt-controls { grid-template-columns: minmax(0,1fr); }
   .gt-controls input { font-size: 16px; }
   .gt-metrics .metric { padding: 8px; }
   .gt-order-status { flex-basis: 100%; }
 }
+
+.gt-controls {
+  grid-template-columns: minmax(215px, 1.8fr) repeat(3, minmax(126px, 1fr));
+  align-items: end;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.gt-reset { min-height: 44px; justify-self: start; }
+.gt-order summary:hover { background: var(--panel-soft); }
+.gt-order[open] summary { background: color-mix(in srgb, var(--primary) 5%, var(--panel)); }
+.gt-order-summary strong { font-size: 14px; }
+.gt-progress { width: min(180px, 100%); height: 7px; margin-block: 4px 2px; accent-color: var(--primary); }
+
+@media (max-width: 1060px) {
+  .gt-controls { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+
+@media (max-width: 570px) {
+  .gt-controls label:first-child { grid-column: 1 / -1; }
+  .gt-controls select { font-size: 16px; }
+  .gt-order summary { padding: 12px; }
+  .gt-table { padding: 8px; }
+  .gt-table table { display: block; min-width: 0; }
+  .gt-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .gt-table tbody { display: grid; gap: 8px; }
+  .gt-table tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    padding: 6px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+  }
+  .gt-table tbody tr td {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+    padding: 6px;
+    border: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: start !important;
+  }
+  .gt-table tbody tr td:nth-child(-n+2) { min-width: 0; grid-column: 1 / -1; }
+  .gt-table tbody tr td::before { content: attr(data-label); color: var(--muted); font-size: 11px; }
+  .gt-table .gt-sku .gt-badge { justify-self: start; }
+}
+
+.gt-status-summary { margin: 14px 0; }
+.gt-status-summary h2 { margin: 0 0 8px; font-size: 15px; }
+.gt-status-cards { display: grid; grid-template-columns: repeat(auto-fit,minmax(112px,1fr)); gap: 8px; }
+.gt-status-card {
+  display: grid; gap: 5px; text-align: start; min-height: 60px; min-width: 0;
+  background: var(--panel); color: var(--text); font: inherit; cursor: pointer; overflow-wrap: anywhere;
+}
+.gt-status-card:hover, .gt-status-card[aria-pressed=true] {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, var(--panel));
+}
+.gt-status-card .v { font-size: 19px; font-variant-numeric: tabular-nums; }

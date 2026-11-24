@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readGtOrders,handleGtOrders} from '../functions/api/orderan-gt.js';
-import {filterGtOrders} from '../assets/js/orderan-gt.js';
+import {filterGtOrders,gtOrderStatusCounts} from '../assets/js/orderan-gt.js';
 
 const row = (...values) => ({values:values.map(value=>typeof value==='number'?{formattedValue:String(value),effectiveValue:{numberValue:value}}:{formattedValue:value})});
 const sheet = {
@@ -43,4 +43,26 @@ test('GT endpoint requires a session and reads the configured sheet/tab only',as
   assert.equal((await response.json()).orders[2].items[0].sku,'0012');
   const wrong=await handleGtOrders(context,{authorize:async()=>true,getToken:async()=>'mock',fetchFn:async()=>Response.json({sheets:[{...sheet,properties:{...sheet.properties,sheetId:1}}]})});
   assert.equal(wrong.status,503);
+});
+
+test('CLOSE and Closed items do not keep orders active, and both filters must match the same item',()=>{
+  const source={data:[{rowData:[
+    ...sheet.data[0].rowData.slice(0,3),
+    row('GT-C','Produk Close',1,1,' CLOSE ','DONE','Customer C'),
+    row('GT-D','Produk Closed',1,1,'Closed','DONE','Customer D')
+  ]}],merges:sheet.merges};
+  const orders=readGtOrders(source);
+  assert.deepEqual(filterGtOrders(orders,'active','').map(order=>order.customer),['Customer A']);
+  assert.equal(filterGtOrders(orders,'all','',{status:'CLOSE'}).length,1);
+  assert.equal(filterGtOrders(orders,'active','',{status:'Packing',pickingStatus:'MASIH KURANG'}).length,1);
+  assert.equal(filterGtOrders(orders,'active','',{status:'Siap Kirim',pickingStatus:'MASIH KURANG'}).length,0);
+});
+
+test('status cards count distinct orders for each status, including CLOSE',()=>{
+  const orders=[
+    {items:[{status:'Packing'},{status:'Packing'},{status:'Proses'}]},
+    {items:[{status:'Packing'}]},
+    {items:[{status:'CLOSE'},{status:''}]}
+  ];
+  assert.deepEqual(gtOrderStatusCounts(orders),[['CLOSE',1],['Packing',2],['Proses',1]]);
 });
