@@ -68,36 +68,51 @@ export function mountGtOrders(root, {read}) {
     <button class="btn-ghost" type="button" data-gt-refresh>Perbarui data</button>
   </header>
   <div class="gt-metrics" data-gt-metrics hidden></div>
-  <section class="gt-status-summary" aria-labelledby="gt-status-title" data-gt-status-summary hidden>
-    <h2 id="gt-status-title">Order per status</h2>
-    <div class="gt-status-cards" data-gt-status-cards></div>
-  </section>
-  <div class="gt-controls" data-gt-controls hidden>
-    <label><span>Cari order</span><input type="search" data-gt-search placeholder="Customer, SKU, produk, atau status…"></label>
-    <label><span>Tampilkan</span><select data-gt-view aria-label="Tampilkan"><option value="active">Order berjalan</option><option value="all">Semua order</option></select></label>
-    <label><span>Status</span><select data-gt-status aria-label="Status"><option value="">Semua status</option></select></label>
-    <label><span>Status Picking</span><select data-gt-picking aria-label="Status Picking"><option value="">Semua status picking</option></select></label>
-    <button class="btn-ghost gt-reset" type="button" data-gt-reset hidden>Reset filter</button>
-  </div>
-  <p class="gt-feedback" data-gt-feedback role="status"></p>
-  <div class="gt-results" data-gt-results hidden>
-    <h2>Daftar order</h2>
-    <p data-gt-results-count role="status"></p>
-  </div>
-  <div class="gt-loading" data-gt-loading aria-hidden="true"><span></span><span></span><span></span></div>
-  <div class="gt-orders" data-gt-orders></div>
-  <footer class="gt-pager" data-gt-pager hidden><span data-gt-count></span><button class="btn-ghost" type="button" data-gt-prev>Sebelumnya</button><button class="btn-ghost" type="button" data-gt-next>Berikutnya</button></footer>`;
+  <div class="gt-workspace">
+    <div class="gt-controls" data-gt-controls hidden>
+      <div class="gt-search-row">
+        <label><span>Cari order</span><input type="search" data-gt-search placeholder="Customer, SKU, atau produk…"></label>
+        <label><span>Tampilkan</span><select data-gt-view aria-label="Tampilkan"><option value="active">Order berjalan</option><option value="all">Semua order</option></select></label>
+      </div>
+      <details class="gt-filters">
+        <summary>Filter status <span data-gt-filter-count hidden></span></summary>
+        <div class="gt-filter-fields">
+          <label><span>Status</span><select data-gt-status aria-label="Status"><option value="">Semua status</option></select></label>
+          <label><span>Status Picking</span><select data-gt-picking aria-label="Status Picking"><option value="">Semua status picking</option></select></label>
+        </div>
+      </details>
+      <button class="btn-ghost gt-reset" type="button" data-gt-reset hidden>Reset filter</button>
+    </div>
+    <section class="gt-status-summary" aria-labelledby="gt-status-title" data-gt-status-summary hidden>
+      <h2 id="gt-status-title">Order per status</h2>
+      <div class="gt-status-cards" data-gt-status-cards></div>
+    </section>
+    <div class="gt-list">
+      <p class="gt-feedback" data-gt-feedback role="status"></p>
+      <div class="gt-results" data-gt-results hidden>
+        <h2>Daftar order</h2>
+        <p data-gt-results-count role="status"></p>
+      </div>
+      <div class="gt-loading" data-gt-loading aria-hidden="true"><span></span><span></span><span></span></div>
+      <div class="gt-orders" data-gt-orders></div>
+      <footer class="gt-pager" data-gt-pager hidden><span data-gt-count></span><button class="btn-ghost" type="button" data-gt-prev>Sebelumnya</button><button class="btn-ghost" type="button" data-gt-next>Berikutnya</button></footer>
+    </div>
+  </div>`;
   const el = name => root.querySelector(`[data-gt-${name}]`);
   function render() {
     const search = el('search').value;
     const status = el('status').value;
     const pickingStatus = el('picking').value;
+    const filterCount = Number(Boolean(status)) + Number(Boolean(pickingStatus));
+    el('filter-count').hidden = !filterCount;
+    el('filter-count').textContent = `${filterCount} aktif`;
     for (const card of el('status-cards').children) card.setAttribute('aria-pressed',String(card.dataset.status===status));
     el('reset').hidden = !search && view === 'active' && !status && !pickingStatus;
     const matches = filterGtOrders(orders,view,search,{status,pickingStatus});
     const activeFilters = [view==='active'?'Order berjalan':'Semua order',status && `Status: ${status}`,pickingStatus && `Picking: ${pickingStatus}`,search.trim() && `Cari: ${search.trim()}`].filter(Boolean);
     el('results').hidden = false;
     el('results-count').textContent = `${number.format(matches.length)} order · ${activeFilters.join(' · ')}`;
+    page = Math.min(page, Math.max(1, Math.ceil(matches.length/PAGE_SIZE)));
     const offset = (page-1)*PAGE_SIZE;
     el('orders').innerHTML = matches.slice(offset,offset+PAGE_SIZE).map(orderMarkup).join('') || `<div class="gt-empty"><strong>${orders.length?'Tidak ada order yang cocok.':'Belum ada order di LIST GT ORDER.'}</strong>${orders.length?'<p>Coba ubah pencarian atau filter.</p>':''}</div>`;
     el('pager').hidden = !matches.length;
@@ -134,9 +149,6 @@ export function mountGtOrders(root, {read}) {
       el('metrics').hidden = el('controls').hidden = false;
       el('feedback').textContent = `Terakhir dibaca ${date.format(new Date(data.lastReadAt))} WIB`;
       loaded = true;
-      page = Math.min(page,Math.max(1,Math.ceil(filterGtOrders(orders,view,el('search').value,{
-        status:el('status').value,pickingStatus:el('picking').value
-      }).length/PAGE_SIZE)));
       render();
       for (const order of el('orders').querySelectorAll('details')) order.open = expanded.has(order.dataset.gtRow);
     } catch (error) {
