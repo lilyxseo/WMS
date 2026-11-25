@@ -13,6 +13,11 @@ const badgeColors = new Map([
 ]);
 const normalizeStatus = value => String(value ?? '').trim().toLowerCase().replace(/\s+/g,' ');
 const statusColor = value => badgeColors.get(normalizeStatus(value)) || 'muted';
+const statusOrder = new Map([
+  ['permintaan baru',0],['proses',1],['packing',2],['siap kirim',3],
+  ['stok kosong',5],['terkirim',6],['selesai',6],['done',6],['close',7],['closed',7]
+]);
+const statusRank = status => statusOrder.get(normalizeStatus(status)) ?? 4;
 const matchesStatusGroup = (order, status) => normalizeStatus(status) !== 'permintaan baru'
   || !order.items.some(item => ['close','closed'].includes(normalizeStatus(item.status)));
 function statusBadge(value) {
@@ -38,7 +43,7 @@ export function gtOrderStatusCounts(orders) {
     const statuses = new Set(order.items.map(item=>item.status).filter(Boolean));
     for (const status of statuses) counts.set(status,(counts.get(status)??0)+Number(matchesStatusGroup(order,status)));
   }
-  return [...counts].sort(([left],[right])=>left.localeCompare(right,'id'));
+  return [...counts].sort(([left],[right])=>statusRank(left)-statusRank(right)||left.localeCompare(right,'id'));
 }
 function orderMarkup(order) {
   const statuses = [...new Set(order.items.map(item => item.status).filter(Boolean))];
@@ -103,7 +108,10 @@ export function mountGtOrders(root, {read,navigate}) {
       <button class="btn-ghost gt-reset" type="button" data-gt-reset hidden>Reset filter</button>
     </div>
     <section class="gt-status-summary" aria-labelledby="gt-status-title" data-gt-status-summary hidden>
-      <h2 id="gt-status-title">Order per status</h2>
+      <div class="gt-status-heading">
+        <h2 id="gt-status-title">Order per status</h2>
+        <button type="button" class="gt-status-clear" data-gt-clear-status hidden>Hapus filter status</button>
+      </div>
       <div class="gt-status-cards" data-gt-status-cards></div>
     </section>
     <div class="gt-list">
@@ -125,6 +133,7 @@ export function mountGtOrders(root, {read,navigate}) {
     const filterCount = Number(Boolean(status)) + Number(Boolean(pickingStatus));
     el('filter-count').hidden = !filterCount;
     el('filter-count').textContent = `${filterCount} aktif`;
+    el('clear-status').hidden = !status;
     for (const card of el('status-cards').children) card.setAttribute('aria-pressed',String(card.dataset.status===status));
     el('reset').hidden = !search && view === 'active' && !status && !pickingStatus;
     const matches = filterGtOrders(orders,view,search,{status,pickingStatus});
@@ -164,7 +173,7 @@ export function mountGtOrders(root, {read,navigate}) {
       el('metrics').innerHTML = [[active.length,'Order berjalan'],[active.reduce((total,order)=>total+order.items.length,0),'Item pada order berjalan']].map(([value,label])=>`<div class="metric"><span class="k">${label}</span><strong class="v">${number.format(value)}</strong></div>`).join('');
       const statusCounts = gtOrderStatusCounts(orders);
       el('status-summary').hidden = !statusCounts.length;
-      el('status-cards').innerHTML = statusCounts.map(([status,count])=>`<button class="gt-status-card gt-badge--${statusColor(status)}" type="button" data-status="${escape(status)}" aria-pressed="false"><span class="gt-status-card-label">${escape(status)}</span><span class="gt-status-card-count"><strong>${number.format(count)}</strong> order</span><span class="gt-status-card-check" aria-hidden="true">✓</span></button>`).join('');
+      el('status-cards').innerHTML = statusCounts.map(([status,count])=>`<button class="gt-status-card gt-badge--${statusColor(status)}" type="button" data-status="${escape(status)}" aria-pressed="false"><span class="gt-status-card-label">${escape(status)}</span><span class="gt-status-card-count"><strong>${number.format(count)}</strong> order</span><span class="gt-status-card-check" aria-hidden="true"></span></button>`).join('');
       el('metrics').hidden = el('controls').hidden = false;
       el('feedback').textContent = `Terakhir dibaca ${date.format(new Date(data.lastReadAt))} WIB`;
       loaded = true;
@@ -190,6 +199,13 @@ export function mountGtOrders(root, {read,navigate}) {
   el('search').oninput = () => { page=1;render(); };
   el('view').onchange = event => { view=event.target.value;page=1;render(); };
   el('status').onchange = el('picking').onchange = () => { page=1;render(); };
+  el('clear-status').onclick = () => {
+    const selectedCard = el('status-cards').querySelector('[aria-pressed="true"]');
+    el('status').value = '';
+    page=1;
+    render();
+    (selectedCard || el('search')).focus();
+  };
   el('status-cards').onclick = event => {
     const card = event.target.closest('button[data-status]');
     if (!card) return;

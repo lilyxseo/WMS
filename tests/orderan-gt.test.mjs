@@ -63,7 +63,7 @@ test('status cards count distinct orders for each status, including CLOSE',()=>{
     {items:[{status:'Packing'}]},
     {items:[{status:'CLOSE'},{status:''}]}
   ];
-  assert.deepEqual(gtOrderStatusCounts(orders),[['CLOSE',1],['Packing',2],['Proses',1]]);
+  assert.deepEqual(gtOrderStatusCounts(orders),[['Proses',1],['Packing',2],['CLOSE',1]]);
 });
 
 test('Stok Kosong and Close do not count as active, but a mixed order can still have an active item',()=>{

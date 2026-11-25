@@ -92,41 +92,75 @@
   .gt-table .gt-sku .gt-badge { justify-self: start; }
 }
 
-.gt-status-summary { min-width: 0; }
-.gt-status-summary h2 { margin: 0 0 10px; font-size: 16px; letter-spacing: -.015em; }
+.gt-status-summary {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+}
+.gt-status-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 12px; margin-bottom: 10px; }
+.gt-status-heading h2 { margin: 0; font-size: 16px; letter-spacing: -.015em; }
+.gt-status-clear {
+  min-height: 40px;
+  padding-inline: 8px;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
 .gt-status-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit,minmax(min(100%, 138px),1fr));
   grid-auto-rows: 1fr;
-  gap: 10px;
+  gap: 8px;
 }
 .gt-status-card {
   position: relative;
   display: grid;
   grid-template-rows: 1fr auto;
-  gap: 7px;
-  min-height: 84px;
+  gap: 10px;
+  min-height: 82px;
   min-width: 0;
-  padding: 12px;
+  padding: 11px 12px;
   border: 1px solid var(--line);
-  border-top: 2px solid color-mix(in srgb,var(--gt-badge-color,var(--muted)) 78%,var(--line));
-  border-radius: 12px;
-  background: linear-gradient(155deg,color-mix(in srgb,var(--gt-badge-color,var(--muted)) 7%,var(--panel)),var(--panel) 72%);
+  border-inline-start: 3px solid var(--gt-badge-color,var(--muted));
+  border-radius: 9px;
+  background: color-mix(in srgb,var(--panel-soft) 44%,var(--panel));
   color: var(--text);
   text-align: start;
   font: inherit;
   cursor: pointer;
 }
-.gt-status-card:hover, .gt-status-card[aria-pressed=true] {
+.gt-status-card:hover { border-color: var(--gt-badge-color,var(--primary)); }
+.gt-status-card[aria-pressed=true] {
   border-color: var(--gt-badge-color,var(--primary));
-  background: color-mix(in srgb,var(--gt-badge-color,var(--primary)) 9%,var(--panel));
+  background: color-mix(in srgb,var(--gt-badge-color,var(--primary)) 11%,var(--panel));
 }
-.gt-status-card-label { padding-inline-end: 14px; font-size: 12px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.gt-status-card-label { padding-inline-end: 19px; font-size: 12px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
 .gt-status-card-count { display: flex; align-items: baseline; gap: 5px; color: var(--muted); font-size: 11px; }
-.gt-status-card-count strong { color: var(--text); font-size: 23px; line-height: 1; font-variant-numeric: tabular-nums; }
-.gt-status-card-check { position: absolute; inset: 8px 9px auto auto; color: var(--text); visibility: hidden; }
-.gt-status-card[aria-pressed=true] .gt-status-card-check { visibility: visible; }
-@media (max-width: 480px) { .gt-status-cards:has(> :nth-child(2)) { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+.gt-status-card-count strong { color: var(--text); font-size: 25px; line-height: 1; font-variant-numeric: tabular-nums; }
+.gt-status-card-check {
+  position: absolute;
+  inset: 11px 10px auto auto;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--muted);
+  border-radius: 50%;
+}
+.gt-status-card[aria-pressed=true] .gt-status-card-check {
+  border-color: var(--gt-badge-color,var(--primary));
+  background: var(--gt-badge-color,var(--primary));
+  box-shadow: inset 0 0 0 3px var(--panel);
+}
+@media (max-width: 480px) {
+  .gt-status-summary { padding: 10px; }
+  .gt-status-cards:has(> :nth-child(2)) { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
 
 .gt-results { margin: 16px 0 10px; }
 .gt-results h2 { margin: 0 0 4px; font-size: 16px; }
