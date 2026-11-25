@@ -6,7 +6,12 @@ const SHEET_ID = 784945780;
 const required = {sku:'sku', product:'namaproduk', requested:'qtyrequest', picked:'qtypicking', status:'status', customer:'customer'};
 const optional = {payment:'payment', bulky:'bulky', retail:'retail', note:'ket', pickingStatus:'statuspicking', remark:'remark'};
 const normalize = value => String(value ?? '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-const finished = new Set(['stokkosong','close','closed','selesai','done','terkirim','sudahkirim','sudahdikirim','shipped','delivered','complete','completed','batal','cancel','cancelled','canceled']);
+const inactiveStatuses = new Set(['stokkosong','stockkosong','tunggukonfirmasi','close','closed','selesai','done','terkirim','sudahkirim','sudahdikirim','shipped','delivered','complete','completed','batal','cancel','cancelled','canceled']);
+function isActiveOrder(items) {
+  const statuses = items.map(item => normalize(item.status));
+  const hasClose = statuses.includes('close') || statuses.includes('closed');
+  return statuses.some(status => !inactiveStatuses.has(status) && !(hasClose && status === 'permintaanbaru'));
+}
 const json = (data, status = 200) => Response.json(data, {status, headers:{'Cache-Control':'private, no-store'}});
 const quantity = cell => {
   if (!cell?.formattedValue?.trim()) return null;
@@ -44,7 +49,7 @@ export function readGtOrders(sheet) {
   }
   return [...orders.values()].reverse().map(order => ({
     ...order,
-    active: order.items.some(item => !finished.has(normalize(item.status))),
+    active: isActiveOrder(order.items),
     missingSku: order.items.filter(item => !item.sku).length
   }));
 }

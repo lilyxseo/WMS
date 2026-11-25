@@ -96,3 +96,21 @@ test('Permintaan Baru filters and counts skip orders that also contain Close or 
   assert.equal(filterGtOrders(orders,'all','',{status:'Closed'}).length,1);
   assert.equal(filterGtOrders(orders,'all','').length,3);
 });
+
+test('Order Berjalan excludes confirmation, Close with Stock Kosong, and Close with Permintaan Baru',()=>{
+  const source={data:[{rowData:[
+    sheet.data[0].rowData[0],
+    row('GT-A','Produk A',1,1,'Siap Kirim','','Siap'),
+    row('GT-B','Produk B',1,1,'Tunggu Konfirmasi','','Konfirmasi'),
+    row('GT-C','Produk C',1,1,'Close','','Kosong'),
+    row('GT-D','Produk D',1,0,'Stock Kosong','',''),
+    row('GT-E','Produk E',1,0,'Permintaan Baru','','Gabungan'),
+    row('GT-F','Produk F',1,1,'Close','','')
+  ]}],merges:[
+    {startRowIndex:3,endRowIndex:5,startColumnIndex:6,endColumnIndex:7},
+    {startRowIndex:5,endRowIndex:7,startColumnIndex:6,endColumnIndex:7}
+  ]};
+  const orders=readGtOrders(source);
+  assert.deepEqual(filterGtOrders(orders,'active','').map(order=>order.customer),['Siap']);
+  assert.equal(filterGtOrders(orders,'all','').length,4);
+});
