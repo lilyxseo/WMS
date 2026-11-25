@@ -10,7 +10,7 @@ const inactiveStatuses = new Set(['stokkosong','stockkosong','tunggukonfirmasi',
 function isActiveOrder(items) {
   const statuses = items.map(item => normalize(item.status));
   const hasClose = statuses.includes('close') || statuses.includes('closed');
-  return statuses.some(status => !inactiveStatuses.has(status) && !(hasClose && status === 'permintaanbaru'));
+  return !hasClose && statuses.some(status => status !== '' && !inactiveStatuses.has(status));
 }
 const json = (data, status = 200) => Response.json(data, {status, headers:{'Cache-Control':'private, no-store'}});
 const quantity = cell => {

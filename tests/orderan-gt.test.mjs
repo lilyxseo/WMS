@@ -114,3 +114,17 @@ test('Order Berjalan excludes confirmation, Close with Stock Kosong, and Close w
   assert.deepEqual(filterGtOrders(orders,'active','').map(order=>order.customer),['Siap']);
   assert.equal(filterGtOrders(orders,'all','').length,4);
 });
+
+test('Close takes precedence over Proses and blank statuses never make an order active',()=>{
+  const source={data:[{rowData:[
+    sheet.data[0].rowData[0],
+    row('GT-A','Produk A',2,1,'Close','','Mixed'),
+    row('GT-B','Produk B',2,1,'Proses','',''),
+    row('GT-C','Produk C',3,1,'Closed','','Closed'),
+    row('GT-D','Produk D',1,0,'','','Forecast'),
+    row('GT-E','Produk E',3,3,'Siap Kirim','','Ready')
+  ]}],merges:[{startRowIndex:1,endRowIndex:3,startColumnIndex:6,endColumnIndex:7}]};
+  const orders=readGtOrders(source);
+  assert.deepEqual(filterGtOrders(orders,'active','').map(order=>order.customer),['Ready']);
+  assert.equal(filterGtOrders(orders,'all','').length,4);
+});
