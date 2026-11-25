@@ -86,7 +86,7 @@ function orderMarkup(order) {
 }
 
 export function mountGtOrders(root, {read,navigate}) {
-  let orders = [], view = 'active', page = 1, controller, loaded = false;
+  let orders = [], view = 'active', status = '', page = 1, controller, loaded = false;
   root.innerHTML = `<header class="gt-heading">
     <div><h1 id="orderan-gt-title">Orderan GT</h1><p>Pantau status order dan progres picking.</p></div>
     <button class="btn-ghost" type="button" data-gt-refresh>Perbarui data</button>
@@ -97,14 +97,8 @@ export function mountGtOrders(root, {read,navigate}) {
       <div class="gt-search-row">
         <label><span>Cari order</span><input type="search" data-gt-search placeholder="Customer, SKU, atau produk…"></label>
         <label><span>Tampilkan</span><select data-gt-view aria-label="Tampilkan"><option value="active">Order berjalan</option><option value="all">Semua order</option></select></label>
+        <label><span>Status Picking</span><select data-gt-picking aria-label="Status Picking"><option value="">Semua status picking</option></select></label>
       </div>
-      <details class="gt-filters">
-        <summary>Filter lanjutan <span data-gt-filter-count hidden></span></summary>
-        <div class="gt-filter-fields">
-          <label><span>Status</span><select data-gt-status aria-label="Status"><option value="">Semua status</option></select></label>
-          <label><span>Status Picking</span><select data-gt-picking aria-label="Status Picking"><option value="">Semua status picking</option></select></label>
-        </div>
-      </details>
       <button class="btn-ghost gt-reset" type="button" data-gt-reset hidden>Reset filter</button>
     </div>
     <section class="gt-status-summary" aria-labelledby="gt-status-title" data-gt-status-summary hidden>
@@ -128,11 +122,7 @@ export function mountGtOrders(root, {read,navigate}) {
   const el = name => root.querySelector(`[data-gt-${name}]`);
   function render() {
     const search = el('search').value;
-    const status = el('status').value;
     const pickingStatus = el('picking').value;
-    const filterCount = Number(Boolean(status)) + Number(Boolean(pickingStatus));
-    el('filter-count').hidden = !filterCount;
-    el('filter-count').textContent = `${filterCount} aktif`;
     el('clear-status').hidden = !status;
     for (const card of el('status-cards').children) card.setAttribute('aria-pressed',String(card.dataset.status===status));
     el('reset').hidden = !search && view === 'active' && !status && !pickingStatus;
@@ -160,18 +150,17 @@ export function mountGtOrders(root, {read,navigate}) {
       const data = await read(request.signal);
       if (request.signal.aborted) return;
       orders = data.orders;
-      for (const [control,field,placeholder] of [['status','status','Semua status'],['picking','pickingStatus','Semua status picking']]) {
-        const select = el(control);
-        const selected = select.value;
-        const values = [...new Set(orders.flatMap(order=>order.items.map(item=>item[field])).filter(Boolean))];
-        if (selected && !values.includes(selected)) values.push(selected);
-        values.sort((left,right)=>left.localeCompare(right,'id'));
-        select.replaceChildren(new Option(placeholder,''),...values.map(value=>new Option(value,value)));
-        select.value = selected;
-      }
+      const picking = el('picking');
+      const selected = picking.value;
+      const values = [...new Set(orders.flatMap(order=>order.items.map(item=>item.pickingStatus)).filter(Boolean))];
+      if (selected && !values.includes(selected)) values.push(selected);
+      values.sort((left,right)=>left.localeCompare(right,'id'));
+      picking.replaceChildren(new Option('Semua status picking',''),...values.map(value=>new Option(value,value)));
+      picking.value = selected;
       const active = orders.filter(order=>order.active);
       el('metrics').innerHTML = [[active.length,'Order berjalan'],[active.reduce((total,order)=>total+order.items.length,0),'Item pada order berjalan']].map(([value,label])=>`<div class="metric"><span class="k">${label}</span><strong class="v">${number.format(value)}</strong></div>`).join('');
       const statusCounts = gtOrderStatusCounts(orders);
+      if (!statusCounts.some(([value])=>value===status)) status = '';
       el('status-summary').hidden = !statusCounts.length;
       el('status-cards').innerHTML = statusCounts.map(([status,count])=>`<button class="gt-status-card gt-badge--${statusColor(status)}" type="button" data-status="${escape(status)}" aria-pressed="false"><span class="gt-status-card-label">${escape(status)}</span><span class="gt-status-card-count"><strong>${number.format(count)}</strong> order</span><span class="gt-status-card-check" aria-hidden="true"></span></button>`).join('');
       el('metrics').hidden = el('controls').hidden = false;
@@ -198,10 +187,10 @@ export function mountGtOrders(root, {read,navigate}) {
   el('refresh').onclick = refresh;
   el('search').oninput = () => { page=1;render(); };
   el('view').onchange = event => { view=event.target.value;page=1;render(); };
-  el('status').onchange = el('picking').onchange = () => { page=1;render(); };
+  el('picking').onchange = () => { page=1;render(); };
   el('clear-status').onclick = () => {
     const selectedCard = el('status-cards').querySelector('[aria-pressed="true"]');
-    el('status').value = '';
+    status = '';
     page=1;
     render();
     (selectedCard || el('search')).focus();
@@ -209,8 +198,7 @@ export function mountGtOrders(root, {read,navigate}) {
   el('status-cards').onclick = event => {
     const card = event.target.closest('button[data-status]');
     if (!card) return;
-    const select = el('status');
-    select.value = select.value === card.dataset.status ? '' : card.dataset.status;
+    status = status === card.dataset.status ? '' : card.dataset.status;
     el('view').value = view = 'all';
     page=1;
     render();
@@ -218,7 +206,8 @@ export function mountGtOrders(root, {read,navigate}) {
   el('reset').onclick = () => {
     view = 'active';
     el('view').value = view;
-    for (const name of ['search','status','picking']) el(name).value = '';
+    status = '';
+    for (const name of ['search','picking']) el(name).value = '';
     page=1;
     render();
     el('search').focus();
