@@ -40,8 +40,22 @@ if(process.argv.includes('--inspect')){
 }else{
  const secret=(await sql("select decrypted_secret from vault.decrypted_secrets where name='wms_warning_snapshot_secret' limit 1"))[0]?.decrypted_secret;if(!secret)throw Error('Snapshot authentication unavailable');
  const endpoint=`https://${project}.supabase.co/functions/v1/warning-snapshot`,denied=await fetch(endpoint,{method:'POST'});if(denied.status!==401)throw Error('Snapshot worker must reject anonymous calls');
- const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json','X-WMS-Snapshot-Secret':secret},body:'{}',signal:AbortSignal.timeout(240000)}),result=await response.json();if(!response.ok||!result.success)throw Error('Initial snapshot refresh failed');
- await sql("do $$begin if not exists(select 1 from cron.job where jobname='wms-warning-snapshot') then perform cron.schedule('wms-warning-snapshot','2-59/5 * * * *','select public.dispatch_warning_snapshot()');end if;end$$");
- const state=(await sql("select jsonb_build_object('stored',payload is not null,'rows',jsonb_array_length(payload->'rows'),'nameConflicts',payload->'summary'->'byCategory'->'NAME_MISMATCH','ready',(select count(*) from jsonb_array_elements(payload->'verification') v where v->>'ready'='true'),'partial',payload->'partial','schedule',(select schedule from cron.job where jobname='wms-warning-snapshot' and active),'last_error',last_error) as state from public.inventory_warning_snapshot where id"))[0]?.state;
- await output('result',state);if(!state?.stored||!state?.schedule)throw Error('Stored warning snapshot not ready');console.log('Server warning snapshot stored and scheduled. Notification worker requested after snapshot publication.');
+ const before=(await sql('select published_at from public.inventory_warning_snapshot where id'))[0]?.published_at;
+ // Repair or install the schedule before the verification call. A failed
+ // immediate refresh must not leave the scheduled worker disabled.
+ await sql("do $$declare existing_job bigint; begin select jobid into existing_job from cron.job where jobname='wms-warning-snapshot'; if existing_job is null then perform cron.schedule('wms-warning-snapshot','2-59/5 * * * *','select public.dispatch_warning_snapshot()'); else perform cron.alter_job(existing_job,schedule:='2-59/5 * * * *',command:='select public.dispatch_warning_snapshot()',active:=true); end if; end$$");
+ const readState=async()=>(await sql("select jsonb_build_object('stored',payload is not null,'publishedAt',published_at,'attemptedAt',last_attempt_at,'rows',jsonb_array_length(payload->'rows'),'nameConflicts',payload->'summary'->'byCategory'->'NAME_MISMATCH','sameNameDifferentSku',payload->'summary'->'byCategory'->'SAME_NAME_DIFFERENT_SKU','ready',(select count(*) from jsonb_array_elements(payload->'verification') v where v->>'ready'='true'),'partial',payload->'partial','schedule',(select schedule from cron.job where jobname='wms-warning-snapshot' and active),'last_error',last_error) as state from public.inventory_warning_snapshot where id"))[0]?.state;
+ let state;
+ for(let attempt=0;attempt<3;attempt++){
+  const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json','X-WMS-Snapshot-Secret':secret},body:'{}',signal:AbortSignal.timeout(120000)}).catch(()=>null);
+  const result=response ? await response.json().catch(()=>({})) : {code:'WORKER_REQUEST_UNAVAILABLE'};
+  state=await readState();
+  if(state?.stored&&state?.schedule&&state.publishedAt&&(!before||Date.parse(state.publishedAt)>Date.parse(before)))break;
+  console.warn('Snapshot publication not yet verified',JSON.stringify({http:response?.status,status:result.status||result.code,ready:result.ready,unavailableSources:result.unavailableSources,attemptedAt:state?.attemptedAt,lastError:state?.last_error}));
+  if(response&&!response.ok&&response.status!==503)break;
+  if(attempt<2)await new Promise(resolve=>setTimeout(resolve,15000));
+ }
+ await output('result',state);
+ if(!state?.stored||!state?.schedule||!state.publishedAt||(before&&Date.parse(state.publishedAt)<=Date.parse(before)))throw Error('A new warning snapshot was not published; inspect the refresh diagnostics.');
+ console.log('A newer server warning snapshot was published and its schedule is active.');
 }

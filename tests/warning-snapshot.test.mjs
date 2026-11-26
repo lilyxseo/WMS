@@ -29,3 +29,20 @@ test('notifications read fresh positive observations while the website retains i
 
 test('fresh positive observations can notify before a complete UI baseline exists',async t=>{const original=globalThis.fetch;t.after(()=>globalThis.fetch=original);globalThis.fetch=async()=>Response.json([{payload:null,published_at:null,observed_payload:{...snapshot,partial:true},observed_at:new Date().toISOString()}]);assert.equal((await readWarningSnapshot(env,{notifications:true})).rows.length,2);await assert.rejects(()=>readWarningSnapshot(env));});
 test('notification dispatch failure does not erase a published warning snapshot',async()=>{let calls=[];const handler=createHandler(workerEnv,{pause:async()=>{},load:async()=>({...snapshot,partial:false,unavailableSources:[],verification:Array.from({length:5},()=>({ready:true}))}),fetchFn:async url=>{const name=url.split('/').at(-1);calls.push(name);if(name==='dispatch_warning_notifications')return Response.json({}, {status:503});return Response.json(true);}});const result=await(await handler(request())).json();assert.equal(result.status,'published');assert.equal(result.notificationDispatch,'failed');assert.ok(!calls.includes('warning_snapshot_fail'));});
+
+test('worker publishes checksum-verified data on the first read even when sync freshness marks it partial',async()=>{
+ let loads=0;
+ const verification=Array.from({length:5},(_,index)=>({ready:true,stale:index===0}));
+ const handler=createHandler(workerEnv,{
+  pause:async()=>assert.fail('Verified data should not be re-read'),
+  load:async()=>{loads++;return {...snapshot,partial:true,unavailableSources:[],verification};},
+  fetchFn:async(url,options)=>{
+   if(String(url).endsWith('warning_snapshot_publish'))assert.equal(JSON.parse(options.body).p_payload.partial,true);
+   return Response.json(true);
+  }
+ });
+ const result=await (await handler(request())).json();
+ assert.equal(result.status,'published');
+ assert.equal(result.partial,true);
+ assert.equal(loads,1);
+});
