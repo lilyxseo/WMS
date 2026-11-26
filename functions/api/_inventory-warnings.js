@@ -6,7 +6,7 @@ import {movementImpactFindings} from './_movement-warning.js';
 export const WARNING_CATEGORIES=Object.freeze({
  OUTBOUND_LOCATION_WITHOUT_INBOUND:'SKU + From Tanpa Riwayat Masuk',INVALID_OUTBOUND_FROM:'Lokasi From Tidak Valid',NEGATIVE_STOCK:'Saldo Negatif',STOCK_BALANCE_MISMATCH:'Rumus Saldo Tidak Sesuai',
  EMPTY_SKU:'SKU Kosong',EMPTY_NAME:'Nama Barang Kosong',EMPTY_LOCATION:'Lokasi Stok Kosong',
- NAME_MISMATCH:'Nama Berbeda pada SKU Sama',ACCURACY_MISMATCH:'Selisih Data Referensi',
+ NAME_MISMATCH:'Nama Berbeda pada SKU Sama',SAME_NAME_DIFFERENT_SKU:'Nama Sama, SKU Berbeda',ACCURACY_MISMATCH:'Selisih Data Referensi',
  OUTBOUND_WITHOUT_INBOUND:'Riwayat Masuk Perlu Verifikasi',
  MOVEMENT_NOT_REFLECTED:'Movement Belum Berdampak',MOVEMENT_NO_EFFECT:'Movement Tanpa Perubahan',
 });
@@ -33,7 +33,7 @@ function warning(category,severity,source,row,issue,evidence,recommendation,conf
 }
 export function buildInventoryWarnings(input,{allowCrossSource=true}={}){
  const rows=Object.fromEntries(Object.keys(SOURCE_NAMES).map(key=>[key,Array.isArray(input?.[key])?input[key]:[]]));
- const result=[],names=new Map();
+ const result=[],names=new Map(),skusByName=new Map();
  for(const key of ['kartuStok','rpl','bulky'])for(const row of rows[key]){
   const source=SOURCE_NAMES[key],sku=normalizeWarningSku(row.sku),name=normalizeWarningName(row.nama_barang),stock=warningNumber(row.stok_akhir);
   const rowLabel=`${source} baris ${row.source_row_number??'-'}`;
@@ -47,7 +47,13 @@ export function buildInventoryWarnings(input,{allowCrossSource=true}={}){
   if(sku&&stock!==null&&stock>0&&!normalizeWarningSku(row.lokasi_bulky))result.push(warning('EMPTY_LOCATION','Medium',source,row,'Stok positif tidak memiliki lokasi.',`${rowLabel}: saldo ${stock}, lokasi kosong.`,'Tetapkan lokasi fisik atau lokasi operasional yang sesuai.'));
   if(key==='kartuStok'&&stock!==null&&stock<0)result.push(warning('NEGATIVE_STOCK','High',source,row,`Saldo pada baris ini negatif: ${stock}.`,`${rowLabel}, lokasi ${text(row.lokasi_bulky)||'-'}: stok akhir ${stock}.`,'Periksa saldo awal dan mutasi baris ini; cocokkan dengan kondisi fisik sebelum koreksi.'));
   if(key==='kartuStok'&&sku){const balance=stockBalance(row);if(balance&&differs(balance.expected,balance.closing))result.push(warning('STOCK_BALANCE_MISMATCH','High',source,row,`Stok akhir ${balance.closing} berbeda dari hasil rumus ${balance.expected}.`,`${rowLabel}: ${balance.opening} − ${balance.internal} − ${balance.replenishment} − ${balance.outgoing} = ${balance.expected}; stok akhir tercatat ${balance.closing}.`,'Periksa formula STOK AKHIR pada baris sumber. Tidak dibandingkan dengan total riwayat transaksi.'));}
-  if(sku&&name&&stock!==null&&stock!==0){const item=names.get(sku)||[];item.push({source,row,name});names.set(sku,item);}
+  if(sku&&name&&stock!==null&&stock!==0){
+   const item={source,row,name};
+   const variants=names.get(sku)||[];variants.push(item);names.set(sku,variants);
+   const groupKey=JSON.stringify([allowCrossSource?'':source,name]);
+   const bySku=skusByName.get(groupKey)||new Map();
+   const references=bySku.get(sku)||[];references.push(item);bySku.set(sku,references);skusByName.set(groupKey,bySku);
+  }
  }
  for(const items of names.values()){
   const groups=allowCrossSource?[items]:[...new Set(items.map(item=>item.source))].map(source=>items.filter(item=>item.source===source));
@@ -64,6 +70,20 @@ export function buildInventoryWarnings(input,{allowCrossSource=true}={}){
    finding.nameVariants=[...variants.values()].map(items=>({name:text(items[0].row.nama_barang),count:items.length}));
    result.push(finding);
   }
+ }
+ for(const [groupKey,bySku] of skusByName){
+  if(bySku.size<2)continue;
+  const skus=[...bySku.keys()].sort();
+  const sources=[...new Set([...bySku.values()].flatMap(items=>items.map(item=>item.source)))].sort();
+  const representative=bySku.get(skus[0])[0].row;
+  const evidence=skus.slice(0,12).map(sku=>{
+   const items=bySku.get(sku),example=items[0];
+   return `${sku} · ${example.source} baris ${example.row.source_row_number??'-'} · lokasi ${text(example.row.lokasi_bulky)||'-'}${items.length>1?` (+${items.length-1} baris)`:''}`;
+  }).join(' | ')+(skus.length>12?` | +${skus.length-12} SKU lain`:'');
+  const finding=warning('SAME_NAME_DIFFERENT_SKU','Medium',sources.join(' / '),representative,`Nama barang yang sama tercatat pada ${skus.length} SKU berbeda.`,evidence,'Cocokkan SKU, label fisik, dan master barang. Verifikasi apakah SKU mewakili varian atau kemasan berbeda sebelum mengoreksi data.','review');
+  finding.id=`SAME_NAME_DIFFERENT_SKU:${groupKey}`;
+  finding.relatedSkus=skus;
+  result.push(finding);
  }
  const accuracy=new Map();
  for(const key of ['rpl','bulky'])for(const row of rows[key]){
@@ -91,7 +111,7 @@ export function outboundLocationWarnings(rows){
 }
 export function queryInventoryWarnings(allRows,options={}){
  const severity=text(options.severity),category=text(options.category),source=text(options.source),terms=text(options.search).toLocaleLowerCase('id-ID').split(/\s+/).filter(Boolean);
- let rows=allRows.filter(row=>(!severity||severity==='all'||row.severity===severity)&&(!category||category==='all'||row.category===category)&&(!source||source==='all'||row.source.split(' / ').includes(source))&&terms.every(term=>`${row.sku} ${row.namaBarang} ${row.issue} ${row.location} ${row.evidence}`.toLocaleLowerCase('id-ID').includes(term)));
+ let rows=allRows.filter(row=>(!severity||severity==='all'||row.severity===severity)&&(!category||category==='all'||row.category===category)&&(!source||source==='all'||row.source.split(' / ').includes(source))&&terms.every(term=>`${row.sku} ${(row.relatedSkus||[]).join(' ')} ${row.namaBarang} ${row.issue} ${row.location} ${row.evidence}`.toLocaleLowerCase('id-ID').includes(term)));
  const collator=new Intl.Collator('id-ID',{sensitivity:'base',numeric:true});
  const latest=row=>{const trace=row.deductionTrace,candidates=trace?[...(trace.transactions||[]),...(trace.primary?[trace.primary]:[])]:[{eventDate:row.eventDate,row:row.sourceRow,source:row.source}];return candidates.map(item=>({...item,date:normalizeTransactionDate(item.eventDate||item.date).value||''})).filter(item=>item.date).sort((a,b)=>b.date.localeCompare(a.date)||(a.source===b.source?(Number(b.row)||0)-(Number(a.row)||0):0))[0]||{date:'',row:0};};
  const dated=new Map(rows.map(row=>[row,latest(row)]));const date=row=>dated.get(row).date;

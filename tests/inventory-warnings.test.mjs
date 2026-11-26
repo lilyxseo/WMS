@@ -73,3 +73,27 @@ test('name conflict proof always includes the differing name beyond many identic
 test('name comparison ignores formatting and historical zero stock but preserves distinct SKU identities',()=>{
  const rows={kartuStok:[{sku:'001',nama_barang:'GOTO Merlyn - White',stok_akhir:-1},{sku:' 001 ',nama_barang:'goto MERLYN white',stok_akhir:2},{sku:'001',nama_barang:'Previous Name',stok_akhir:0},{sku:'01',nama_barang:'Other Product',stok_akhir:3}]};assert.equal(buildInventoryWarnings(rows).some(row=>row.category==='NAME_MISMATCH'),false);
 });
+
+test('same-name warning groups distinct SKUs, ignores zero stock, and honors source verification',()=>{
+  const rows=base();
+  rows.kartuStok=[
+    {sku:'0012',nama_barang:'GOTO Pen',stok_akhir:2,lokasi_bulky:'A01',source_row_number:10},
+    {sku:'0012',nama_barang:'GOTO-Pen',stok_akhir:3,lokasi_bulky:'B01',source_row_number:11},
+    {sku:'HISTORIS',nama_barang:'GOTO Pen',stok_akhir:0}
+  ];
+  rows.rpl=[
+    {sku:'12',nama_barang:'goto  pen',stok_akhir:5,lokasi_bulky:'C01',source_row_number:21},
+    {sku:'OTHER',nama_barang:'GOTO Pencil',stok_akhir:1}
+  ];
+  const findings=buildInventoryWarnings(rows).filter(row=>row.category==='SAME_NAME_DIFFERENT_SKU');
+  assert.equal(findings.length,1);
+  assert.deepEqual(findings[0].relatedSkus,['0012','12']);
+  assert.equal(findings[0].confidence,'review');
+  assert.match(findings[0].evidence,/Kartu Stok baris 10.*RPL baris 21/);
+  assert.equal(queryInventoryWarnings(findings,{search:'12 goto'}).total,1);
+  assert.equal(buildInventoryWarnings(rows,{allowCrossSource:false}).some(row=>row.category==='SAME_NAME_DIFFERENT_SKU'),false);
+  rows.kartuStok.push({sku:'GT-A',nama_barang:'goto pen',stok_akhir:1});
+  const local=buildInventoryWarnings(rows,{allowCrossSource:false}).find(row=>row.category==='SAME_NAME_DIFFERENT_SKU');
+  assert.deepEqual(local?.relatedSkus,['0012','GT-A']);
+  assert.equal(local?.source,'Kartu Stok');
+});
