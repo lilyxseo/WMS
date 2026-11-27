@@ -4,7 +4,7 @@ import {normalizeTransactionDate} from './_transaction-read.js';
 import {loadWarningData} from './_warning-data.js';
 import {movementImpactFindings} from './_movement-warning.js';
 export const WARNING_CATEGORIES=Object.freeze({
- OUTBOUND_LOCATION_WITHOUT_INBOUND:'SKU + From Tanpa Riwayat Masuk',INVALID_OUTBOUND_FROM:'Lokasi From Tidak Valid',NEGATIVE_STOCK:'Saldo Negatif',STOCK_BALANCE_MISMATCH:'Rumus Saldo Tidak Sesuai',
+ OUTBOUND_UNKNOWN_STOCK_LOCATION:'Pengeluaran dari Lokasi SKU Belum Tercatat',OUTBOUND_LOCATION_WITHOUT_INBOUND:'SKU + From Tanpa Riwayat Masuk',INVALID_OUTBOUND_FROM:'Lokasi From Tidak Valid',NEGATIVE_STOCK:'Saldo Negatif',STOCK_BALANCE_MISMATCH:'Rumus Saldo Tidak Sesuai',
  EMPTY_SKU:'SKU Kosong',EMPTY_NAME:'Nama Barang Kosong',EMPTY_LOCATION:'Lokasi Stok Kosong',
  NAME_MISMATCH:'Nama Berbeda pada SKU Sama',SAME_NAME_DIFFERENT_SKU:'Nama Sama, SKU Berbeda',ACCURACY_MISMATCH:'Selisih Data Referensi',
  OUTBOUND_WITHOUT_INBOUND:'Riwayat Masuk Perlu Verifikasi',
@@ -109,6 +109,16 @@ export function outboundLocationWarnings(rows){
   return finding;
  });
 }
+export function outboundUnknownStockLocationWarnings(rows){
+ return (rows||[]).filter(row=>row.reason==='missing_stock_location'&&normalizeWarningSku(row.sku)&&text(row.from_location)&&warningNumber(row.qty)>0).map(row=>{
+  const finding=warning('OUTBOUND_UNKNOWN_STOCK_LOCATION','Medium','Barang Keluar',row,
+   `Pengeluaran SKU ${text(row.sku)} dari lokasi ${text(row.from_location)} belum didukung catatan stok atau penerimaan di lokasi tersebut.`,
+   `Tanggal ${text(row.tanggal)||'-'} • baris ${row.source_row_number??'-'} • From: ${text(row.from_location)} • To: ${text(row.to_location)||'-'} • Qty: ${row.qty}.`,
+   'Cocokkan lokasi asal dengan dokumen, saldo awal, dan stok fisik sebelum koreksi.','review');
+  finding.eventDate=normalizeTransactionDate(row.tanggal).value||text(row.tanggal);
+  return finding;
+ });
+}
 export function queryInventoryWarnings(allRows,options={}){
  const severity=text(options.severity),category=text(options.category),source=text(options.source),terms=text(options.search).toLocaleLowerCase('id-ID').split(/\s+/).filter(Boolean);
  let rows=allRows.filter(row=>(!severity||severity==='all'||row.severity===severity)&&(!category||category==='all'||row.category===category)&&(!source||source==='all'||row.source.split(' / ').includes(source))&&terms.every(term=>`${row.sku} ${(row.relatedSkus||[]).join(' ')} ${row.namaBarang} ${row.issue} ${row.location} ${row.evidence}`.toLocaleLowerCase('id-ID').includes(term)));
@@ -125,6 +135,7 @@ export async function loadInventoryWarnings(env,options={}){
  const warnings=attachNegativeStockTraces(buildInventoryWarnings(data.rows,{allowCrossSource:allStockReady}),data.negativeContext,{ready:data.negativeContextReady});if(data.outboundFromReady)warnings.push(...outboundFromWarnings(data.outboundFrom));
  const outboundLocationReady=!!data.outboundFromReady&&data.verification.some(item=>item.source==='barang_masuk'&&item.ready);
  if(outboundLocationReady)warnings.push(...outboundLocationWarnings(data.outboundFrom));
+ if(outboundLocationReady&&allStockReady)warnings.push(...outboundUnknownStockLocationWarnings(data.outboundFrom));
  if(data.ledgerReady)for(const row of data.ledger){
   const qty=warningNumber(row.qty);if(!normalizeWarningSku(row.sku)||qty===null||qty<=0)continue;
   warnings.push(warning('OUTBOUND_WITHOUT_INBOUND','Medium','Barang Keluar',row,'Riwayat masuk SKU yang telah keluar belum ditemukan.',`Pengeluaran positif ${qty}; SKU tidak ditemukan di Barang Masuk dan ketiga sumber stok. Baris keluar ${row.source_row_number??'-'}.`,'Verifikasi dokumen penerimaan atau saldo awal. Ketiadaan riwayat bukan bukti barang tidak pernah diterima.','review'));

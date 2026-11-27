@@ -17,11 +17,17 @@ test('missing SKU + From inbound evidence is a review warning with complete tran
 test('location absence is suppressed until inbound evidence is verified in the atomic snapshot',async()=>{
  const {loadInventoryWarnings}=await import('../functions/api/_inventory-warnings.js');const original=globalThis.fetch;
  const sources=['kartu_stok','rpl','bulky','barang_masuk','barang_keluar'],version='a'.repeat(64),now=new Date().toISOString();
- const input={stocks:{kartuStok:[],rpl:[],bulky:[]},sync:sources.map(source=>({source,status:'success',last_success_at:now,source_version:version})),signatures:sources.map(source=>({source,content_version:version,row_count:0})),ledgerAvailable:true,ledger:[],movementAvailable:false,outboundFromAvailable:true,outboundFrom:[{...sample,reason:'missing_inbound'}]};
+ const input={stocks:{kartuStok:[],rpl:[],bulky:[]},sync:sources.map(source=>({source,status:'success',last_success_at:now,source_version:version})),signatures:sources.map(source=>({source,content_version:version,row_count:0})),ledgerAvailable:true,ledger:[],movementAvailable:false,outboundFromAvailable:true,outboundFrom:[{...sample,reason:'missing_inbound'},{...sample,from_location:'A01-1',reason:'missing_stock_location'}]};
  globalThis.fetch=async()=>Response.json(input);
  try{
   const env={SUPABASE_URL:'https://example.supabase.co',SUPABASE_SECRET_KEY:'sb_secret_test',WMS_WARNING_ATOMIC_READ:'true'};
   let data=await loadInventoryWarnings(env,{full:true});assert.equal(data.rows.filter(row=>row.category==='OUTBOUND_LOCATION_WITHOUT_INBOUND').length,1);
+  const missing=data.rows.find(row=>row.category==='OUTBOUND_UNKNOWN_STOCK_LOCATION');
+  assert.equal(missing?.confidence,'review');
+  assert.match(missing?.evidence,/From: A01-1.*Qty: 20/);
+  input.signatures=input.signatures.filter(row=>row.source!=='rpl');
+  data=await loadInventoryWarnings(env,{full:true});
+  assert.equal(data.rows.some(row=>row.category==='OUTBOUND_UNKNOWN_STOCK_LOCATION'),false);
   input.signatures=input.signatures.filter(row=>row.source!=='barang_masuk');data=await loadInventoryWarnings(env,{full:true});assert.equal(data.rows.filter(row=>row.category==='OUTBOUND_LOCATION_WITHOUT_INBOUND').length,0);assert.equal(data.checks.find(row=>row.key==='outbound-location-inbound').ready,false);
  }finally{globalThis.fetch=original;}
 });
