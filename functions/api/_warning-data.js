@@ -86,7 +86,12 @@ export function atomicWarningSource(sync,signatures,key){
  // Only trust it while its checksum matches and its successful sync is recent.
  const age=Date.now()-Date.parse(status?.last_success_at||''),fresh=Number.isFinite(age)&&age>=0&&age<=15*60*1000;
  const refreshing=status?.status==='syncing'&&fresh;
- return {source:key,ready,stale:ready&&(!fresh||status.status!=='success'&&!refreshing),rowCount:ready?proof.row_count:null,lastSuccess:status?.last_success_at||null,reason:ready?'Data dibaca atomik dan checksum cocok dengan sinkronisasi terakhir.':'Checksum data belum cocok dengan snapshot sinkronisasi terakhir.'};
+ let reason='Data dibaca atomik dan checksum cocok dengan sinkronisasi terakhir.';
+ if(!status?.last_success_at)reason='Belum ada sinkronisasi yang berhasil.';
+ else if(!/^[a-f0-9]{64}$/.test(status.source_version||''))reason='Versi sinkronisasi belum memiliki checksum yang valid.';
+ else if(!proof?.content_version)reason='Checksum data sumber belum tersedia.';
+ else if(!ready)reason='Checksum data berbeda dari sinkronisasi terakhir.';
+ return {source:key,ready,stale:ready&&(!fresh||status.status!=='success'&&!refreshing),rowCount:ready?proof.row_count:null,lastSuccess:status?.last_success_at||null,reason};
 }
 async function loadAtomicWarningData(config){
  const response=await fetch(config.url+'/rest/v1/rpc/inventory_warning_detection_data',{method:'POST',headers:{apikey:config.key,Authorization:`Bearer ${config.key}`,'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(60000)}),data=await response.json();

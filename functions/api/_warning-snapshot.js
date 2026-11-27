@@ -19,6 +19,11 @@ export async function readWarningSnapshot(env,options={}){
  const observedForPage=!notifications&&hasObservation&&observedAge>=0&&observedAge<=freshObservationMs
   &&(!Number.isFinite(completeAt)||observedAt>completeAt)&&observation.partial===true
   &&observation.rows.length>0&&observation.verification?.some(source=>source.ready&&!source.stale);
+ const latestAttemptIncomplete=hasObservation&&(!Number.isFinite(completeAt)||observedAt>completeAt)&&!!record.last_error;
+ const incompleteSources=latestAttemptIncomplete?(observation.verification||[])
+  .filter(source=>!source.ready).map(({source,reason,lastSuccess})=>({source,reason,lastSuccess})):[];
+ const incompleteChecks=latestAttemptIncomplete?(observation.unavailableSources||[])
+  .filter(key=>!incompleteSources.some(source=>source.source===key)):[];
  const useObservation=observedForNotifications||observedForPage;
  const snapshot=useObservation?observation:record.payload;
  const displayedAt=useObservation?record.observed_at:record.published_at;
@@ -27,5 +32,5 @@ export async function readWarningSnapshot(env,options={}){
  if(!snapshot||!Array.isArray(snapshot.rows))throw Error('Hasil pemeriksaan server belum tersedia.');
  return {...snapshot,...queryInventoryWarnings(snapshot.rows,options),partial:!!snapshot.partial||snapshotStale,snapshotStale,
   snapshotPublishedAt:displayedAt,partialObservation:observedForPage,baselinePublishedAt:record.published_at,
-  lastAttemptAt:record.last_attempt_at,refreshMessage:record.last_error||'',mode:'stored_snapshot'};
+  lastAttemptAt:record.last_attempt_at,incompleteSources,incompleteChecks,refreshMessage:record.last_error||'',mode:'stored_snapshot'};
 }

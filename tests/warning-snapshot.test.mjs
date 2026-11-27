@@ -59,3 +59,18 @@ test('a retained baseline stays visible when the later partial observation is em
   assert.equal(result.rows.length,2);
  }
 });
+
+test('retained results disclose which sources and checks blocked the latest publication',async t=>{
+ const original=globalThis.fetch;
+ t.after(()=>globalThis.fetch=original);
+ const blocked={source:'barang_keluar',ready:false,lastSuccess:'2026-11-25T00:00:00Z',reason:'Checksum data berbeda dari sinkronisasi terakhir.'};
+ globalThis.fetch=async()=>Response.json([{
+  payload:snapshot,published_at:new Date(Date.now()-60*60*1000).toISOString(),last_error:'Incomplete',
+  observed_payload:{...snapshot,rows:[],partial:true,verification:[blocked],unavailableSources:['barang_keluar','movement_impact']},
+  observed_at:new Date().toISOString()
+ }]);
+ const result=await readWarningSnapshot(env);
+ assert.equal(result.rows.length,snapshot.rows.length);
+ assert.deepEqual(result.incompleteSources,[{source:blocked.source,lastSuccess:blocked.lastSuccess,reason:blocked.reason}]);
+ assert.deepEqual(result.incompleteChecks,['movement_impact']);
+});
