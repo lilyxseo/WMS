@@ -74,3 +74,23 @@ test('retained results disclose which sources and checks blocked the latest publ
  assert.deepEqual(result.incompleteSources,[{source:blocked.source,lastSuccess:blocked.lastSuccess,reason:blocked.reason}]);
  assert.deepEqual(result.incompleteChecks,['movement_impact']);
 });
+
+test('stored snapshots show the strongest outbound warning once per SKU and transaction before filtering',async t=>{
+ const original=globalThis.fetch;
+ t.after(()=>globalThis.fetch=original);
+ const outbound={...rows[0],severity:'Medium',source:'Barang Keluar',sourceRow:17500};
+ const findings=[
+  {...outbound,id:'ledger',category:'OUTBOUND_WITHOUT_INBOUND'},
+  {...outbound,id:'inbound',category:'OUTBOUND_LOCATION_WITHOUT_INBOUND'},
+  {...outbound,id:'location',category:'OUTBOUND_UNKNOWN_STOCK_LOCATION'},
+  {...outbound,id:'other-row',sourceRow:17501,category:'OUTBOUND_LOCATION_WITHOUT_INBOUND'},
+  {...outbound,id:'invalid-from',category:'INVALID_OUTBOUND_FROM'}
+ ];
+ globalThis.fetch=async()=>Response.json([{payload:{...snapshot,rows:findings},published_at:new Date().toISOString()}]);
+ const result=await readWarningSnapshot(env,{full:true});
+ assert.deepEqual(result.rows.map(row=>row.id).sort(),['invalid-from','location','other-row']);
+ assert.equal(result.summary.total,3);
+ assert.equal(result.summary.byCategory.OUTBOUND_WITHOUT_INBOUND,0);
+ const filtered=await readWarningSnapshot(env,{category:'OUTBOUND_LOCATION_WITHOUT_INBOUND'});
+ assert.deepEqual(filtered.rows.map(row=>row.id),['other-row']);
+});

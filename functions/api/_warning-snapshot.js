@@ -1,5 +1,5 @@
 import {getSecretSupabaseConfig} from './_supabase-config.js';
-import {queryInventoryWarnings} from './_inventory-warnings.js';
+import {consolidateOutboundWarnings,queryInventoryWarnings,summarizeInventoryWarnings} from './_inventory-warnings.js';
 
 const freshObservationMs = 15 * 60 * 1000;
 
@@ -30,7 +30,9 @@ export async function readWarningSnapshot(env,options={}){
  const age=Date.now()-Date.parse(displayedAt);
  const snapshotStale=(!useObservation&&!!record.last_error)||!Number.isFinite(age)||age<0||age>freshObservationMs;
  if(!snapshot||!Array.isArray(snapshot.rows))throw Error('Hasil pemeriksaan server belum tersedia.');
- return {...snapshot,...queryInventoryWarnings(snapshot.rows,options),partial:!!snapshot.partial||snapshotStale,snapshotStale,
+ const rows=notifications?snapshot.rows:consolidateOutboundWarnings(snapshot.rows);
+ const summary=rows.length===snapshot.rows.length?snapshot.summary:{...snapshot.summary,...summarizeInventoryWarnings(rows)};
+ return {...snapshot,...queryInventoryWarnings(rows,options),summary,partial:!!snapshot.partial||snapshotStale,snapshotStale,
   snapshotPublishedAt:displayedAt,partialObservation:observedForPage,baselinePublishedAt:record.published_at,
   lastAttemptAt:record.last_attempt_at,incompleteSources,incompleteChecks,refreshMessage:record.last_error||'',mode:'stored_snapshot'};
 }

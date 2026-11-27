@@ -119,6 +119,40 @@ export function outboundUnknownStockLocationWarnings(rows){
   return finding;
  });
 }
+const outboundOverlapPriority = new Map([
+ ['OUTBOUND_UNKNOWN_STOCK_LOCATION',0],
+ ['OUTBOUND_LOCATION_WITHOUT_INBOUND',1],
+ ['OUTBOUND_WITHOUT_INBOUND',2],
+]);
+
+export function consolidateOutboundWarnings(warnings){
+ const preferred=new Map();
+ const keys=warnings.map(row=>{
+  const sku=normalizeWarningSku(row.sku);
+  if(row.source!=='Barang Keluar'||!outboundOverlapPriority.has(row.category)
+    ||!sku||!Number.isSafeInteger(Number(row.sourceRow))||Number(row.sourceRow)<=0)return null;
+  const key=JSON.stringify([sku,Number(row.sourceRow)]);
+  const previous=preferred.get(key);
+  if(!previous||outboundOverlapPriority.get(row.category)<outboundOverlapPriority.get(previous.category))preferred.set(key,row);
+  return key;
+ });
+ return warnings.filter((row,index)=>keys[index]===null||preferred.get(keys[index])===row);
+}
+
+export function summarizeInventoryWarnings(warnings){
+ const byCategory=Object.fromEntries(Object.keys(WARNING_CATEGORIES).map(key=>[key,0]));
+ const counts={high:0,medium:0,low:0};
+ const skus=new Set();
+ for(const row of warnings){
+  if(Object.hasOwn(byCategory,row.category))byCategory[row.category]++;
+  const severity=String(row.severity??'').toLowerCase();
+  if(Object.hasOwn(counts,severity))counts[severity]++;
+  const sku=normalizeWarningSku(row.sku);
+  if(sku&&sku!=='-')skus.add(sku);
+ }
+ return {total:warnings.length,...counts,affectedSku:skus.size,byCategory};
+}
+
 export function queryInventoryWarnings(allRows,options={}){
  const severity=text(options.severity),category=text(options.category),source=text(options.source),terms=text(options.search).toLocaleLowerCase('id-ID').split(/\s+/).filter(Boolean);
  let rows=allRows.filter(row=>(!severity||severity==='all'||row.severity===severity)&&(!category||category==='all'||row.category===category)&&(!source||source==='all'||row.source.split(' / ').includes(source))&&terms.every(term=>`${row.sku} ${(row.relatedSkus||[]).join(' ')} ${row.namaBarang} ${row.issue} ${row.location} ${row.evidence}`.toLocaleLowerCase('id-ID').includes(term)));
@@ -151,6 +185,5 @@ export async function loadInventoryWarnings(env,options={}){
  checks.push({key:'movement',label:'Dampak movement',ready:data.movementReady,checked:data.movementReady?movement.checked:undefined,skipped:movement.skipped,note:data.movementReady?'Memeriksa pengurangan From pada kolom mutasi dan penerimaan To pada STOK AWAL. Saldo/kolom tujuan 0 saja bukan bukti movement gagal. Netto yang saling membatalkan, aktivitas lanjutan, dan input yang belum melewati jeda sinkronisasi tidak disimpulkan sebagai gagal.':'Riwayat movement atau snapshot sumber belum terverifikasi.'});
  checks.push({key:'outbound-location-inbound',label:'Pasangan SKU + From terhadap SKU + To masuk',ready:outboundLocationReady});
  checks.push({key:'outbound-from',label:'Lokasi From barang keluar',ready:!!data.outboundFromReady,checked:data.outboundFromReady?data.outboundFrom.length:undefined});
- const byCategory=Object.fromEntries(Object.keys(WARNING_CATEGORIES).map(key=>[key,warnings.filter(row=>row.category===key).length]));
- return {...queryInventoryWarnings(warnings,options),summary:{total:warnings.length,high:warnings.filter(row=>row.severity==='High').length,medium:warnings.filter(row=>row.severity==='Medium').length,low:warnings.filter(row=>row.severity==='Low').length,affectedSku:new Set(warnings.map(row=>normalizeWarningSku(row.sku)).filter(sku=>sku&&sku!=='-')).size,byCategory},categories:WARNING_CATEGORIES,partial:!!(data.unavailableSources.length||data.staleSources?.length),unavailableSources:data.unavailableSources,verification:data.verification,checks,checkedAt:new Date().toISOString(),businessDate:businessDateKey()};
+ return {...queryInventoryWarnings(warnings,options),summary:summarizeInventoryWarnings(warnings),categories:WARNING_CATEGORIES,partial:!!(data.unavailableSources.length||data.staleSources?.length),unavailableSources:data.unavailableSources,verification:data.verification,checks,checkedAt:new Date().toISOString(),businessDate:businessDateKey()};
 }
