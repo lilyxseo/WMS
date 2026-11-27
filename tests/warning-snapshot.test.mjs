@@ -24,10 +24,10 @@ test('fresh checksum-proven atomic data remains notification-ready during backgr
  assert.equal(atomicWarningSource([source],[{...proof[0],content_version:'d'.repeat(64)}],'barang_keluar').ready,false);
 });
 
-test('notifications read fresh positive observations while the website retains its complete baseline',async t=>{const original=globalThis.fetch;t.after(()=>globalThis.fetch=original);const latest={...snapshot,partial:true,rows:[{...snapshot.rows[0],sku:'NEW'}]};globalThis.fetch=async()=>Response.json([{payload:snapshot,published_at:new Date(Date.now()-60000).toISOString(),last_error:'Latest attempt incomplete',observed_payload:latest,observed_at:new Date().toISOString()}]);const web=await readWarningSnapshot(env),bot=await readWarningSnapshot(env,{full:true,notifications:true});assert.equal(web.rows.length,2);assert.equal(web.snapshotStale,true);assert.equal(bot.rows.length,1);assert.equal(bot.rows[0].sku,'NEW');assert.equal(bot.snapshotStale,false);assert.equal(bot.partial,true);});
+test('website and notifications read newer verified positive observations',async t=>{const original=globalThis.fetch;t.after(()=>globalThis.fetch=original);const latest={...snapshot,partial:true,rows:[{...snapshot.rows[0],sku:'NEW'}]};globalThis.fetch=async()=>Response.json([{payload:snapshot,published_at:new Date(Date.now()-60000).toISOString(),last_error:'Latest attempt incomplete',observed_payload:latest,observed_at:new Date().toISOString()}]);const web=await readWarningSnapshot(env),bot=await readWarningSnapshot(env,{full:true,notifications:true});assert.equal(web.rows.length,1);assert.equal(web.rows[0].sku,'NEW');assert.equal(web.partialObservation,true);assert.equal(web.snapshotStale,false);assert.equal(bot.rows.length,1);assert.equal(bot.rows[0].sku,'NEW');assert.equal(bot.snapshotStale,false);assert.equal(bot.partial,true);});
 
 
-test('fresh positive observations can notify before a complete UI baseline exists',async t=>{const original=globalThis.fetch;t.after(()=>globalThis.fetch=original);globalThis.fetch=async()=>Response.json([{payload:null,published_at:null,observed_payload:{...snapshot,partial:true},observed_at:new Date().toISOString()}]);assert.equal((await readWarningSnapshot(env,{notifications:true})).rows.length,2);await assert.rejects(()=>readWarningSnapshot(env));});
+test('fresh positive observations can notify before a complete UI baseline exists',async t=>{const original=globalThis.fetch;t.after(()=>globalThis.fetch=original);globalThis.fetch=async()=>Response.json([{payload:null,published_at:null,observed_payload:{...snapshot,partial:true},observed_at:new Date().toISOString()}]);assert.equal((await readWarningSnapshot(env,{notifications:true})).rows.length,2);assert.equal((await readWarningSnapshot(env)).partialObservation,true);});
 test('notification dispatch failure does not erase a published warning snapshot',async()=>{let calls=[];const handler=createHandler(workerEnv,{pause:async()=>{},load:async()=>({...snapshot,partial:false,unavailableSources:[],verification:Array.from({length:5},()=>({ready:true}))}),fetchFn:async url=>{const name=url.split('/').at(-1);calls.push(name);if(name==='dispatch_warning_notifications')return Response.json({}, {status:503});return Response.json(true);}});const result=await(await handler(request())).json();assert.equal(result.status,'published');assert.equal(result.notificationDispatch,'failed');assert.ok(!calls.includes('warning_snapshot_fail'));});
 
 test('worker publishes checksum-verified data on the first read even when sync freshness marks it partial',async()=>{
@@ -45,4 +45,17 @@ test('worker publishes checksum-verified data on the first read even when sync f
  assert.equal(result.status,'published');
  assert.equal(result.partial,true);
  assert.equal(loads,1);
+});
+
+test('a retained baseline stays visible when the later partial observation is empty, old, or unverified',async t=>{
+ const original=globalThis.fetch;
+ t.after(()=>globalThis.fetch=original);
+ const published_at=new Date(Date.now()-60*60*1000).toISOString();
+ for(const [patch,age] of [[{rows:[]},0],[{},16*60*1000],[{verification:[{source:'kartu_stok',ready:false}]},0]]){
+  globalThis.fetch=async()=>Response.json([{payload:snapshot,published_at,last_error:'Incomplete',observed_payload:{...snapshot,partial:true,...patch},observed_at:new Date(Date.now()-age).toISOString()}]);
+  const result=await readWarningSnapshot(env);
+  assert.equal(result.partialObservation,false);
+  assert.equal(result.snapshotPublishedAt,published_at);
+  assert.equal(result.rows.length,2);
+ }
 });
