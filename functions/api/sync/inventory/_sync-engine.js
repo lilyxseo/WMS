@@ -22,7 +22,7 @@ export function diffRows(sourceRows, sourceKeys, existingRows, needsUpdate = () 
   for (const row of sourceRows) {
     const existing = existingByKey.get(row.source_row_key);
     if (!existing) rowsToInsert.push(row);
-    else if (existing.source_hash !== row.source_hash || needsUpdate(existing, row)) rowsToUpdate.push(row);
+    else if (existing.source_hash !== row.source_hash || (existing.source_row_number !== undefined && existing.source_row_number !== row.source_row_number) || needsUpdate(existing, row)) rowsToUpdate.push(row);
     else unchanged += 1;
   }
   const keysToDelete = existingRows.map(row => row.source_row_key).filter(key => !sourceKeys.has(key));
@@ -97,7 +97,7 @@ export function createInventorySyncService(config) {
         return id;
       },
       updateHistory(id, row) { return request(`/rest/v1/inventory_sync_history?id=eq.${encodeURIComponent(id)}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) }); },
-      async existingMetadata() { const all = [], columns = ['source_row_key', 'source_hash', ...(config.metadataFields || [])].join(','); for (let offset = 0; ; offset += SYNC_READ_PAGE_SIZE) { const page = await request(`/rest/v1/${tableName}?select=${columns}&order=source_row_key&limit=${SYNC_READ_PAGE_SIZE}&offset=${offset}`, {}, 'read'); all.push(...page); if (page.length < SYNC_READ_PAGE_SIZE) return all; } },
+      async existingMetadata() { const all = [], columns = ['source_row_key', 'source_hash', 'source_row_number', ...(config.metadataFields || [])].join(','); for (let offset = 0; ; offset += SYNC_READ_PAGE_SIZE) { const page = await request(`/rest/v1/${tableName}?select=${columns}&order=source_row_key&limit=${SYNC_READ_PAGE_SIZE}&offset=${offset}`, {}, 'read'); all.push(...page); if (page.length < SYNC_READ_PAGE_SIZE) return all; } },
       async upsertRows(rows) { for (const batch of chunks(rows)) await request(`/rest/v1/${tableName}?on_conflict=source_row_key`, { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(batch) }); },
       async deleteKeys(keys) { for (const batch of chunks(keys)) { const values = batch.map(item => `"${String(item).replace(/"/g, '\\"')}"`).join(','); await request(`/rest/v1/${tableName}?source_row_key=in.(${encodeURIComponent(values)})`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }); } },
     };
@@ -121,13 +121,28 @@ export function createInventorySyncService(config) {
       const parsed = await parseValues(await (dependencies.fetchValues || fetchValues)(env, { ...dependencies, requestMetrics }), { buildSourceRowKey, buildSourceHash:async()=>'', logger });
       for(const batch of chunks(parsed.rows,128))await Promise.all(batch.map(async row=>{row.source_hash=await buildSourceHash(row);}));
       metrics.sourceRows = parsed.sourceRowCount; metrics.invalidRows = parsed.invalidRows.length;
-      const sourceVersion = await sha256(JSON.stringify(parsed.rows.map(row => [row.source_row_key, row.source_hash])));
+      let sourceVersion = await sha256(JSON.stringify(parsed.rows.map(row => [row.source_row_key, row.source_hash])));
       const fullReconcile=dependencies.forceFull===true||parsed.invalidRows.length>0||gateway.committedSourceVersion?.()!==sourceVersion;
       if(!fullReconcile){metrics.unchanged=parsed.rows.length;}else{
       const existing = await gateway.existingMetadata();
       log(`sheet rows: ${metrics.sourceRows}\nexisting rows: ${existing.length}`);
       if (existing.length > 0 && parsed.sourceRowCount === 0) throw new SyncError('SUSPICIOUS_SOURCE_SIZE', 'Source kosong sementara database masih berisi data');
       if (existing.length > SOURCE_SIZE_GUARD.previousMinimum && parsed.sourceRowCount < existing.length * SOURCE_SIZE_GUARD.minimumRatio) throw new SyncError('SOURCE_ROW_COUNT_DROPPED_UNEXPECTEDLY', `Source ${parsed.sourceRowCount}, sebelumnya ${existing.length}`);
+      if (parsed.invalidRows.length) {
+        // Invalid source rows retain their last valid stored values. Include
+        // those same rows in the version verified by the Warning snapshot.
+        const invalidKeys = new Set(parsed.invalidRows.map(row=>row.sourceRowKey));
+        const retained = existing.filter(row=>invalidKeys.has(row.source_row_key));
+        if (retained.length) {
+          if(retained.some(row=>!Number.isInteger(row.source_row_number)
+            || buildSourceRowKey(row.source_row_number)!==row.source_row_key
+            || !/^[a-f0-9]{64}$/.test(row.source_hash||''))) {
+            throw new SyncError('INVALID_RETAINED_ROW_PROOF','Checksum baris lama yang dipertahankan tidak dapat diverifikasi.');
+          }
+          const committed = [...parsed.rows,...retained].sort((a,b)=>a.source_row_number-b.source_row_number);
+          sourceVersion = await sha256(JSON.stringify(committed.map(row=>[row.source_row_key,row.source_hash])));
+        }
+      }
       const diff = diffRows(parsed.rows, parsed.sourceKeys, existing, config.needsUpdate);
       metrics = { ...metrics, inserted: diff.rowsToInsert.length, updated: diff.rowsToUpdate.length, deleted: diff.keysToDelete.length, unchanged: diff.unchanged };
       if (config.buildMetrics) metrics = { ...metrics, ...config.buildMetrics({ parsed, existing, diff }) };

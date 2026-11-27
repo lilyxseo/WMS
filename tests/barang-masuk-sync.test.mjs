@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {sha256} from '../functions/api/sync/inventory/_sync-engine.js';
 import { BARANG_MASUK_SHEET_RANGE, buildSourceRowKey, fetchBarangMasukValues, parseBarangMasukValues, syncBarangMasuk } from '../functions/api/sync/inventory/_barang-masuk-service.js';
 
 const HEADER = ['TANGGAL', 'FROM', 'TO', 'SKU', 'NAMA BARANG', 'QTY', 'STATUS', 'PIC', 'KETERANGAN', 'NO ISELLER', 'NETSUITE', 'KETERANGAN LAINNYA', 'LOKASI SURAT JALAN', 'STOCKOUT', 'DOKUMEN'];
@@ -12,7 +13,7 @@ function statefulGateway() {
     records,
     async acquireLock(source) { assert.equal(source, 'barang_masuk'); return true; },
     async insertHistory() { return 'history-1'; }, async updateHistory() {},
-    async existingMetadata() { return [...records.values()].map(({ source_row_key, source_hash, no_iseller, netsuite, keterangan_lainnya, lokasi_surat_jalan, stockout, dokumen }) => ({ source_row_key, source_hash, no_iseller, netsuite, keterangan_lainnya, lokasi_surat_jalan, stockout, dokumen })); },
+    async existingMetadata() { return [...records.values()].map(({ source_row_key, source_hash, source_row_number, no_iseller, netsuite, keterangan_lainnya, lokasi_surat_jalan, stockout, dokumen }) => ({ source_row_key, source_hash, source_row_number, no_iseller, netsuite, keterangan_lainnya, lokasi_surat_jalan, stockout, dokumen })); },
     async upsertRows(rows) { rows.forEach(item => records.set(item.source_row_key, item)); },
     async deleteKeys(keys) { keys.forEach(key => records.delete(key)); },
     async finishSuccess(args) { assert.equal(args.source, 'barang_masuk'); }, async finishError() {},
@@ -150,4 +151,20 @@ test('7000-row sync uses paged metadata and 1000-row mutation batches', async ()
   assert.deepEqual(second.requests, { googleRequests: 2, supabaseReads: 8, supabaseWrites: 2, rpcRequests: 2, estimatedRequests: 14 });
   assert.equal(calls.upserts, 0);
   assert.ok(second.requests.estimatedRequests < 15);
+});
+
+test('Barang Masuk commits a checksum matching stored rows when an invalid sheet row is retained',async()=>{
+  const gateway=statefulGateway();
+  let committedVersion;
+  gateway.finishSuccess=async args=>{committedVersion=args.source_version;};
+  const run=values=>syncBarangMasuk({}, {gateway,fetchValues:async()=>values,logger});
+  await run([HEADER,row('A'),row('B'),row('C')]);
+  const retained=gateway.records.get('barang_masuk:3');
+  const result=await run([HEADER,row('A',12),row('B','INVALID'),row('C')]);
+  const pairs=[...gateway.records.values()].sort((a,b)=>a.source_row_number-b.source_row_number).map(item=>[item.source_row_key,item.source_hash]);
+  assert.equal(result.invalidRows,1);
+  assert.equal(result.deleted,0);
+  assert.deepEqual(gateway.records.get('barang_masuk:3'),retained);
+  assert.equal(committedVersion,await sha256(JSON.stringify(pairs)));
+  assert.equal(result.sourceVersion,committedVersion);
 });
