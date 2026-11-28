@@ -1,0 +1,46 @@
+#page-riwayat-gudang { min-width: 0; }
+#inventoryHistoryApp [hidden] { display: none; }
+.inventory-history-heading {
+  padding: clamp(16px, 3vw, 26px);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(115deg,color-mix(in srgb,var(--primary) 10%,var(--panel)),var(--panel) 65%);
+}
+.inventory-history-heading h1 { margin: 0 0 5px; font-size: clamp(23px,4vw,33px); letter-spacing: -.035em; }
+.inventory-history-heading p, .inventory-history-feedback { margin: 0; color: var(--muted); font-size: 13px; }
+.inventory-history-controls {
+  display: grid;
+  grid-template-columns: minmax(140px,190px) auto minmax(0,1fr);
+  align-items: end;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.inventory-history-controls label { display: grid; gap: 5px; color: var(--muted); font-size: 12px; min-width: 0; }
+.inventory-history-controls input {
+  width: 100%; min-width: 0; margin: 0; min-height: 44px; padding: 8px 10px; border: 1px solid var(--line);
+  border-radius: 8px; background: var(--panel-soft); color: var(--text);
+}
+.inventory-history-controls button,.inventory-history-tabs button,.inventory-history-pager button { min-height: 44px; }
+.inventory-history-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.inventory-history-tabs button[aria-pressed=true] {
+  border-color: var(--primary);
+  background: color-mix(in srgb,var(--primary) 10%,var(--panel));
+}
+.inventory-history-feedback { margin: 10px 0; }
+.inventory-history-table { min-width: 0; max-width: 100%; overflow: auto; }
+.inventory-history-table table { width: 100%; min-width: 690px; }
+.inventory-history-table :is(td,th) { padding: 10px 12px; text-align: start; }
+.inventory-history-table :is(td,th).history-qty { text-align: end; font-variant-numeric: tabular-nums; }
+.inventory-history-table tbody tr:nth-child(even) { background: var(--panel-soft); }
+.inventory-history-pager { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 12px 0; }
+.inventory-history-pager span { flex: 1 1 190px; color: var(--muted); font-size: 12px; }
+#inventoryHistoryApp :is(input,button,.inventory-history-table):focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+@media (max-width: 600px) {
+  .inventory-history-controls { grid-template-columns: minmax(0,1fr) auto; }
+  .inventory-history-controls label:last-child { grid-column: 1/-1; }
+  .inventory-history-controls input { font-size: 16px; }
+}
