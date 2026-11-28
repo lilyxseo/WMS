@@ -2,19 +2,19 @@ const fmt = new Intl.NumberFormat('id-ID');
 const dayFormat = new Intl.DateTimeFormat('id-ID',{dateStyle:'long',timeZone:'UTC'});
 const captureFormat = new Intl.DateTimeFormat('id-ID',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Jakarta'});
 const escape = value => String(value??'—').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-const datasets = {stock:'Stok per lokasi',inbound:'Barang Masuk',outbound:'Barang Keluar'};
+const datasets = {stock:'Kartu Stok',rpl:'RPL',bulky:'BULKY',inbound:'Barang Masuk',outbound:'Barang Keluar'};
 const stockFields=[['SKU','sku'],['Nama barang','name'],['Lokasi','location'],['Stok akhir','qty'],['Sumber','source']];
-const transactionFields=[['SKU','sku'],['Nama barang','name'],['From','from'],['To','to'],['Qty','qty'],['Status','status'],['PIC','pic'],['Keterangan','note']];
+const transactionFields=[['Tanggal','date'],['SKU','sku'],['Nama barang','name'],['From','from'],['To','to'],['Qty','qty'],['Status','status'],['PIC','pic'],['Keterangan','note']];
 
 export function mountInventoryHistory(root,{read}){
   let kind='stock',page=1,controller,changes;
   root.innerHTML=`<header class="inventory-history-heading">
    <h1>Riwayat Gudang</h1>
-   <p>Lihat stok yang tersimpan dan transaksi pada tanggal pilihan (WIB).</p>
+   <p>Lihat transaksi sampai tanggal pilihan dan estimasi stok per lokasi (WIB).</p>
   </header>
   <div class="inventory-history-controls">
-   <label>Tanggal arsip <input type="date" data-history-date></label>
-   <button type="button" class="btn-ghost" data-history-latest>Arsip terbaru</button>
+   <label>Tanggal riwayat <input type="date" data-history-date></label>
+   <button type="button" class="btn-ghost" data-history-latest>Hari ini</button>
    <label>Cari data <input type="search" maxlength="120" placeholder="SKU, nama barang, atau lokasi…" data-history-search></label>
   </div>
   <div class="inventory-history-tabs" role="group" aria-label="Jenis data">${Object.entries(datasets).map(([key,label])=>`<button type="button" class="btn-ghost" data-kind="${key}" aria-pressed="${key===kind}">${label}</button>`).join('')}</div>
@@ -34,22 +34,32 @@ export function mountInventoryHistory(root,{read}){
     date.value=data.date||'';
     if(data.latestDate)date.max=data.latestDate;
     el('latest').disabled=!data.latestDate||data.date===data.latestDate;
-    if(!data.capturedAt){
-      el('status').textContent=data.date?`Arsip ${dayFormat.format(new Date(data.date+'T00:00:00Z'))}`:'Riwayat Gudang';
-      el('content').innerHTML='<div class="state">Belum ada snapshot tersimpan untuk tanggal ini.</div>';
+    const isStock=kind!=='inbound'&&kind!=='outbound';
+    const day=dayFormat.format(new Date(data.date+'T00:00:00Z'));
+    if(isStock&&!data.stockAvailable){
+      el('status').textContent=`${datasets[kind]} · ${day}`;
+      el('content').innerHTML='<div class="state">Estimasi stok belum tersedia untuk tanggal ini. Saldo sumber belum terverifikasi atau tanggal berada di luar cakupan ledger yang tersedia.</div>';
       return;
     }
     page=data.page;
-    el('status').textContent=`${dayFormat.format(new Date(data.date+'T00:00:00Z'))} · Snapshot diambil ${captureFormat.format(new Date(data.capturedAt))} WIB`;
+    el('status').textContent=isStock
+      ? `Estimasi stok ${day} · Saldo acuan tersinkron ${captureFormat.format(new Date(data.basisAt))} WIB`
+      : `Transaksi sampai ${day} · Terbaru dulu`;
+    if(isStock) {
+      const note=document.createElement('p');
+      note.className='inventory-history-feedback';
+      note.textContent='Dihitung dari saldo tersinkron dan transaksi setelah tanggal pilihan. Koreksi manual dan SKU–lokasi yang sudah hilang dari sumber tidak dapat dipulihkan.';
+      el('content').append(note);
+    }
     if(!data.rows.length){
-      el('content').innerHTML='<div class="state">Tidak ada data yang cocok.</div>';
+      el('content').insertAdjacentHTML('beforeend','<div class="state">Tidak ada data yang cocok.</div>');
       return;
     }
-    const fields=kind==='stock'?stockFields:transactionFields;
-    el('content').innerHTML=`<div class="inventory-history-table table-wrap" tabindex="0" role="region" aria-label="${datasets[kind]}"><table>
+    const fields=isStock?stockFields:transactionFields;
+    el('content').insertAdjacentHTML('beforeend',`<div class="inventory-history-table table-wrap" tabindex="0" role="region" aria-label="${datasets[kind]}"><table>
      <thead><tr>${fields.map(([label,field])=>`<th scope="col" class="${field==='qty'?'history-qty':''}">${label}</th>`).join('')}</tr></thead>
      <tbody>${data.rows.map(row=>`<tr>${fields.map(([,field])=>`<td class="${field==='qty'?'history-qty':''}">${field==='qty'&&typeof row.qty==='number'?fmt.format(row.qty):escape(row[field]===''?'—':row[field])}</td>`).join('')}</tr>`).join('')}</tbody>
-    </table></div>`;
+    </table></div>`);
     const first=(page-1)*50+1,last=first+data.rows.length-1;
     el('count').textContent=`${fmt.format(first)}–${fmt.format(last)} dari ${fmt.format(data.total)} baris`;
     el('pager').hidden=false;
@@ -64,7 +74,7 @@ export function mountInventoryHistory(root,{read}){
     controller=request;
     const params=new URLSearchParams({kind,page,q:search.value.trim()});
     if(date.value)params.set('date',date.value);
-    el('status').textContent='Memuat arsip gudang…';
+    el('status').textContent='Memuat riwayat gudang…';
     el('content').replaceChildren();
     el('content').setAttribute('aria-busy','true');
     el('pager').hidden=true;
@@ -73,7 +83,7 @@ export function mountInventoryHistory(root,{read}){
       if(!request.signal.aborted)render(data);
     }catch(error){
       if(!request.signal.aborted){
-        el('status').textContent=error.message||'Gagal memuat arsip gudang.';
+        el('status').textContent=error.message||'Gagal memuat riwayat gudang.';
         const retry=document.createElement('button');
         retry.type='button';
         retry.className='btn-ghost';

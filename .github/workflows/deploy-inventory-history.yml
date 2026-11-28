@@ -5,7 +5,7 @@ on:
     paths:
       - '.github/workflows/deploy-inventory-history.yml'
       - 'scripts/deploy-inventory-history.mjs'
-      - 'supabase/migrations/20261128000000_inventory_daily_history.sql'
+      - 'supabase/migrations/20261128010000_inventory_history_from_ledger.sql'
   workflow_dispatch:
 permissions:
   contents: read
