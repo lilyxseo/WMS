@@ -20,3 +20,54 @@ test('spreadsheet edits with unchanged row count and deleted rows both produce n
  for(const values of [['B','A'],['A']]){let updates=0,deletes=0;const gateway={acquireLock:async()=>true,committedSourceVersion:()=>originalVersion,insertHistory:async()=>1,updateHistory:async()=>{},existingMetadata:async()=>[0,1].map(index=>({source_row_key:'test:'+index,source_hash:oldHash})),upsertRows:async rows=>updates+=rows.length,deleteKeys:async keys=>deletes+=keys.length,finishSuccess:async()=>{},finishError:async()=>{}};
  const result=await service.sync({},{gateway,fetchValues:async()=>values,logger:{log(){}}});assert.notEqual(result.sourceVersion,originalVersion);assert.equal(result.fastPath,false);assert.equal(updates,values.length===2?1:0);assert.equal(deletes,values.length===2?0:1);}
 });
+
+test('scheduled sync downloads sheet values only when metadata cannot prove an unchanged source', async () => {
+  const service = createInventorySyncService(config);
+  const proof = { spreadsheetId: 'file', range: "'Test'!A:ZZ", version: '42' };
+  const cases = [
+    { prior: proof, versions: ['42'], skip: true },
+    { prior: { ...proof, range: 'old' }, versions: ['42', '42'], saved: '42' },
+    { prior: proof, versions: ['43', '43'], saved: '43' },
+    { prior: proof, versions: ['43', '44'] },
+    { prior: proof, versions: [null] },
+    { prior: proof, versions: [], automatic: false },
+    { prior: proof, versions: [], forceFull: true },
+    { prior: null, versions: ['42', '42'], saved: '42' },
+    { prior: undefined, versions: [] },
+  ];
+  for (const { prior, versions, skip, saved, automatic = true, forceFull = false } of cases) {
+    const calls = [];
+    let finished;
+    const gateway = {
+      acquireLock: async () => true,
+      driveProof: () => prior,
+      finishUnchanged: async () => calls.push('release'),
+      insertHistory: async () => calls.push('history'),
+      updateHistory: async () => {},
+      existingMetadata: async () => [],
+      upsertRows: async () => {},
+      deleteKeys: async () => {},
+      finishSuccess: async args => { finished = args; },
+    };
+    let probes = 0;
+    const result = await service.sync({ SHEET_ID_2026: 'file' }, {
+      automatic, forceFull, gateway, logger: { log() {} },
+      getGoogleAccessToken: async () => 'test-token',
+      fetch: async (url, options) => {
+        assert.equal(options.headers.Authorization, 'Bearer test-token');
+        if (url.startsWith('https://sheets.googleapis.com/')) {
+          calls.push('values');
+          return Response.json({ values: ['A'] });
+        }
+        assert.match(url, /\/drive\/v3\/files\/file\?fields=version/);
+        assert.ok(probes < versions.length);
+        const version = versions[probes++];
+        return version ? Response.json({ version }) : new Response(null, { status: 403 });
+      },
+    });
+    assert.equal(probes, versions.length);
+    assert.equal(Boolean(result.noChanges), Boolean(skip));
+    assert.deepEqual(calls, skip ? ['release'] : ['history', 'values']);
+    assert.equal(finished?.driveProof?.version, saved);
+  }
+});

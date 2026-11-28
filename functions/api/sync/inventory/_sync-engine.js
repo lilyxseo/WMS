@@ -41,13 +41,32 @@ export function createInventorySyncService(config) {
   const buildSourceRowKey = rowNumber => `${source}:${rowNumber}`;
   const buildSourceHash = row => sha256(JSON.stringify(config.hashFields.map(field => row[field])));
 
+  async function readAccessToken(env, dependencies) {
+    if (dependencies.requestMetrics) dependencies.requestMetrics.googleRequests += 1;
+    return (dependencies.getGoogleAccessToken || getGoogleAccessToken)(env);
+  }
+
+  async function readDriveVersion(id, token, fetchFn, metrics) {
+    metrics.googleRequests += 1;
+    try {
+      const result = await fetchFn(
+        `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?fields=version&supportsAllDrives=true`,
+        { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5000) },
+      );
+      if (!result.ok) return null;
+      const { version } = await result.json();
+      return typeof version === 'string' && /^\d+$/.test(version) ? version : null;
+    } catch {
+      return null;
+    }
+  }
+
   async function fetchValues(env, dependencies = {}) {
     const id = normalizeText(env.SHEET_ID_2026 || env.GOOGLE_SHEET_ID);
     if (!id) throw new SyncError('MISSING_SHEET_CONFIG', 'SHEET_ID_2026/GOOGLE_SHEET_ID belum diset');
     // The central Gmail token request is one Worker subrequest. Keep it in the
     // Google total alongside the authenticated Sheets read.
-    if (dependencies.requestMetrics) dependencies.requestMetrics.googleRequests += 1;
-    const accessToken = await (dependencies.getGoogleAccessToken || getGoogleAccessToken)(env);
+    const accessToken = dependencies.accessToken || await readAccessToken(env, dependencies);
     const fetchFn = dependencies.fetch || fetch;
     const wait = dependencies.sleep || sleep;
     const range = config.sheetRange || `'${sheetName}'!A:ZZ`;
@@ -80,12 +99,53 @@ export function createInventorySyncService(config) {
       if (!response.ok){const error=new SyncError(response.status===429?'SUPABASE_RATE_LIMITED':response.status>=500?'SUPABASE_UNAVAILABLE':'SUPABASE_REQUEST_FAILED',body?.message || body?.hint || `Supabase request gagal (${response.status})`);error.rpcMissing=body?.code==='PGRST202';throw error;}
       return body;
     }
-    let fastProof=null;
+    let fastProof=null, driveProof;
     const rpc = (name, args) => request(`/rest/v1/rpc/${name}`, { method: 'POST', body: JSON.stringify(args) }, 'rpc');
     return {
-      async acquireLock(lockSource, lockId) {const args={p_source:lockSource,p_lock_id:lockId,p_stale_after_seconds:120};try{const result=await rpc('acquire_inventory_sync_fast',args);fastProof=result?.allow_fast?result.source_version:null;return result?.acquired===true;}catch(error){if(!error.rpcMissing)throw error;fastProof=null;const result=await rpc('acquire_inventory_sync_lock',args);return result===true||result?.acquire_inventory_sync_lock===true;}},
-      committedSourceVersion(){return fastProof;},
-      async finishSuccess(args) {const payload={p_source:args.source,p_lock_id:args.lock_id,p_row_count:args.row_count,p_inserted_count:args.inserted_count,p_updated_count:args.updated_count,p_deleted_count:args.deleted_count,p_duration_ms:args.duration_ms,p_source_version:args.source_version};try{return await rpc('finish_inventory_sync_fast',{...payload,p_full:args.fullReconcile!==false});}catch(error){if(!error.rpcMissing)throw error;return rpc('finish_inventory_sync_success',payload);}},
+      async acquireLock(lockSource, lockId) {
+        const args = { p_source: lockSource, p_lock_id: lockId, p_stale_after_seconds: 120 };
+        try {
+          const result = await rpc('acquire_inventory_sync_fast', args);
+          fastProof = result?.allow_fast ? result.source_version : null;
+          driveProof = result?.drive_proof;
+          return result?.acquired === true;
+        } catch (error) {
+          if (!error.rpcMissing) throw error;
+          const result = await rpc('acquire_inventory_sync_lock', args);
+          return result === true || result?.acquire_inventory_sync_lock === true;
+        }
+      },
+      committedSourceVersion() { return fastProof; },
+      driveProof() { return driveProof; },
+      finishUnchanged(lockSource, lockId) {
+        return rpc('finish_inventory_sync_unchanged', { p_source: lockSource, p_lock_id: lockId });
+      },
+      async finishSuccess(args) {
+        const payload = {
+          p_source: args.source,
+          p_lock_id: args.lock_id,
+          p_row_count: args.row_count,
+          p_inserted_count: args.inserted_count,
+          p_updated_count: args.updated_count,
+          p_deleted_count: args.deleted_count,
+          p_duration_ms: args.duration_ms,
+          p_source_version: args.source_version,
+        };
+        const fastPayload = { ...payload, p_full: args.fullReconcile !== false };
+        if (args.driveProof) {
+          try {
+            return await rpc('finish_inventory_sync_drive', { ...fastPayload, p_drive_proof: args.driveProof });
+          } catch (error) {
+            if (!error.rpcMissing) throw error;
+          }
+        }
+        try {
+          return await rpc('finish_inventory_sync_fast', fastPayload);
+        } catch (error) {
+          if (!error.rpcMissing) throw error;
+          return rpc('finish_inventory_sync_success', payload);
+        }
+      },
       finishError(lockSource, lockId, message, durationMs) { return rpc('finish_inventory_sync_error', { p_source: lockSource, p_lock_id: lockId, p_error: message, p_duration_ms: durationMs }); },
       async insertHistory(row) {
         const id = crypto.randomUUID();
@@ -116,9 +176,38 @@ export function createInventorySyncService(config) {
     try {
       lockAcquired = await gateway.acquireLock(source, lockId);
       if (!lockAcquired) { await gateway.insertHistory({ source, status: 'skipped', started_at: startedAt, finished_at: new Date().toISOString(), source_row_count: 0, inserted_count: 0, updated_count: 0, deleted_count: 0, duration_ms: Date.now() - started, error_message: 'SYNC_ALREADY_RUNNING', source_version: null }); return { success: false, skipped: true, reason: 'SYNC_ALREADY_RUNNING', source, durationMs: Date.now() - started }; }
+      const fetchOptions = { ...dependencies, requestMetrics };
+      const spreadsheetId = normalizeText(env.SHEET_ID_2026 || env.GOOGLE_SHEET_ID);
+      const canCheckDrive = dependencies.automatic && !dependencies.forceFull && spreadsheetId
+        && gateway.driveProof?.() !== undefined;
+      const range = config.sheetRange || `'${sheetName}'!A:ZZ`;
+      const fetchFn = dependencies.fetch || fetch;
+      let driveVersion = null, accessError;
+      if (canCheckDrive) {
+        try {
+          fetchOptions.accessToken = await readAccessToken(env, fetchOptions);
+          driveVersion = await readDriveVersion(spreadsheetId, fetchOptions.accessToken, fetchFn, requestMetrics);
+        } catch (error) {
+          accessError = error;
+        }
+        const prior = gateway.driveProof();
+        if (driveVersion && prior?.version === driveVersion && prior.spreadsheetId === spreadsheetId && prior.range === range) {
+          await gateway.finishUnchanged(source, lockId);
+          lockAcquired = false;
+          log('Spreadsheet unchanged');
+          return { success: true, source, noChanges: true, durationMs: Date.now() - started, requests: logRequestSummary() };
+        }
+      }
       historyId = await gateway.insertHistory({ source, status: 'syncing', started_at: startedAt, source_row_count: 0, inserted_count: 0, updated_count: 0, deleted_count: 0, duration_ms: 0, error_message: null, source_version: null });
       log('START');
-      const parsed = await parseValues(await (dependencies.fetchValues || fetchValues)(env, { ...dependencies, requestMetrics }), { buildSourceRowKey, buildSourceHash:async()=>'', logger });
+      if (accessError) throw accessError;
+      const values = await (dependencies.fetchValues || fetchValues)(env, fetchOptions);
+      const stableDriveVersion = driveVersion && driveVersion === await readDriveVersion(
+        spreadsheetId, fetchOptions.accessToken, fetchFn, requestMetrics,
+      );
+      const parsed = await parseValues(values, { buildSourceRowKey, buildSourceHash:async()=>'', logger });
+      const driveProof = stableDriveVersion && !parsed.invalidRows.length
+        ? { spreadsheetId, range, version: driveVersion } : null;
       for(const batch of chunks(parsed.rows,128))await Promise.all(batch.map(async row=>{row.source_hash=await buildSourceHash(row);}));
       metrics.sourceRows = parsed.sourceRowCount; metrics.invalidRows = parsed.invalidRows.length;
       let sourceVersion = await sha256(JSON.stringify(parsed.rows.map(row => [row.source_row_key, row.source_hash])));
@@ -150,7 +239,7 @@ export function createInventorySyncService(config) {
       await gateway.deleteKeys(diff.keysToDelete);
       }
       const durationMs = Date.now() - started;
-      await gateway.finishSuccess({ source, lock_id: lockId, row_count: metrics.sourceRows, inserted_count: metrics.inserted, updated_count: metrics.updated, deleted_count: metrics.deleted, duration_ms: durationMs, source_version: sourceVersion,fullReconcile }); lockAcquired = false;
+      await gateway.finishSuccess({ source, lock_id: lockId, row_count: metrics.sourceRows, inserted_count: metrics.inserted, updated_count: metrics.updated, deleted_count: metrics.deleted, duration_ms: durationMs, source_version: sourceVersion,fullReconcile,driveProof }); lockAcquired = false;
       await gateway.updateHistory(historyId, { status: 'success', finished_at: new Date().toISOString(), source_row_count: metrics.sourceRows, inserted_count: metrics.inserted, updated_count: metrics.updated, deleted_count: metrics.deleted, duration_ms: durationMs, error_message: null, source_version: sourceVersion });
       log(`insert: ${metrics.inserted}\nupdate: ${metrics.updated}\ndelete: ${metrics.deleted}\nunchanged: ${metrics.unchanged}\nduration: ${durationMs}ms`);
       const requests = logRequestSummary();

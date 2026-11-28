@@ -20,3 +20,18 @@ test('Barang Masuk manual endpoint rejects missing or incorrect secrets', async 
 });
 
 test('manual refresh allows a proven checksum fast path and full reconciliation remains explicit',async()=>{for(const [query,expected]of [['',false],['?full=1',true]]){let actual;const response=await handleManualBarangMasukSync({request:new Request('https://example.test/api/sync/inventory/barang-masuk'+query,{method:'POST',headers:{Authorization:'Bearer '+SECRET}}),env:{INVENTORY_SYNC_SECRET:SECRET}},{sync:async(_env,options)=>{actual=options.forceFull;return {success:true};}});assert.equal(response.status,200);assert.equal(actual,expected);}});
+
+test('queued refresh bypasses the automatic spreadsheet metadata check', async () => {
+  for (const [query, automatic] of [['', true], ['?manual=1', false]]) {
+    const response = await handleManualBarangMasukSync({
+      request: new Request('https://example.test/api/sync/inventory/barang-masuk' + query, {
+        method: 'POST', headers: { Authorization: 'Bearer ' + SECRET },
+      }),
+      env: { INVENTORY_SYNC_SECRET: SECRET },
+    }, { sync: async (_env, options) => {
+      assert.equal(options.automatic, automatic);
+      return { success: true };
+    } });
+    assert.equal(response.status, 200);
+  }
+});

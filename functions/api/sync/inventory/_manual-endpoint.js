@@ -30,11 +30,14 @@ export async function handleManualInventorySync({ request, env }, { source, sync
   // application uses the user's regular authenticated session. Keeping each
   // source in a separate request prevents a single Worker invocation from
   // exhausting Cloudflare's subrequest/resource limits.
-  const authorized = isInventorySyncAuthorized(request, env) || await hasApplicationSession(request, env);
-  if (!authorized) return inventorySyncJson({ success: false, reason: 'UNAUTHORIZED' }, 401);
+  const scheduler = isInventorySyncAuthorized(request, env);
+  if (!scheduler && !await hasApplicationSession(request, env)) return inventorySyncJson({ success: false, reason: 'UNAUTHORIZED' }, 401);
   try {
-    // Read Sheets on every refresh; let checksum proof avoid unchanged full scans.
-    const result = await sync(env,{forceFull:new URL(request.url).searchParams.get('full')==='1'});
+    const params = new URL(request.url).searchParams;
+    const result = await sync(env, {
+      forceFull: params.get('full') === '1',
+      automatic: scheduler && params.get('manual') !== '1',
+    });
     return inventorySyncJson(result, result.skipped ? 409 : 200);
   } catch (error) {
     console.error(`[InventorySync:${source}] ERROR ${error?.code || 'SYNC_FAILED'}: ${error?.message || error}`);

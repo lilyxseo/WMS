@@ -2,7 +2,7 @@ import {appendFile,readFile} from 'node:fs/promises';
 const project=process.env.SUPABASE_PROJECT_REF,token=process.env.SUPABASE_ACCESS_TOKEN;if(!project||!token)throw Error('Sync deployment configuration unavailable');
 async function sql(query){const response=await fetch(`https://api.supabase.com/v1/projects/${project}/database/query`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({query}),signal:AbortSignal.timeout(60000)});if(!response.ok)throw Error(`Sync database operation failed (${response.status})`);return response.json();}
 const migration=await readFile(new URL('../supabase/migrations/20261023010000_sync_pipeline.sql',import.meta.url),'utf8');
-const checks=`do $$declare lease uuid:=gen_random_uuid();proof jsonb;rejected boolean:=false;begin
+const checks=`do $$declare lease uuid:=gen_random_uuid();proof jsonb;verified_at timestamptz;rejected boolean:=false;begin
  perform 1 from public.inventory_sync_status where source='kartu_stok' for update;
  update public.inventory_sync_status set status='success',locked_at=null,lock_id=null,source_version=repeat('a',64),last_full_sync_at=now() where source='kartu_stok';
  proof:=public.acquire_inventory_sync_fast('kartu_stok',lease,120);
@@ -11,7 +11,21 @@ const checks=`do $$declare lease uuid:=gen_random_uuid();proof jsonb;rejected bo
  update public.inventory_sync_status set status='error' where source='kartu_stok';
  proof:=public.acquire_inventory_sync_fast('kartu_stok',lease,120);if proof->>'allow_fast'='true' then raise exception 'Failed run treated as clean';end if;
  perform public.finish_inventory_sync_fast('kartu_stok',lease,7482,0,0,0,1,repeat('a',64),true);
- update public.inventory_sync_status set last_full_sync_at=now()-interval '11 minutes' where source='kartu_stok';
+ proof:=public.acquire_inventory_sync_fast('kartu_stok',lease,120);
+ perform public.finish_inventory_sync_drive('kartu_stok',lease,7482,0,0,0,1,repeat('a',64),false,'{"version":"42"}');
+ select drive_verified_at into verified_at from public.inventory_sync_status where source='kartu_stok';
+ proof:=public.acquire_inventory_sync_fast('kartu_stok',lease,120);
+ if proof#>>'{drive_proof,version}' is distinct from '42' then raise exception 'Drive proof unavailable';end if;
+ perform public.finish_inventory_sync_unchanged('kartu_stok',lease);
+ if not exists(select 1 from public.inventory_sync_status where source='kartu_stok' and status='success'
+  and locked_at is null and last_success_at=verified_at and drive_verified_at=verified_at)
+ then raise exception 'Unchanged probe altered committed freshness';end if;
+ update public.inventory_sync_status set last_success_at=now()-interval '11 minutes',
+  drive_verified_at=now()-interval '11 minutes' where source='kartu_stok';
+ proof:=public.acquire_inventory_sync_fast('kartu_stok',lease,120);
+ if proof->'drive_proof' is distinct from 'null'::jsonb then raise exception 'Expired Drive proof accepted';end if;
+ perform public.finish_inventory_sync_unchanged('kartu_stok',lease);
+ update public.inventory_sync_status set last_full_sync_at=now()-interval '31 minutes' where source='kartu_stok';
  proof:=public.acquire_inventory_sync_fast('kartu_stok',lease,120);if proof->>'allow_fast'='true' then raise exception 'Full comparison interval ignored';end if;
  if public.inventory_client_versions()->>'kartuStokVersion'<>repeat('a',64) then raise exception 'Committed version changed while locked';end if;
  if has_function_privilege('anon','public.request_inventory_refresh(text[])','EXECUTE') or has_function_privilege('authenticated','public.inventory_client_versions()','EXECUTE') then raise exception 'Public sync access';end if;
@@ -30,7 +44,7 @@ else if(process.argv.includes('--configure')){
 }
 const state=await sql(`select jsonb_build_object(
  'jobs',(select jsonb_agg(jsonb_build_object('job',jobname,'schedule',schedule,'active',active,'source',substring(command from '/api/sync/inventory/([a-z-]+)'),'host',substring(command from 'https://([a-zA-Z0-9.-]+)'),'requestTimeoutMs',substring(command from 'timeout_milliseconds[[:space:]]*[:= >]+([0-9]+)'))) from cron.job where command like '%/api/sync/inventory/%' or jobname like 'inventory-%'),
- 'sources',(select jsonb_agg(jsonb_build_object('source',source,'status',status,'lastSuccess',last_success_at,'locked',locked_at,'hasVersion',source_version is not null,'lastFull',to_jsonb(s)->>'last_full_sync_at')) from public.inventory_sync_status s),
+ 'sources',(select jsonb_agg(jsonb_build_object('source',source,'status',status,'lastSuccess',last_success_at,'locked',locked_at,'hasVersion',source_version is not null,'lastFull',to_jsonb(s)->>'last_full_sync_at','lastDriveVerified',to_jsonb(s)->>'drive_verified_at')) from public.inventory_sync_status s),
  'transport',(select jsonb_agg(to_jsonb(t)) from (select status_code,timed_out,created,substring(content from '"source"[[:space:]]*:[[:space:]]*"([a-z_]+)"') as source,content ~ '"fastPath"[[:space:]]*:[[:space:]]*true' as fast_path,(content like '%1102%' or content ilike '%too many subrequests%') as worker_limit from net._http_response order by created desc limit 20) t),
  'recent',(select jsonb_agg(to_jsonb(h)) from (select source,status,duration_ms,source_row_count,substring(error_message from '^([A-Z_]+)') as error_code from public.inventory_sync_history order by started_at desc limit 18) h)) as state`);
 const result=JSON.stringify(state[0]?.state||{});if(process.env.GITHUB_OUTPUT)await appendFile(process.env.GITHUB_OUTPUT,`result=${result}\n`);console.log('Read-only synchronization metadata inspected.');

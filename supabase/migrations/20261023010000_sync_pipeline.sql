@@ -1,10 +1,22 @@
 alter table public.inventory_sync_status add column if not exists last_full_sync_at timestamptz;
+alter table public.inventory_sync_status
+ add column if not exists drive_sync_proof jsonb,
+ add column if not exists drive_verified_at timestamptz;
 create or replace function public.acquire_inventory_sync_fast(p_source text,p_lock_id uuid,p_stale_after_seconds integer default 120) returns jsonb language plpgsql security definer set search_path=public as $$
 declare prior public.inventory_sync_status%rowtype; acquired boolean;
 begin
  select * into prior from public.inventory_sync_status where source=p_source for update;
  acquired:=public.acquire_inventory_sync_lock(p_source,p_lock_id,p_stale_after_seconds);
- return jsonb_build_object('acquired',acquired,'source_version',prior.source_version,'allow_fast',acquired and prior.status='success' and prior.locked_at is null and prior.last_full_sync_at>now()-interval '30 minutes');
+ return jsonb_build_object(
+  'acquired', acquired,
+  'source_version', prior.source_version,
+  'allow_fast', acquired and prior.status='success' and prior.locked_at is null and prior.last_full_sync_at>now()-interval '30 minutes',
+  'drive_proof', case when acquired and prior.status='success' and prior.locked_at is null
+   and prior.drive_verified_at=prior.last_success_at
+   -- Formula results can change without a new Drive version.
+   and prior.drive_verified_at>now()-interval '10 minutes'
+   and prior.last_full_sync_at>now()-interval '30 minutes' then prior.drive_sync_proof end
+ );
 end$$;
 create or replace function public.finish_inventory_sync_fast(p_source text,p_lock_id uuid,p_row_count integer,p_inserted_count integer,p_updated_count integer,p_deleted_count integer,p_duration_ms integer,p_source_version text,p_full boolean default true) returns void language plpgsql security definer set search_path=public as $$
 begin
@@ -13,6 +25,29 @@ begin
  perform public.finish_inventory_sync_success(p_source,p_lock_id,p_row_count,p_inserted_count,p_updated_count,p_deleted_count,p_duration_ms,p_source_version);
  if p_full then update public.inventory_sync_status set last_full_sync_at=now() where source=p_source and source_version=p_source_version and locked_at is null;end if;
 end$$;
+-- Store proof in the same transaction as the successful Sheets reconciliation.
+create or replace function public.finish_inventory_sync_drive(
+ p_source text,p_lock_id uuid,p_row_count integer,p_inserted_count integer,p_updated_count integer,
+ p_deleted_count integer,p_duration_ms integer,p_source_version text,p_full boolean,p_drive_proof jsonb
+) returns void language plpgsql security definer set search_path=public as $$
+begin
+ perform public.finish_inventory_sync_fast(p_source,p_lock_id,p_row_count,p_inserted_count,p_updated_count,
+  p_deleted_count,p_duration_ms,p_source_version,p_full);
+ update public.inventory_sync_status set drive_sync_proof=p_drive_proof,drive_verified_at=last_success_at
+ where source=p_source;
+end$$;
+-- This probe did not read Sheets. Preserve freshness timestamps and sync history.
+create or replace function public.finish_inventory_sync_unchanged(p_source text,p_lock_id uuid)
+returns void language plpgsql security definer set search_path=public as $$
+begin
+ update public.inventory_sync_status set status='success',locked_at=null,lock_id=null
+ where source=p_source and lock_id=p_lock_id and locked_at is not null;
+ if not found then raise exception 'Sync lease unavailable';end if;
+end$$;
+revoke all on function public.finish_inventory_sync_drive(text,uuid,integer,integer,integer,integer,integer,text,boolean,jsonb),
+ public.finish_inventory_sync_unchanged(text,uuid) from public,anon,authenticated;
+grant execute on function public.finish_inventory_sync_drive(text,uuid,integer,integer,integer,integer,integer,text,boolean,jsonb),
+ public.finish_inventory_sync_unchanged(text,uuid) to service_role;
 create or replace function public.inventory_client_versions() returns jsonb language sql stable security definer set search_path=public as $$
  select (select jsonb_object_agg(mapping.key,coalesce(s.source_version,'unsynced')) from (values
  ('barangMasukVersion','barang_masuk'),('barangKeluarVersion','barang_keluar'),('kartuStokVersion','kartu_stok'),('rplVersion','rpl'),('bulkyVersion','bulky'),('netsuiteVersion','netsuite')) mapping(key,source)
@@ -45,12 +80,15 @@ begin
   select dispatched_at into previous_dispatch from public.inventory_refresh_requests where source=src for update;
   if previous_dispatch>now()-interval '15 seconds' then continue;end if;
   slug:=replace(src,'_','-');
-  if src='netsuite' then template:='select public.dispatch_netsuite_sync()';else
-   select command into template from cron.job where active and command like '%/api/sync/inventory/'||slug||'%' order by jobid limit 1;
-  end if;
+  select command into template from cron.job
+  where active and command like '%/api/sync/inventory/'||case when src='netsuite' then 'kartu-stok' else slug end||'%'
+  order by jobid limit 1;
   if template is null then update public.inventory_refresh_requests set last_error='SCHEDULE_TEMPLATE_MISSING' where source=src;continue;end if;
+  if src='netsuite' then template:=replace(template,'/api/sync/inventory/kartu-stok','/api/sync/inventory/netsuite');end if;
+  -- Explicit refresh requests share the cron credential but must read Sheets.
+  template:=replace(template,'/api/sync/inventory/'||slug,'/api/sync/inventory/'||slug||'?manual=1');
   begin
-   execute case when src='netsuite' then template else public.inventory_sync_http_command(template) end;
+   execute public.inventory_sync_http_command(template);
    update public.inventory_refresh_requests set dispatched_at=now(),last_error=null where source=src;
    dispatched:=dispatched+1;
   exception when others then update public.inventory_refresh_requests set last_error='DISPATCH_FAILED' where source=src;
