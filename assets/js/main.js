@@ -1,4 +1,4 @@
-import {mountInventoryHistory} from './inventory-history.js';
+import {mountInventoryHistory} from './inventory-history.js?v=__APP_VERSION__';
 import {mountGtOrders} from './orderan-gt.js';
 import {BALIKAN_BASE_COLUMNS} from './balikan-columns.js';
 import {assetEditorFields,assetToday} from './asset-editor.js';

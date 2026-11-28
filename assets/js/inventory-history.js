@@ -54,11 +54,13 @@ export function mountInventoryHistory(root,{read}){
       el('content').append(notice);
       return;
     }
+    const revision = new Date(data.revisionAt);
+    if(!Number.isFinite(revision.getTime()))throw Error('Server belum mengirim versi Google Sheets untuk tanggal ini.');
     page=data.page;
     el('status').textContent=`Tanggal pilihan ${day} WIB · ${fmt.format(data.total)} baris`;
     const versionTime=el('version-time');
     versionTime.dateTime=data.revisionAt;
-    versionTime.textContent=`${captureFormat.format(new Date(data.revisionAt))} WIB`;
+    versionTime.textContent=`${captureFormat.format(revision)} WIB`;
     el('version').hidden=false;
     if(!data.rows.length){
       el('content').insertAdjacentHTML('beforeend','<div class="inventory-history-empty">Tidak ada data yang cocok.</div>');

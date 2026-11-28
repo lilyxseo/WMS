@@ -39,6 +39,7 @@ test('build flattens CSS imports in original order and retains safe version chec
   for(const file of ['index.html','assets','scripts','package.json'])await cp(new URL('../'+file,import.meta.url),join(temp,file),{recursive:true});
   execFileSync(process.execPath,['scripts/inject-version.js'],{cwd:temp,env:{...process.env,CF_PAGES_COMMIT_SHA:'seo-test'},stdio:'pipe'});
   const css=await readFile(join(temp,'assets/css/style.css'),'utf8'),main=await readFile(join(temp,'assets/js/main.js'),'utf8');
+  assert.match(main,/from '\.\/inventory-history\.js\?v=seo-test'/);
   assert.doesNotMatch(css,/@import/);for(const name of ['base','layout','components','pages','responsive'])assert.ok(css.includes((await read('assets/css/'+name+'.css')).trim()));
   assert.match(main,/stock-entry.js\?v=seo-test/);assert.match(main,/warning-view.js\?v=seo-test/);assert.ok(main.includes("includes('__APP_VERSION__')")||main.includes('includes("__APP_VERSION__")'));
  }finally{await rm(temp,{recursive:true,force:true});}
