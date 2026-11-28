@@ -10,7 +10,7 @@ export function mountInventoryHistory(root,{read}){
   let kind='stock',page=1,controller,changes;
   root.innerHTML=`<header class="inventory-history-heading">
    <h1>Riwayat Gudang</h1>
-   <p>Lihat transaksi sampai tanggal pilihan dan estimasi stok per lokasi (WIB).</p>
+   <p>Lihat stok dan transaksi dari versi spreadsheet pada tanggal pilihan (WIB).</p>
   </header>
   <div class="inventory-history-controls">
    <label>Tanggal riwayat <input type="date" data-history-date></label>
@@ -36,21 +36,16 @@ export function mountInventoryHistory(root,{read}){
     el('latest').disabled=!data.latestDate||data.date===data.latestDate;
     const isStock=kind!=='inbound'&&kind!=='outbound';
     const day=dayFormat.format(new Date(data.date+'T00:00:00Z'));
-    if(isStock&&!data.stockAvailable){
+    if(data.revisionUnavailable){
       el('status').textContent=`${datasets[kind]} · ${day}`;
-      el('content').innerHTML='<div class="state">Estimasi stok belum tersedia untuk tanggal ini. Saldo sumber belum terverifikasi atau tanggal berada di luar cakupan ledger yang tersedia.</div>';
+      const notice=document.createElement('div');
+      notice.className='state';
+      notice.textContent=data.message||'Riwayat versi tidak tersedia.';
+      el('content').append(notice);
       return;
     }
     page=data.page;
-    el('status').textContent=isStock
-      ? `Estimasi stok ${day} · Saldo acuan tersinkron ${captureFormat.format(new Date(data.basisAt))} WIB`
-      : `Transaksi sampai ${day} · Terbaru dulu`;
-    if(isStock) {
-      const note=document.createElement('p');
-      note.className='inventory-history-feedback';
-      note.textContent='Dihitung dari saldo tersinkron dan transaksi setelah tanggal pilihan. Koreksi manual dan SKU–lokasi yang sudah hilang dari sumber tidak dapat dipulihkan.';
-      el('content').append(note);
-    }
+    el('status').textContent=`Tanggal pilihan ${day} · Versi Google Sheets ${captureFormat.format(new Date(data.revisionAt))} WIB`;
     if(!data.rows.length){
       el('content').insertAdjacentHTML('beforeend','<div class="state">Tidak ada data yang cocok.</div>');
       return;

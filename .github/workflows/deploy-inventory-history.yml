@@ -1,11 +1,16 @@
-name: Deploy inventory history
+name: Verify inventory revision history
 on:
   push:
     branches: [main]
     paths:
       - '.github/workflows/deploy-inventory-history.yml'
-      - 'scripts/deploy-inventory-history.mjs'
-      - 'supabase/migrations/20261128010000_inventory_history_from_ledger.sql'
+      - 'functions/api/inventory-history.js'
+      - 'functions/api/_inventory-drive-revisions.js'
+      - 'functions/api/_inventory-revision-xlsx.js'
+      - 'assets/js/inventory-history.js'
+      - 'tests/inventory-history.test.mjs'
+      - 'tests/inventory-revision-xlsx.integration.mjs'
+      - 'package-lock.json'
   workflow_dispatch:
 permissions:
   contents: read
@@ -14,14 +19,10 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 8
-    env:
-      SUPABASE_PROJECT_REF: udullprykzdskrxmbbkj
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - run: node --test tests/*.test.mjs
-      - if: github.ref == 'refs/heads/main'
-        run: node scripts/deploy-inventory-history.mjs
+      - run: npm ci
+      - run: node --test tests/inventory-history.test.mjs tests/inventory-revision-xlsx.integration.mjs
