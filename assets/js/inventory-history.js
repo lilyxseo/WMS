@@ -10,16 +10,26 @@ export function mountInventoryHistory(root,{read}){
   let kind='stock',page=1,controller,changes;
   root.innerHTML=`<header class="inventory-history-heading">
    <h1>Riwayat Gudang</h1>
-   <p>Lihat stok dan transaksi dari versi spreadsheet pada tanggal pilihan (WIB).</p>
+   <p>Lihat stok dan transaksi dari versi Google Sheets pada tanggal pilihan.</p>
   </header>
-  <div class="inventory-history-controls">
-   <label>Tanggal riwayat <input type="date" data-history-date></label>
-   <button type="button" class="btn-ghost" data-history-latest>Hari ini</button>
-   <label>Cari data <input type="search" maxlength="120" placeholder="SKU, nama barang, atau lokasi…" data-history-search></label>
+  <div class="inventory-history-workspace">
+   <div class="inventory-history-controls">
+    <label>Tanggal riwayat <input type="date" data-history-date></label>
+    <button type="button" class="btn-ghost" data-history-latest>Hari ini</button>
+    <label>Cari data <input type="search" maxlength="120" placeholder="SKU, nama barang, atau lokasi…" data-history-search></label>
+   </div>
+   <div class="inventory-history-tabs" role="group" aria-label="Jenis data">${Object.entries(datasets).map(([key,label])=>`<button type="button" class="btn-ghost" data-kind="${key}" aria-pressed="${key===kind}">${label}</button>`).join('')}</div>
   </div>
-  <div class="inventory-history-tabs" role="group" aria-label="Jenis data">${Object.entries(datasets).map(([key,label])=>`<button type="button" class="btn-ghost" data-kind="${key}" aria-pressed="${key===kind}">${label}</button>`).join('')}</div>
-  <p class="inventory-history-feedback" role="status" data-history-status></p>
-  <div class="inventory-history-content" data-history-content aria-busy="true"></div>
+  <section class="inventory-history-results" aria-labelledby="inventory-history-source-title">
+   <header class="inventory-history-results-header">
+    <div><h2 id="inventory-history-source-title" data-history-title>Kartu Stok</h2><p class="inventory-history-feedback" role="status" data-history-status></p></div>
+    <div class="inventory-history-version" data-history-version hidden>
+     <span>Versi Google Sheets</span>
+     <time data-history-version-time></time>
+    </div>
+   </header>
+   <div class="inventory-history-content" data-history-content aria-busy="true"></div>
+  </section>
   <footer class="inventory-history-pager" data-history-pager hidden>
    <span data-history-count></span>
    <button type="button" class="btn-ghost" data-history-prev>Sebelumnya</button>
@@ -37,23 +47,27 @@ export function mountInventoryHistory(root,{read}){
     const isStock=kind!=='inbound'&&kind!=='outbound';
     const day=dayFormat.format(new Date(data.date+'T00:00:00Z'));
     if(data.revisionUnavailable){
-      el('status').textContent=`${datasets[kind]} · ${day}`;
+      el('status').textContent=`Tanggal pilihan ${day} WIB`;
       const notice=document.createElement('div');
-      notice.className='state';
+      notice.className='inventory-history-empty';
       notice.textContent=data.message||'Riwayat versi tidak tersedia.';
       el('content').append(notice);
       return;
     }
     page=data.page;
-    el('status').textContent=`Tanggal pilihan ${day} · Versi Google Sheets ${captureFormat.format(new Date(data.revisionAt))} WIB`;
+    el('status').textContent=`Tanggal pilihan ${day} WIB · ${fmt.format(data.total)} baris`;
+    const versionTime=el('version-time');
+    versionTime.dateTime=data.revisionAt;
+    versionTime.textContent=`${captureFormat.format(new Date(data.revisionAt))} WIB`;
+    el('version').hidden=false;
     if(!data.rows.length){
-      el('content').insertAdjacentHTML('beforeend','<div class="state">Tidak ada data yang cocok.</div>');
+      el('content').insertAdjacentHTML('beforeend','<div class="inventory-history-empty">Tidak ada data yang cocok.</div>');
       return;
     }
     const fields=isStock?stockFields:transactionFields;
-    el('content').insertAdjacentHTML('beforeend',`<div class="inventory-history-table table-wrap" tabindex="0" role="region" aria-label="${datasets[kind]}"><table>
-     <thead><tr>${fields.map(([label,field])=>`<th scope="col" class="${field==='qty'?'history-qty':''}">${label}</th>`).join('')}</tr></thead>
-     <tbody>${data.rows.map(row=>`<tr>${fields.map(([,field])=>`<td class="${field==='qty'?'history-qty':''}">${field==='qty'&&typeof row.qty==='number'?fmt.format(row.qty):escape(row[field]===''?'—':row[field])}</td>`).join('')}</tr>`).join('')}</tbody>
+    el('content').insertAdjacentHTML('beforeend',`<div class="inventory-history-table table-wrap" tabindex="0" role="region" aria-label="${datasets[kind]}"><table role="table">
+     <thead role="rowgroup"><tr role="row">${fields.map(([label,field])=>`<th role="columnheader" scope="col" class="${field==='qty'?'history-qty':''}">${label}</th>`).join('')}</tr></thead>
+     <tbody role="rowgroup">${data.rows.map(row=>`<tr role="row">${fields.map(([label,field])=>`<td role="cell" data-label="${label}" data-field="${field}" class="${field==='qty'?'history-qty':''}">${field==='qty'&&typeof row.qty==='number'?fmt.format(row.qty):escape(row[field]===''?'—':row[field])}</td>`).join('')}</tr>`).join('')}</tbody>
     </table></div>`);
     const first=(page-1)*50+1,last=first+data.rows.length-1;
     el('count').textContent=`${fmt.format(first)}–${fmt.format(last)} dari ${fmt.format(data.total)} baris`;
@@ -69,6 +83,8 @@ export function mountInventoryHistory(root,{read}){
     controller=request;
     const params=new URLSearchParams({kind,page,q:search.value.trim()});
     if(date.value)params.set('date',date.value);
+    el('title').textContent=datasets[kind];
+    el('version').hidden=true;
     el('status').textContent='Memuat riwayat gudang…';
     el('content').replaceChildren();
     el('content').setAttribute('aria-busy','true');
